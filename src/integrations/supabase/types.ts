@@ -19,6 +19,7 @@ export type Database = {
           created_at: string
           grace_period_days: number | null
           id: string
+          payment_link: string | null
           reminder_days_before: number | null
           robokassa_merchant_login: string | null
           robokassa_password1: string | null
@@ -31,6 +32,7 @@ export type Database = {
           created_at?: string
           grace_period_days?: number | null
           id?: string
+          payment_link?: string | null
           reminder_days_before?: number | null
           robokassa_merchant_login?: string | null
           robokassa_password1?: string | null
@@ -43,6 +45,7 @@ export type Database = {
           created_at?: string
           grace_period_days?: number | null
           id?: string
+          payment_link?: string | null
           reminder_days_before?: number | null
           robokassa_merchant_login?: string | null
           robokassa_password1?: string | null

@@ -16,6 +16,7 @@ interface AdminSettings {
   robokassa_password2: string | null;
   grace_period_days: number;
   reminder_days_before: number;
+  payment_link: string | null;
 }
 
 export default function AdminSettings() {
@@ -30,6 +31,7 @@ export default function AdminSettings() {
     robokassa_password2: '',
     grace_period_days: 0,
     reminder_days_before: 3,
+    payment_link: '',
   });
 
   useEffect(() => {
@@ -55,6 +57,7 @@ export default function AdminSettings() {
           robokassa_password2: data.robokassa_password2 || '',
           grace_period_days: data.grace_period_days || 0,
           reminder_days_before: data.reminder_days_before || 3,
+          payment_link: (data as any).payment_link || '',
         });
       }
     } catch (error) {
@@ -77,7 +80,8 @@ export default function AdminSettings() {
           robokassa_password2: settings.robokassa_password2 || null,
           grace_period_days: settings.grace_period_days,
           reminder_days_before: settings.reminder_days_before,
-        })
+          payment_link: settings.payment_link || null,
+        } as any)
         .not('id', 'is', null);
 
       if (error) throw error;
@@ -139,6 +143,26 @@ export default function AdminSettings() {
                   onChange={(e) => setSettings({ ...settings, telegram_channel_id: e.target.value })}
                 />
                 <p className="text-xs text-muted-foreground">Your private channel/group ID</p>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Payment Link */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Ссылка на оплату</CardTitle>
+              <CardDescription>Ручная ссылка для оплаты подписки (до интеграции Robokassa)</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="payment_link">Payment Link</Label>
+                <Input
+                  id="payment_link"
+                  placeholder="https://..."
+                  value={settings.payment_link || ''}
+                  onChange={(e) => setSettings({ ...settings, payment_link: e.target.value })}
+                />
+                <p className="text-xs text-muted-foreground">Эта ссылка будет показана пользователям в Mini App</p>
               </div>
             </CardContent>
           </Card>

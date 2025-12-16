@@ -35,9 +35,11 @@ export function useSendInvite() {
       if (data.message_sent) {
         toast({ title: 'Приглашение отправлено пользователю' });
       } else if (data.invite_link) {
+        // Copy link to clipboard
+        navigator.clipboard.writeText(data.invite_link);
         toast({ 
-          title: 'Ссылка создана', 
-          description: 'Не удалось отправить сообщение. Пользователь должен сначала запустить бота.' 
+          title: 'Ссылка скопирована', 
+          description: 'Пользователь должен сначала запустить бота. Ссылка скопирована в буфер обмена.' 
         });
       }
     },
@@ -69,6 +71,13 @@ export function useCheckMembership() {
   return useMutation({
     mutationFn: async ({ telegram_user_id, subscriber_id }: { telegram_user_id: number; subscriber_id?: string }) => {
       return callChannelFunction('check_membership', telegram_user_id, subscriber_id);
+    },
+    onSuccess: (data) => {
+      if (data.is_member) {
+        toast({ title: 'Пользователь в канале', description: `Статус: ${data.status}` });
+      } else {
+        toast({ title: 'Пользователь НЕ в канале', description: 'Отправьте приглашение', variant: 'destructive' });
+      }
     },
     onError: (error: Error) => {
       toast({ title: 'Ошибка проверки', description: error.message, variant: 'destructive' });
