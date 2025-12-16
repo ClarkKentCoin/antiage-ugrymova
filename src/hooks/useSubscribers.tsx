@@ -122,14 +122,39 @@ export function useCreateSubscriber() {
         if (paymentError) throw paymentError;
       }
 
-      return subscriber;
+      // Auto-send invite to the new subscriber
+      try {
+        const { data: inviteResult } = await supabase.functions.invoke('telegram-channel', {
+          body: { 
+            action: 'send_invite', 
+            telegram_user_id: input.telegram_user_id,
+            subscriber_id: subscriber.id 
+          },
+        });
+        
+        return { ...subscriber, inviteResult };
+      } catch (inviteError) {
+        // Don't fail the whole operation if invite fails
+        console.error('Failed to send invite:', inviteError);
+        return { ...subscriber, inviteResult: null };
+      }
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['subscribers'] });
-      toast({ title: 'Subscriber added successfully' });
+      if (data.inviteResult?.message_sent) {
+        toast({ title: 'Подписчик добавлен', description: 'Приглашение отправлено в Telegram' });
+      } else if (data.inviteResult?.invite_link) {
+        navigator.clipboard.writeText(data.inviteResult.invite_link);
+        toast({ 
+          title: 'Подписчик добавлен', 
+          description: 'Пользователь должен запустить бота. Ссылка скопирована.' 
+        });
+      } else {
+        toast({ title: 'Подписчик добавлен' });
+      }
     },
     onError: (error: Error) => {
-      toast({ title: 'Error adding subscriber', description: error.message, variant: 'destructive' });
+      toast({ title: 'Ошибка добавления', description: error.message, variant: 'destructive' });
     },
   });
 }

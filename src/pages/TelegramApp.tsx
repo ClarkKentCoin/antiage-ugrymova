@@ -1,14 +1,15 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useTelegramWebApp } from '@/hooks/useTelegramWebApp';
 import { useSubscriber } from '@/hooks/useSubscribers';
 import { useActiveTiers } from '@/hooks/useSubscriptionTiers';
 import { usePaymentHistory } from '@/hooks/usePaymentHistory';
+import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { format, differenceInDays } from 'date-fns';
-import { Calendar, CreditCard, Crown, AlertCircle, Clock } from 'lucide-react';
+import { Calendar, CreditCard, Crown, AlertCircle, Clock, ExternalLink } from 'lucide-react';
 
 const statusConfig: Record<string, { label: string; className: string }> = {
   active: { label: 'Active', className: 'bg-success/10 text-success border-success/20' },
@@ -21,6 +22,22 @@ export default function TelegramApp() {
   const { isReady, isTelegramWebApp, user, showConfirm, hapticFeedback } = useTelegramWebApp();
   const { data: subscriber, isLoading: loadingSubscriber } = useSubscriber(user?.id || null);
   const { data: tiers } = useActiveTiers();
+  const [paymentLink, setPaymentLink] = useState<string | null>(null);
+
+  // Fetch payment link from admin settings
+  useEffect(() => {
+    async function fetchPaymentLink() {
+      const { data } = await supabase
+        .from('admin_settings')
+        .select('payment_link')
+        .limit(1)
+        .single();
+      if (data) {
+        setPaymentLink((data as any).payment_link);
+      }
+    }
+    fetchPaymentLink();
+  }, []);
 
   // For testing outside Telegram (DEV or ?test=1)
   const [testUserId, setTestUserId] = useState<number | null>(null);
@@ -108,6 +125,7 @@ export default function TelegramApp() {
             daysRemaining={daysRemaining}
             tiers={tiers || []}
             payments={payments || []}
+            paymentLink={paymentLink}
             onUnsubscribe={handleUnsubscribe}
             onExtend={handleExtendRequest}
           />
@@ -132,6 +150,7 @@ export default function TelegramApp() {
         daysRemaining={daysRemaining}
         tiers={tiers || []}
         payments={payments || []}
+        paymentLink={paymentLink}
         onUnsubscribe={handleUnsubscribe}
         onExtend={handleExtendRequest}
         userName={user?.first_name}
@@ -146,6 +165,7 @@ function SubscriptionContent({
   daysRemaining, 
   tiers, 
   payments,
+  paymentLink,
   onUnsubscribe,
   onExtend,
   userName
@@ -155,6 +175,7 @@ function SubscriptionContent({
   daysRemaining: number | null;
   tiers: any[];
   payments: any[];
+  paymentLink: string | null;
   onUnsubscribe: () => void;
   onExtend: (tierId: string) => void;
   userName?: string;
@@ -174,21 +195,32 @@ function SubscriptionContent({
         <Card>
           <CardContent className="pt-6 text-center">
             <AlertCircle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-            <h2 className="text-lg font-semibold mb-2">No Active Subscription</h2>
-            <p className="text-sm text-muted-foreground mb-4">
-              You don't have an active subscription yet.
+            <h2 className="text-lg font-semibold mb-2">Нет активной подписки</h2>
+            <p className="text-sm text-muted-foreground mb-6">
+              У вас пока нет активной подписки на канал.
             </p>
-            <div className="space-y-2">
+            
+            {paymentLink ? (
+              <Button 
+                className="w-full mb-4" 
+                size="lg"
+                onClick={() => window.open(paymentLink, '_blank')}
+              >
+                <ExternalLink className="mr-2 h-5 w-5" />
+                Оформить подписку
+              </Button>
+            ) : null}
+
+            <div className="space-y-2 mt-4">
+              <p className="text-xs text-muted-foreground">Доступные тарифы:</p>
               {tiers.map(tier => (
-                <Button 
+                <div 
                   key={tier.id} 
-                  variant="outline" 
-                  className="w-full justify-between"
-                  onClick={() => onExtend(tier.id)}
+                  className="flex justify-between items-center p-3 border rounded-lg"
                 >
-                  <span>{tier.name}</span>
+                  <span className="font-medium">{tier.name}</span>
                   <span className="font-semibold">{tier.price}₽</span>
-                </Button>
+                </div>
               ))}
             </div>
           </CardContent>
