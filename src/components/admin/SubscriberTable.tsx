@@ -14,10 +14,12 @@ import {
   DropdownMenu, 
   DropdownMenuContent, 
   DropdownMenuItem, 
+  DropdownMenuSeparator,
   DropdownMenuTrigger 
 } from '@/components/ui/dropdown-menu';
-import { MoreHorizontal, Pencil, Trash2, Calendar } from 'lucide-react';
+import { MoreHorizontal, Pencil, Trash2, Calendar, Send, UserMinus, CheckCircle, Loader2 } from 'lucide-react';
 import { Subscriber, useDeleteSubscriber } from '@/hooks/useSubscribers';
+import { useSendInvite, useKickUser, useCheckMembership } from '@/hooks/useTelegramChannel';
 import { EditSubscriberDialog } from './EditSubscriberDialog';
 import { ExtendSubscriptionDialog } from './ExtendSubscriptionDialog';
 
@@ -36,11 +38,37 @@ export function SubscriberTable({ subscribers }: SubscriberTableProps) {
   const [editingSubscriber, setEditingSubscriber] = useState<Subscriber | null>(null);
   const [extendingSubscriber, setExtendingSubscriber] = useState<Subscriber | null>(null);
   const deleteSubscriber = useDeleteSubscriber();
+  const sendInvite = useSendInvite();
+  const kickUser = useKickUser();
+  const checkMembership = useCheckMembership();
 
   const handleDelete = (id: string) => {
     if (confirm('Are you sure you want to remove this subscriber?')) {
       deleteSubscriber.mutate(id);
     }
+  };
+
+  const handleSendInvite = (subscriber: Subscriber) => {
+    sendInvite.mutate({ 
+      telegram_user_id: subscriber.telegram_user_id, 
+      subscriber_id: subscriber.id 
+    });
+  };
+
+  const handleKickUser = (subscriber: Subscriber) => {
+    if (confirm('Remove this user from the Telegram channel?')) {
+      kickUser.mutate({ 
+        telegram_user_id: subscriber.telegram_user_id, 
+        subscriber_id: subscriber.id 
+      });
+    }
+  };
+
+  const handleCheckMembership = (subscriber: Subscriber) => {
+    checkMembership.mutate({ 
+      telegram_user_id: subscriber.telegram_user_id, 
+      subscriber_id: subscriber.id 
+    });
   };
 
   const getDisplayName = (subscriber: Subscriber) => {
@@ -126,20 +154,54 @@ export function SubscriberTable({ subscribers }: SubscriberTableProps) {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
+                          <DropdownMenuItem 
+                            onClick={() => handleSendInvite(subscriber)}
+                            disabled={sendInvite.isPending}
+                          >
+                            {sendInvite.isPending ? (
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            ) : (
+                              <Send className="mr-2 h-4 w-4" />
+                            )}
+                            Отправить приглашение
+                          </DropdownMenuItem>
+                          <DropdownMenuItem 
+                            onClick={() => handleCheckMembership(subscriber)}
+                            disabled={checkMembership.isPending}
+                          >
+                            {checkMembership.isPending ? (
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            ) : (
+                              <CheckCircle className="mr-2 h-4 w-4" />
+                            )}
+                            Проверить в канале
+                          </DropdownMenuItem>
+                          <DropdownMenuItem 
+                            onClick={() => handleKickUser(subscriber)}
+                            disabled={kickUser.isPending}
+                          >
+                            {kickUser.isPending ? (
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            ) : (
+                              <UserMinus className="mr-2 h-4 w-4" />
+                            )}
+                            Удалить из канала
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
                           <DropdownMenuItem onClick={() => setEditingSubscriber(subscriber)}>
                             <Pencil className="mr-2 h-4 w-4" />
-                            Edit
+                            Редактировать
                           </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => setExtendingSubscriber(subscriber)}>
                             <Calendar className="mr-2 h-4 w-4" />
-                            Extend
+                            Продлить
                           </DropdownMenuItem>
                           <DropdownMenuItem 
                             onClick={() => handleDelete(subscriber.id)}
                             className="text-destructive"
                           >
                             <Trash2 className="mr-2 h-4 w-4" />
-                            Remove
+                            Удалить
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
