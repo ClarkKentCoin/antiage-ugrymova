@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useTelegramWebApp } from '@/hooks/useTelegramWebApp';
 import { useSubscriber } from '@/hooks/useSubscribers';
 import { useActiveTiers } from '@/hooks/useSubscriptionTiers';
@@ -18,29 +18,33 @@ const statusConfig: Record<string, { label: string; className: string }> = {
 };
 
 export default function TelegramApp() {
-  const { isReady, isTelegramWebApp, user, showConfirm, hapticFeedback, close } = useTelegramWebApp();
-  const { data: subscriber, isLoading: loadingSubscriber, refetch } = useSubscriber(user?.id || null);
+  const { isReady, isTelegramWebApp, user, showConfirm, hapticFeedback } = useTelegramWebApp();
+  const { data: subscriber, isLoading: loadingSubscriber } = useSubscriber(user?.id || null);
   const { data: tiers } = useActiveTiers();
-  const { data: payments } = usePaymentHistory(subscriber?.id);
-  const [selectedTab, setSelectedTab] = useState('subscription');
 
-  // For testing outside Telegram
+  // For testing outside Telegram (DEV or ?test=1)
   const [testUserId, setTestUserId] = useState<number | null>(null);
-  const effectiveUserId = user?.id || testUserId;
-  
   const { data: testSubscriber, isLoading: loadingTestSubscriber } = useSubscriber(testUserId);
+
   const activeSubscriber = user ? subscriber : testSubscriber;
   const isLoading = user ? loadingSubscriber : loadingTestSubscriber;
 
-  const daysRemaining = activeSubscriber?.subscription_end 
+  // Prevent fetching *all* payments when we don't know the subscriber yet
+  const paymentSubscriberId = activeSubscriber?.id ?? '00000000-0000-0000-0000-000000000000';
+  const { data: payments } = usePaymentHistory(paymentSubscriberId);
+
+  const daysRemaining = activeSubscriber?.subscription_end
     ? differenceInDays(new Date(activeSubscriber.subscription_end), new Date())
     : null;
 
+  const allowTestMode =
+    import.meta.env.DEV || new URLSearchParams(window.location.search).has('test');
+
   const handleUnsubscribe = async () => {
-    const confirmed = isTelegramWebApp 
+    const confirmed = isTelegramWebApp
       ? await showConfirm('Are you sure you want to cancel your subscription?')
       : window.confirm('Are you sure you want to cancel your subscription?');
-    
+
     if (confirmed) {
       hapticFeedback('warning');
       // In a real app, this would call an API to cancel
@@ -50,14 +54,34 @@ export default function TelegramApp() {
 
   const handleExtendRequest = (tierId: string) => {
     hapticFeedback('success');
-    const tier = tiers?.find(t => t.id === tierId);
+    const tier = tiers?.find((t) => t.id === tierId);
     alert(`Request to extend with ${tier?.name} plan sent! Contact admin to complete payment.`);
   };
 
-  // Show test UI if not in Telegram
+  // If opened outside Telegram, show instructions in production; keep Test Mode for dev / ?test=1
   if (!isTelegramWebApp) {
+    if (!allowTestMode) {
+      return (
+        <main className="min-h-screen bg-background p-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Open in Telegram</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2 text-sm text-muted-foreground">
+              <p>
+                This page must be opened from your Telegram bot as a Mini App (a Web App button), not as a regular link.
+              </p>
+              <p>
+                If you are testing in a browser, add <span className="font-mono">?test=1</span> to the URL.
+              </p>
+            </CardContent>
+          </Card>
+        </main>
+      );
+    }
+
     return (
-      <div className="min-h-screen bg-background p-4">
+      <main className="min-h-screen bg-background p-4">
         <Card className="mb-4">
           <CardHeader>
             <CardTitle className="text-lg">Test Mode</CardTitle>
@@ -76,9 +100,19 @@ export default function TelegramApp() {
             </div>
           </CardContent>
         </Card>
-        
-        {testUserId && <SubscriptionContent subscriber={testSubscriber} isLoading={loadingTestSubscriber} daysRemaining={daysRemaining} tiers={tiers || []} payments={payments || []} onUnsubscribe={handleUnsubscribe} onExtend={handleExtendRequest} />}
-      </div>
+
+        {testUserId && (
+          <SubscriptionContent
+            subscriber={testSubscriber}
+            isLoading={loadingTestSubscriber}
+            daysRemaining={daysRemaining}
+            tiers={tiers || []}
+            payments={payments || []}
+            onUnsubscribe={handleUnsubscribe}
+            onExtend={handleExtendRequest}
+          />
+        )}
+      </main>
     );
   }
 
@@ -92,11 +126,11 @@ export default function TelegramApp() {
 
   return (
     <div className="min-h-screen bg-background">
-      <SubscriptionContent 
-        subscriber={activeSubscriber} 
-        isLoading={isLoading} 
-        daysRemaining={daysRemaining} 
-        tiers={tiers || []} 
+      <SubscriptionContent
+        subscriber={activeSubscriber}
+        isLoading={isLoading}
+        daysRemaining={daysRemaining}
+        tiers={tiers || []}
         payments={payments || []}
         onUnsubscribe={handleUnsubscribe}
         onExtend={handleExtendRequest}

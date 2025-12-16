@@ -84,21 +84,35 @@ export function useTelegramWebApp() {
   const [colorScheme, setColorScheme] = useState<'light' | 'dark'>('light');
 
   useEffect(() => {
-    const webApp = window.Telegram?.WebApp;
-    
-    if (webApp) {
+    let tries = 0;
+    const maxTries = 30; // ~3s
+
+    const tryInit = () => {
+      const webApp = window.Telegram?.WebApp;
+      if (!webApp?.initData) return false;
+
       webApp.ready();
       webApp.expand();
-      
+
       setIsReady(true);
       setUser(webApp.initDataUnsafe.user || null);
       setColorScheme(webApp.colorScheme);
-      
+
       // Apply telegram theme
-      if (webApp.colorScheme === 'dark') {
-        document.documentElement.classList.add('dark');
+      document.documentElement.classList.toggle('dark', webApp.colorScheme === 'dark');
+      return true;
+    };
+
+    if (tryInit()) return;
+
+    const interval = window.setInterval(() => {
+      tries += 1;
+      if (tryInit() || tries >= maxTries) {
+        window.clearInterval(interval);
       }
-    }
+    }, 100);
+
+    return () => window.clearInterval(interval);
   }, []);
 
   const showAlert = (message: string) => {
@@ -123,7 +137,7 @@ export function useTelegramWebApp() {
 
   return {
     isReady,
-    isTelegramWebApp: !!window.Telegram?.WebApp,
+    isTelegramWebApp: !!window.Telegram?.WebApp?.initData,
     user,
     colorScheme,
     showAlert,
