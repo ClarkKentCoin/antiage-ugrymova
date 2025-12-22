@@ -1,17 +1,19 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { crypto } from "https://deno.land/std@0.168.0/crypto/mod.ts";
+import { encode } from "https://deno.land/std@0.168.0/encoding/hex.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// MD5 hash function
+// MD5 hash function using Deno std crypto
 async function md5(message: string): Promise<string> {
-  const msgUint8 = new TextEncoder().encode(message);
-  const hashBuffer = await crypto.subtle.digest("MD5", msgUint8);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  const data = new TextEncoder().encode(message);
+  const hash = await crypto.subtle.digest("MD5", data);
+  const hexBytes = encode(new Uint8Array(hash));
+  return new TextDecoder().decode(hexBytes);
 }
 
 serve(async (req) => {
