@@ -32,6 +32,7 @@ export type Database = {
           telegram_channel_id: string | null
           updated_at: string
           welcome_message_button_text: string | null
+          welcome_message_button_url: string | null
           welcome_message_image_url: string | null
           welcome_message_text: string | null
         }
@@ -52,6 +53,7 @@ export type Database = {
           telegram_channel_id?: string | null
           updated_at?: string
           welcome_message_button_text?: string | null
+          welcome_message_button_url?: string | null
           welcome_message_image_url?: string | null
           welcome_message_text?: string | null
         }
@@ -72,6 +74,7 @@ export type Database = {
           telegram_channel_id?: string | null
           updated_at?: string
           welcome_message_button_text?: string | null
+          welcome_message_button_url?: string | null
           welcome_message_image_url?: string | null
           welcome_message_text?: string | null
         }

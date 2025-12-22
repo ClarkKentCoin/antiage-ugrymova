@@ -57,7 +57,7 @@ serve(async (req) => {
     // Get admin settings
     const { data: settings, error: settingsError } = await supabaseAdmin
       .from("admin_settings")
-      .select("telegram_bot_token, welcome_message_text, welcome_message_image_url, welcome_message_button_text")
+      .select("telegram_bot_token, welcome_message_text, welcome_message_image_url, welcome_message_button_text, welcome_message_button_url")
       .limit(1)
       .maybeSingle();
 
@@ -81,9 +81,10 @@ serve(async (req) => {
       
       console.log(`Processing /start command from user ${userId}`);
 
-      // Get Mini App URL from the project
-      const miniAppUrl = Deno.env.get("SUPABASE_URL")?.replace('.supabase.co', '.lovable.app') || 
+      // Get button URL from settings or use default Mini App URL
+      const defaultMiniAppUrl = Deno.env.get("SUPABASE_URL")?.replace('.supabase.co', '.lovable.app') || 
                         `https://zmewfhnaycjuvpjxkiin.lovable.app/telegram`;
+      const buttonUrl = settings.welcome_message_button_url || defaultMiniAppUrl;
 
       const welcomeText = settings.welcome_message_text || 
         `🌟 Добро пожаловать в АНТИЭЙДЖ ЛАБ!\n\nЗакрытый Telegram-канал для женщин о секретах молодости, здоровья и долголетия.\n\n💎 Нажмите кнопку ниже, чтобы выбрать подписку и получить доступ к эксклюзивному контенту.`;
@@ -91,12 +92,14 @@ serve(async (req) => {
       const buttonText = settings.welcome_message_button_text || "Подробнее";
       const imageUrl = settings.welcome_message_image_url;
 
+      // Determine if URL is a web_app or regular URL
+      const isWebApp = buttonUrl.includes('/telegram') || buttonUrl.includes('t.me/') && buttonUrl.includes('/app');
+      
       const inlineKeyboard = {
         inline_keyboard: [[
-          {
-            text: buttonText,
-            web_app: { url: miniAppUrl }
-          }
+          isWebApp 
+            ? { text: buttonText, web_app: { url: buttonUrl } }
+            : { text: buttonText, url: buttonUrl }
         ]]
       };
 

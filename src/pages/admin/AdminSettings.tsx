@@ -24,6 +24,7 @@ interface AdminSettingsData {
   welcome_message_text: string | null;
   welcome_message_image_url: string | null;
   welcome_message_button_text: string | null;
+  welcome_message_button_url: string | null;
 }
 
 export default function AdminSettings() {
@@ -46,6 +47,7 @@ export default function AdminSettings() {
     welcome_message_text: '',
     welcome_message_image_url: '',
     welcome_message_button_text: 'Подробнее',
+    welcome_message_button_url: '',
   });
 
   // Generate default webhook URLs
@@ -81,6 +83,7 @@ export default function AdminSettings() {
           welcome_message_text: (data as any).welcome_message_text || '',
           welcome_message_image_url: (data as any).welcome_message_image_url || '',
           welcome_message_button_text: (data as any).welcome_message_button_text || 'Подробнее',
+          welcome_message_button_url: (data as any).welcome_message_button_url || '',
         });
       }
     } catch (error) {
@@ -114,6 +117,7 @@ export default function AdminSettings() {
         welcome_message_text: settings.welcome_message_text || null,
         welcome_message_image_url: settings.welcome_message_image_url || null,
         welcome_message_button_text: settings.welcome_message_button_text || 'Подробнее',
+        welcome_message_button_url: settings.welcome_message_button_url || null,
       };
 
       let error;
@@ -348,6 +352,17 @@ export default function AdminSettings() {
                   value={settings.welcome_message_button_text || ''}
                   onChange={(e) => setSettings({ ...settings, welcome_message_button_text: e.target.value })}
                 />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="welcome_button_url">Ссылка кнопки (URL)</Label>
+                <Input
+                  id="welcome_button_url"
+                  placeholder="https://t.me/your_bot/app"
+                  value={settings.welcome_message_button_url || ''}
+                  onChange={(e) => setSettings({ ...settings, welcome_message_button_url: e.target.value })}
+                />
+                <p className="text-xs text-muted-foreground">URL для кнопки (например, ссылка на Mini App или сайт)</p>
               </div>
             </CardContent>
           </Card>
