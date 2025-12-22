@@ -43,16 +43,23 @@ serve(async (req) => {
       .single();
 
     if (settingsError || !settings?.telegram_bot_token || !settings?.telegram_channel_id) {
+      console.error("Settings error:", settingsError);
       return new Response(
         JSON.stringify({ error: "Telegram bot not configured" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    const { telegram_bot_token: botToken, telegram_channel_id: channelId } = settings;
+    const { telegram_bot_token: botToken, telegram_channel_id } = settings;
     const { action, telegram_user_id, subscriber_id } = await req.json();
+    
+    // Ensure channel ID is properly formatted (add -100 prefix if needed for supergroups/channels)
+    let channelId = telegram_channel_id.toString();
+    if (!channelId.startsWith("-100") && channelId.startsWith("-")) {
+      channelId = "-100" + channelId.substring(1);
+    }
 
-    console.log(`Processing action: ${action} for user: ${telegram_user_id}`);
+    console.log(`Processing action: ${action} for user: ${telegram_user_id}, channel: ${channelId}`);
 
     if (action === "create_invite_link") {
       // Create a unique invite link for the user
@@ -142,20 +149,35 @@ serve(async (req) => {
 
     if (action === "check_membership") {
       // Check if user is a member of the channel
+      console.log(`Checking membership for user ${telegram_user_id} in channel ${channelId}`);
+      
       const result = await callTelegramApi(botToken, "getChatMember", {
         chat_id: channelId,
         user_id: telegram_user_id,
       });
 
+      console.log("getChatMember result:", JSON.stringify(result));
+
       if (!result.ok) {
+        console.error("getChatMember error:", result.description);
+        // Update subscriber as not in channel
+        if (subscriber_id) {
+          await supabase
+            .from("subscribers")
+            .update({ is_in_channel: false })
+            .eq("id", subscriber_id);
+        }
         return new Response(
-          JSON.stringify({ is_member: false, status: "not_found" }),
+          JSON.stringify({ is_member: false, status: "error", error: result.description }),
           { headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
 
       const status = result.result.status;
-      const isMember = ["member", "administrator", "creator"].includes(status);
+      // "left" and "kicked" mean not a member
+      const isMember = ["member", "administrator", "creator", "restricted"].includes(status);
+
+      console.log(`User ${telegram_user_id} status: ${status}, isMember: ${isMember}`);
 
       // Update subscriber in database
       if (subscriber_id) {
@@ -173,6 +195,8 @@ serve(async (req) => {
 
     if (action === "send_invite") {
       // Send invite link directly to the user via bot
+      console.log(`Creating invite link for channel ${channelId}`);
+      
       // First create the invite link
       const inviteResult = await callTelegramApi(botToken, "createChatInviteLink", {
         chat_id: channelId,
@@ -180,7 +204,10 @@ serve(async (req) => {
         creates_join_request: false,
       });
 
+      console.log("createChatInviteLink result:", JSON.stringify(inviteResult));
+
       if (!inviteResult.ok) {
+        console.error("Failed to create invite link:", inviteResult.description);
         return new Response(
           JSON.stringify({ error: inviteResult.description || "Failed to create invite link" }),
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -188,21 +215,24 @@ serve(async (req) => {
       }
 
       // Send the invite link to the user
+      console.log(`Sending invite link to user ${telegram_user_id}`);
       const messageResult = await callTelegramApi(botToken, "sendMessage", {
         chat_id: telegram_user_id,
         text: `🎉 Ваша подписка активирована!\n\nПерейдите по ссылке, чтобы присоединиться к каналу:\n${inviteResult.result.invite_link}\n\n⚠️ Ссылка одноразовая и действует только для вас.`,
         parse_mode: "HTML",
       });
 
+      console.log("sendMessage result:", JSON.stringify(messageResult));
+
       if (!messageResult.ok) {
         console.error("Failed to send message:", messageResult.description);
-        // Still return the invite link even if message sending failed
+        // Return 200 with invite link even if message sending failed (user can copy link)
         return new Response(
           JSON.stringify({ 
             success: true, 
             invite_link: inviteResult.result.invite_link,
             message_sent: false,
-            error: "Could not send message to user. They may need to start the bot first."
+            error: messageResult.description || "Could not send message to user. They may need to start the bot first."
           }),
           { headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
