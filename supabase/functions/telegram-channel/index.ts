@@ -30,13 +30,74 @@ serve(async (req) => {
   }
 
   try {
-    const supabase = createClient(
+    // Create Supabase client with service role for database operations
+    const supabaseAdmin = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     );
 
+    // Authentication check - require valid user session
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      console.error("No authorization header provided");
+      return new Response(
+        JSON.stringify({ error: "Unauthorized - No authorization header" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Create a client with the user's token to verify their identity
+    const supabaseUser = createClient(
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_ANON_KEY") ?? "",
+      {
+        global: {
+          headers: { Authorization: authHeader },
+        },
+      }
+    );
+
+    // Verify the user's token
+    const { data: { user }, error: authError } = await supabaseUser.auth.getUser();
+    
+    if (authError || !user) {
+      console.error("Auth error:", authError?.message || "No user found");
+      return new Response(
+        JSON.stringify({ error: "Unauthorized - Invalid token" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    console.log(`Authenticated user: ${user.id}`);
+
+    // Check if user has admin role
+    const { data: roleData, error: roleError } = await supabaseAdmin
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", user.id)
+      .eq("role", "admin")
+      .maybeSingle();
+
+    if (roleError) {
+      console.error("Role check error:", roleError.message);
+      return new Response(
+        JSON.stringify({ error: "Error checking permissions" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (!roleData) {
+      console.error(`User ${user.id} does not have admin role`);
+      return new Response(
+        JSON.stringify({ error: "Forbidden - Admin access required" }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    console.log(`Admin access verified for user: ${user.id}`);
+
     // Get admin settings for bot token and channel ID
-    const { data: settings, error: settingsError } = await supabase
+    const { data: settings, error: settingsError } = await supabaseAdmin
       .from("admin_settings")
       .select("telegram_bot_token, telegram_channel_id")
       .limit(1)
@@ -135,7 +196,7 @@ serve(async (req) => {
 
       // Update subscriber status
       if (subscriber_id) {
-        await supabase
+        await supabaseAdmin
           .from("subscribers")
           .update({ is_in_channel: false })
           .eq("id", subscriber_id);
@@ -162,7 +223,7 @@ serve(async (req) => {
         console.error("getChatMember error:", result.description);
         // Update subscriber as not in channel
         if (subscriber_id) {
-          await supabase
+          await supabaseAdmin
             .from("subscribers")
             .update({ is_in_channel: false })
             .eq("id", subscriber_id);
@@ -181,7 +242,7 @@ serve(async (req) => {
 
       // Update subscriber in database
       if (subscriber_id) {
-        await supabase
+        await supabaseAdmin
           .from("subscribers")
           .update({ is_in_channel: isMember })
           .eq("id", subscriber_id);
