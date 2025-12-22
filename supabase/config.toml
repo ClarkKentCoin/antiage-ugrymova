@@ -14,3 +14,9 @@ verify_jwt = true
 
 [functions.notify-upcoming-payments]
 verify_jwt = true
+
+[functions.check-expired-subscriptions]
+verify_jwt = true
+
+[functions.telegram-bot-webhook]
+verify_jwt = false
