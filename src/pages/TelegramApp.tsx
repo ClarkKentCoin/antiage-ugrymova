@@ -9,7 +9,9 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { format, differenceInDays } from 'date-fns';
-import { Calendar, CreditCard, Crown, AlertCircle, Clock, ExternalLink } from 'lucide-react';
+import { Calendar, CreditCard, Crown, AlertCircle, Clock, ExternalLink, RefreshCw } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 
 const statusConfig: Record<string, { label: string; className: string }> = {
   active: { label: 'Active', className: 'bg-success/10 text-success border-success/20' },
