@@ -38,12 +38,15 @@ export function useSendInvite() {
         // Copy link to clipboard
         navigator.clipboard.writeText(data.invite_link);
         toast({ 
-          title: 'Ссылка скопирована', 
-          description: 'Пользователь должен сначала запустить бота. Ссылка скопирована в буфер обмена.' 
+          title: 'Ссылка создана и скопирована', 
+          description: data.error || 'Пользователь должен сначала запустить бота. Ссылка скопирована в буфер обмена.' 
         });
+      } else {
+        toast({ title: 'Приглашение создано', description: 'Проверьте результат' });
       }
     },
     onError: (error: Error) => {
+      console.error('Send invite error:', error);
       toast({ title: 'Ошибка', description: error.message, variant: 'destructive' });
     },
   });
@@ -73,13 +76,20 @@ export function useCheckMembership() {
       return callChannelFunction('check_membership', telegram_user_id, subscriber_id);
     },
     onSuccess: (data) => {
+      console.log('Check membership result:', data);
       if (data.is_member) {
         toast({ title: 'Пользователь в канале', description: `Статус: ${data.status}` });
       } else {
-        toast({ title: 'Пользователь НЕ в канале', description: 'Отправьте приглашение', variant: 'destructive' });
+        const errorMsg = data.error ? ` (${data.error})` : '';
+        toast({ 
+          title: 'Пользователь НЕ в канале', 
+          description: `Статус: ${data.status}${errorMsg}. Отправьте приглашение.`, 
+          variant: 'destructive' 
+        });
       }
     },
     onError: (error: Error) => {
+      console.error('Check membership error:', error);
       toast({ title: 'Ошибка проверки', description: error.message, variant: 'destructive' });
     },
   });
