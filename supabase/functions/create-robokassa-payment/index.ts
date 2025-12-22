@@ -87,7 +87,7 @@ serve(async (req) => {
     console.log(`Admin access verified for user: ${user.id}`);
 
     // Parse request body
-    const { subscriber_id, tier_id, is_recurring } = await req.json();
+    const { subscriber_id, tier_id, is_recurring, ip_address, user_agent } = await req.json();
 
     if (!subscriber_id || !tier_id) {
       return new Response(
@@ -139,6 +139,39 @@ serve(async (req) => {
         JSON.stringify({ error: "Subscriber not found" }),
         { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
+    }
+
+    // If recurring, save consent
+    if (is_recurring) {
+      // Log consent
+      const { error: consentError } = await supabaseAdmin
+        .from("subscription_consent_log")
+        .insert({
+          subscriber_id,
+          consent_type: "auto_renewal_enabled",
+          ip_address: ip_address || null,
+          user_agent: user_agent || null,
+        });
+
+      if (consentError) {
+        console.error("Failed to log consent:", consentError);
+      } else {
+        console.log(`Logged auto_renewal consent for subscriber ${subscriber_id}`);
+      }
+
+      // Update subscriber with consent date and auto_renewal flag
+      const { error: updateError } = await supabaseAdmin
+        .from("subscribers")
+        .update({
+          auto_renewal: true,
+          auto_renewal_consent_date: new Date().toISOString(),
+          next_payment_notification_sent: false,
+        })
+        .eq("id", subscriber_id);
+
+      if (updateError) {
+        console.error("Failed to update subscriber consent date:", updateError);
+      }
     }
 
     // Generate unique InvoiceID

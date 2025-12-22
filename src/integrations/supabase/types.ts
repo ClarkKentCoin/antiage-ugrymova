@@ -125,11 +125,13 @@ export type Database = {
       subscribers: {
         Row: {
           auto_renewal: boolean | null
+          auto_renewal_consent_date: string | null
           created_at: string
           first_name: string | null
           id: string
           is_in_channel: boolean | null
           last_name: string | null
+          next_payment_notification_sent: boolean | null
           robokassa_invoice_id: string | null
           status: string | null
           subscriber_payment_method: string | null
@@ -142,11 +144,13 @@ export type Database = {
         }
         Insert: {
           auto_renewal?: boolean | null
+          auto_renewal_consent_date?: string | null
           created_at?: string
           first_name?: string | null
           id?: string
           is_in_channel?: boolean | null
           last_name?: string | null
+          next_payment_notification_sent?: boolean | null
           robokassa_invoice_id?: string | null
           status?: string | null
           subscriber_payment_method?: string | null
@@ -159,11 +163,13 @@ export type Database = {
         }
         Update: {
           auto_renewal?: boolean | null
+          auto_renewal_consent_date?: string | null
           created_at?: string
           first_name?: string | null
           id?: string
           is_in_channel?: boolean | null
           last_name?: string | null
+          next_payment_notification_sent?: boolean | null
           robokassa_invoice_id?: string | null
           status?: string | null
           subscriber_payment_method?: string | null
@@ -180,6 +186,44 @@ export type Database = {
             columns: ["tier_id"]
             isOneToOne: false
             referencedRelation: "subscription_tiers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      subscription_consent_log: {
+        Row: {
+          consent_date: string
+          consent_type: string
+          created_at: string
+          id: string
+          ip_address: string | null
+          subscriber_id: string
+          user_agent: string | null
+        }
+        Insert: {
+          consent_date?: string
+          consent_type: string
+          created_at?: string
+          id?: string
+          ip_address?: string | null
+          subscriber_id: string
+          user_agent?: string | null
+        }
+        Update: {
+          consent_date?: string
+          consent_type?: string
+          created_at?: string
+          id?: string
+          ip_address?: string | null
+          subscriber_id?: string
+          user_agent?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subscription_consent_log_subscriber_id_fkey"
+            columns: ["subscriber_id"]
+            isOneToOne: false
+            referencedRelation: "subscribers"
             referencedColumns: ["id"]
           },
         ]
