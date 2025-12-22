@@ -70,19 +70,39 @@ export default function AdminSettings() {
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      const { error } = await supabase
+      // First check if a settings row exists
+      const { data: existingSettings } = await supabase
         .from('admin_settings')
-        .update({
-          telegram_bot_token: settings.telegram_bot_token || null,
-          telegram_channel_id: settings.telegram_channel_id || null,
-          robokassa_merchant_login: settings.robokassa_merchant_login || null,
-          robokassa_password1: settings.robokassa_password1 || null,
-          robokassa_password2: settings.robokassa_password2 || null,
-          grace_period_days: settings.grace_period_days,
-          reminder_days_before: settings.reminder_days_before,
-          payment_link: settings.payment_link || null,
-        } as any)
-        .not('id', 'is', null);
+        .select('id')
+        .limit(1)
+        .maybeSingle();
+
+      const settingsData = {
+        telegram_bot_token: settings.telegram_bot_token || null,
+        telegram_channel_id: settings.telegram_channel_id || null,
+        robokassa_merchant_login: settings.robokassa_merchant_login || null,
+        robokassa_password1: settings.robokassa_password1 || null,
+        robokassa_password2: settings.robokassa_password2 || null,
+        grace_period_days: settings.grace_period_days,
+        reminder_days_before: settings.reminder_days_before,
+        payment_link: settings.payment_link || null,
+      };
+
+      let error;
+      if (existingSettings?.id) {
+        // Update existing row
+        const result = await supabase
+          .from('admin_settings')
+          .update(settingsData as any)
+          .eq('id', existingSettings.id);
+        error = result.error;
+      } else {
+        // Insert new row
+        const result = await supabase
+          .from('admin_settings')
+          .insert(settingsData as any);
+        error = result.error;
+      }
 
       if (error) throw error;
 
