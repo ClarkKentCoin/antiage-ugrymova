@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { Textarea } from '@/components/ui/textarea';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Copy, Check } from 'lucide-react';
@@ -20,6 +21,9 @@ interface AdminSettingsData {
   grace_period_days: number;
   reminder_days_before: number;
   payment_link: string | null;
+  welcome_message_text: string | null;
+  welcome_message_image_url: string | null;
+  welcome_message_button_text: string | null;
 }
 
 export default function AdminSettings() {
@@ -27,6 +31,7 @@ export default function AdminSettings() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [copiedBotWebhook, setCopiedBotWebhook] = useState(false);
   const [settings, setSettings] = useState<AdminSettingsData>({
     telegram_bot_token: '',
     telegram_channel_id: '',
@@ -38,10 +43,14 @@ export default function AdminSettings() {
     grace_period_days: 0,
     reminder_days_before: 3,
     payment_link: '',
+    welcome_message_text: '',
+    welcome_message_image_url: '',
+    welcome_message_button_text: 'Подробнее',
   });
 
-  // Generate default webhook URL
+  // Generate default webhook URLs
   const defaultWebhookUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/robokassa-webhook`;
+  const botWebhookUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/telegram-bot-webhook`;
 
   useEffect(() => {
     loadSettings();
@@ -69,6 +78,9 @@ export default function AdminSettings() {
           grace_period_days: data.grace_period_days || 0,
           reminder_days_before: data.reminder_days_before || 3,
           payment_link: (data as any).payment_link || '',
+          welcome_message_text: (data as any).welcome_message_text || '',
+          welcome_message_image_url: (data as any).welcome_message_image_url || '',
+          welcome_message_button_text: (data as any).welcome_message_button_text || 'Подробнее',
         });
       }
     } catch (error) {
@@ -99,6 +111,9 @@ export default function AdminSettings() {
         grace_period_days: settings.grace_period_days,
         reminder_days_before: settings.reminder_days_before,
         payment_link: settings.payment_link || null,
+        welcome_message_text: settings.welcome_message_text || null,
+        welcome_message_image_url: settings.welcome_message_image_url || null,
+        welcome_message_button_text: settings.welcome_message_button_text || 'Подробнее',
       };
 
       let error;
@@ -134,6 +149,13 @@ export default function AdminSettings() {
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
     toast({ title: 'URL скопирован' });
+  };
+
+  const copyBotWebhookUrl = () => {
+    navigator.clipboard.writeText(botWebhookUrl);
+    setCopiedBotWebhook(true);
+    setTimeout(() => setCopiedBotWebhook(false), 2000);
+    toast({ title: 'URL для Telegram webhook скопирован' });
   };
 
   if (isLoading) {
@@ -173,6 +195,27 @@ export default function AdminSettings() {
                   onChange={(e) => setSettings({ ...settings, telegram_bot_token: e.target.value })}
                 />
                 <p className="text-xs text-muted-foreground">Получите токен у @BotFather</p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="bot_webhook">Bot Webhook URL</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="bot_webhook"
+                    value={botWebhookUrl}
+                    readOnly
+                    className="flex-1 text-xs"
+                  />
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    size="icon"
+                    onClick={copyBotWebhookUrl}
+                  >
+                    {copiedBotWebhook ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">Установите этот URL как webhook для бота через @BotFather или API</p>
               </div>
 
               <div className="space-y-2">
@@ -264,6 +307,47 @@ export default function AdminSettings() {
                 <p className="text-xs text-muted-foreground">
                   Укажите этот URL в настройках Robokassa → Технические настройки → Result Url
                 </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Welcome Message */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Приветственное сообщение бота</CardTitle>
+              <CardDescription>Сообщение, которое бот отправляет при команде /start</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="welcome_image">Картинка (URL)</Label>
+                <Input
+                  id="welcome_image"
+                  placeholder="https://example.com/image.jpg"
+                  value={settings.welcome_message_image_url || ''}
+                  onChange={(e) => setSettings({ ...settings, welcome_message_image_url: e.target.value })}
+                />
+                <p className="text-xs text-muted-foreground">Загрузите картинку на хостинг и вставьте ссылку</p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="welcome_text">Текст сообщения</Label>
+                <Textarea
+                  id="welcome_text"
+                  placeholder="🌟 Добро пожаловать в АНТИЭЙДЖ ЛАБ!..."
+                  value={settings.welcome_message_text || ''}
+                  onChange={(e) => setSettings({ ...settings, welcome_message_text: e.target.value })}
+                  rows={5}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="welcome_button">Текст кнопки</Label>
+                <Input
+                  id="welcome_button"
+                  placeholder="Подробнее"
+                  value={settings.welcome_message_button_text || ''}
+                  onChange={(e) => setSettings({ ...settings, welcome_message_button_text: e.target.value })}
+                />
               </div>
             </CardContent>
           </Card>

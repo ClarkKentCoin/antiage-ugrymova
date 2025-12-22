@@ -31,6 +31,7 @@ const statusConfig: Record<string, { label: string; className: string }> = {
   expired: { label: 'Истекла', className: 'bg-destructive/10 text-destructive border-destructive/20' },
   inactive: { label: 'Неактивна', className: 'bg-muted text-muted-foreground border-border' },
   cancelled: { label: 'Отменена', className: 'bg-warning/10 text-warning border-warning/20' },
+  grace_period: { label: 'Льготный период', className: 'bg-warning/10 text-warning border-warning/20' },
 };
 
 export default function TelegramApp() {
@@ -41,21 +42,23 @@ export default function TelegramApp() {
   const { toast } = useToast();
 
   const [channelInfo, setChannelInfo] = useState<{ name: string; description: string } | null>(null);
+  const [gracePeriodDays, setGracePeriodDays] = useState<number>(0);
 
   // Fetch settings from admin_settings
   useEffect(() => {
     async function fetchSettings() {
       const { data } = await supabase
         .from('admin_settings')
-        .select('payment_link, channel_name, channel_description')
+        .select('payment_link, channel_name, channel_description, grace_period_days')
         .limit(1)
-        .single();
+        .maybeSingle();
       if (data) {
         setPaymentLink((data as any).payment_link);
         setChannelInfo({
           name: (data as any).channel_name || 'АНТИЭЙДЖ ЛАБ',
           description: (data as any).channel_description || 'Закрытый Telegram-канал для женщин: мотивация, рецепты, научные подходы к антиэйджу. Всё для энергии и молодости в одном месте.'
         });
+        setGracePeriodDays((data as any).grace_period_days || 0);
       }
     }
     fetchSettings();
@@ -153,6 +156,7 @@ export default function TelegramApp() {
           onUnsubscribe={handleUnsubscribe}
           onExtend={handleExtendRequest}
           onRefetch={refetch}
+          gracePeriodDays={gracePeriodDays}
         />
       </main>
     );
@@ -181,6 +185,7 @@ export default function TelegramApp() {
         onExtend={handleExtendRequest}
         userName={user?.first_name}
         onRefetch={refetch}
+        gracePeriodDays={gracePeriodDays}
       />
     </div>
   );
@@ -415,6 +420,215 @@ function NewUserView({
   );
 }
 
+// Component for grace period users
+function GracePeriodView({
+  channelInfo,
+  tiers,
+  telegramUserId,
+  subscriber,
+  onRefetch,
+  graceDaysRemaining
+}: {
+  channelInfo: { name: string; description: string } | null;
+  tiers: any[];
+  telegramUserId?: number | null;
+  subscriber: any;
+  onRefetch?: () => void;
+  graceDaysRemaining: number;
+}) {
+  const [selectedTier, setSelectedTier] = useState<string | null>(null);
+  const [autoRenewal, setAutoRenewal] = useState(false);
+  const [consentGiven, setConsentGiven] = useState(false);
+  const [generatingLink, setGeneratingLink] = useState(false);
+  const { toast } = useToast();
+
+  const handleSelectTier = (tierId: string) => {
+    setSelectedTier(tierId);
+    setAutoRenewal(false);
+    setConsentGiven(false);
+  };
+
+  const handlePayment = async () => {
+    if (!selectedTier || !subscriber?.id) return;
+    
+    if (autoRenewal && !consentGiven) {
+      toast({ title: 'Необходимо согласие', description: 'Пожалуйста, подтвердите согласие на автосписания', variant: 'destructive' });
+      return;
+    }
+
+    setGeneratingLink(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('create-robokassa-payment', {
+        body: {
+          subscriber_id: subscriber.id,
+          tier_id: selectedTier,
+          is_recurring: autoRenewal,
+          ip_address: null,
+          user_agent: navigator.userAgent,
+        },
+      });
+
+      if (error) throw error;
+      
+      if (data?.payment_url) {
+        window.open(data.payment_url, '_blank');
+        onRefetch?.();
+      }
+    } catch (error) {
+      console.error('Error generating payment link:', error);
+      toast({ title: 'Ошибка', description: 'Не удалось создать ссылку для оплаты', variant: 'destructive' });
+    } finally {
+      setGeneratingLink(false);
+    }
+  };
+
+  const selectedTierData = tiers.find(t => t.id === selectedTier);
+
+  return (
+    <div className="p-4 space-y-6">
+      {/* Grace Period Warning */}
+      <Card className="border-warning bg-warning/10">
+        <CardContent className="pt-6">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="h-6 w-6 text-warning flex-shrink-0 mt-0.5" />
+            <div className="space-y-2">
+              <h2 className="text-lg font-semibold">⚠️ Ваша подписка истекла</h2>
+              <p className="text-muted-foreground">
+                У вас есть <span className="font-bold text-warning">{graceDaysRemaining} {graceDaysRemaining === 1 ? 'день' : graceDaysRemaining < 5 ? 'дня' : 'дней'}</span> для продления без потери доступа к архиву канала.
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Продлите сейчас, чтобы не потерять историю сообщений.
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Tier Selection */}
+      <div className="space-y-4">
+        <h2 className="text-center text-lg font-semibold flex items-center justify-center gap-2">
+          <span>💎</span> Выберите тариф для продления:
+        </h2>
+
+        <div className="grid gap-3">
+          {tiers.map(tier => (
+            <Card 
+              key={tier.id} 
+              className={`cursor-pointer transition-all ${
+                selectedTier === tier.id 
+                  ? 'border-primary ring-2 ring-primary/30 bg-primary/5' 
+                  : 'hover:border-primary/50 hover:shadow-md'
+              }`}
+              onClick={() => handleSelectTier(tier.id)}
+            >
+              <CardContent className="flex items-center justify-between p-4">
+                <div className="flex items-center gap-3">
+                  <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                    selectedTier === tier.id ? 'border-primary bg-primary' : 'border-muted-foreground'
+                  }`}>
+                    {selectedTier === tier.id && (
+                      <CheckCircle className="h-4 w-4 text-primary-foreground" />
+                    )}
+                  </div>
+                  <div>
+                    <p className="font-semibold text-lg">{tier.name}</p>
+                    <p className="text-sm text-muted-foreground">{tier.duration_days} дней</p>
+                  </div>
+                </div>
+                <p className="text-xl font-bold">{Number(tier.price).toLocaleString('ru-RU')}₽</p>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
+
+      {/* Payment options - shown when tier is selected */}
+      {selectedTier && (
+        <Card className="border-primary/30 bg-gradient-to-b from-primary/5 to-background">
+          <CardContent className="pt-5 space-y-4">
+            <div className="text-center pb-2">
+              <p className="text-sm text-muted-foreground">Вы выбрали:</p>
+              <p className="font-semibold text-lg">{selectedTierData?.name} — {Number(selectedTierData?.price).toLocaleString('ru-RU')}₽</p>
+            </div>
+
+            {/* Auto-renewal checkbox */}
+            <div className="flex items-start space-x-3 p-3 rounded-lg bg-muted/50">
+              <Checkbox 
+                id="auto-renewal-grace" 
+                checked={autoRenewal}
+                onCheckedChange={(checked) => {
+                  setAutoRenewal(checked === true);
+                  if (!checked) setConsentGiven(false);
+                }}
+              />
+              <div className="grid gap-1 leading-none">
+                <Label htmlFor="auto-renewal-grace" className="font-medium cursor-pointer">
+                  Автоматическое продление
+                </Label>
+              </div>
+            </div>
+
+            {/* Consent required if auto-renewal is enabled */}
+            {autoRenewal && (
+              <div className="space-y-3 p-4 rounded-lg bg-warning/10 border border-warning/20">
+                <div className="flex items-center gap-2 text-warning">
+                  <AlertTriangle className="h-4 w-4" />
+                  <span className="text-sm font-medium">Требуется ваше согласие</span>
+                </div>
+                
+                <div className="flex items-start space-x-3">
+                  <Checkbox 
+                    id="consent-grace" 
+                    checked={consentGiven}
+                    onCheckedChange={(checked) => setConsentGiven(checked === true)}
+                  />
+                  <div className="grid gap-1.5 leading-none">
+                    <Label htmlFor="consent-grace" className="text-sm cursor-pointer">
+                      Я согласен на автоматические списания средств согласно условиям{' '}
+                      <a 
+                        href="https://antiage.ugrymova.ru/oferta" 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="text-primary underline"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        публичной оферты
+                      </a>
+                    </Label>
+                  </div>
+                </div>
+                
+                <p className="text-xs text-muted-foreground">
+                  При автопродлении оплата будет списываться за 1 день до окончания подписки. Вы получите уведомление за 3 дня.
+                </p>
+              </div>
+            )}
+
+            <Button 
+              className="w-full" 
+              size="lg"
+              disabled={generatingLink || (autoRenewal && !consentGiven)}
+              onClick={handlePayment}
+            >
+              {generatingLink ? (
+                <>
+                  <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                  Создание ссылки...
+                </>
+              ) : (
+                <>
+                  <CreditCard className="mr-2 h-4 w-4" />
+                  Продлить подписку
+                </>
+              )}
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
+
 function SubscriptionContent({
   subscriber, 
   isLoading, 
@@ -427,7 +641,8 @@ function SubscriptionContent({
   onUnsubscribe,
   onExtend,
   userName,
-  onRefetch
+  onRefetch,
+  gracePeriodDays = 0
 }: { 
   subscriber: any; 
   isLoading: boolean;
@@ -441,6 +656,7 @@ function SubscriptionContent({
   onExtend: (tierId: string) => void;
   userName?: string;
   onRefetch?: () => void;
+  gracePeriodDays?: number;
 }) {
   const [selectedTier, setSelectedTier] = useState<string | null>(null);
   const [autoRenewal, setAutoRenewal] = useState(false);
@@ -530,6 +746,29 @@ function SubscriptionContent({
   }
 
   const isActiveSubscriber = subscriber && subscriber.status === 'active';
+  const isGracePeriod = subscriber && subscriber.status === 'grace_period';
+
+  // Calculate grace period days remaining
+  let graceDaysRemaining = 0;
+  if (isGracePeriod && subscriber.subscription_end) {
+    const subscriptionEnd = new Date(subscriber.subscription_end);
+    const graceEndDate = addDays(subscriptionEnd, gracePeriodDays);
+    graceDaysRemaining = Math.max(0, differenceInDays(graceEndDate, new Date()));
+  }
+
+  // Show grace period warning
+  if (isGracePeriod) {
+    return (
+      <GracePeriodView
+        channelInfo={channelInfo}
+        tiers={tiers}
+        telegramUserId={telegramUserId}
+        subscriber={subscriber}
+        onRefetch={onRefetch}
+        graceDaysRemaining={graceDaysRemaining}
+      />
+    );
+  }
 
   // Show channel info and tier selection for new users or users without active subscription
   if (!isActiveSubscriber) {
