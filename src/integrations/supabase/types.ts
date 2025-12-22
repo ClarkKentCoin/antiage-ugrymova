@@ -16,6 +16,8 @@ export type Database = {
     Tables: {
       admin_settings: {
         Row: {
+          channel_description: string | null
+          channel_name: string | null
           created_at: string
           grace_period_days: number | null
           id: string
@@ -31,6 +33,8 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          channel_description?: string | null
+          channel_name?: string | null
           created_at?: string
           grace_period_days?: number | null
           id?: string
@@ -46,6 +50,8 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          channel_description?: string | null
+          channel_name?: string | null
           created_at?: string
           grace_period_days?: number | null
           id?: string

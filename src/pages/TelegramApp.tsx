@@ -40,19 +40,25 @@ export default function TelegramApp() {
   const [paymentLink, setPaymentLink] = useState<string | null>(null);
   const { toast } = useToast();
 
-  // Fetch payment link from admin settings
+  const [channelInfo, setChannelInfo] = useState<{ name: string; description: string } | null>(null);
+
+  // Fetch settings from admin_settings
   useEffect(() => {
-    async function fetchPaymentLink() {
+    async function fetchSettings() {
       const { data } = await supabase
         .from('admin_settings')
-        .select('payment_link')
+        .select('payment_link, channel_name, channel_description')
         .limit(1)
         .single();
       if (data) {
         setPaymentLink((data as any).payment_link);
+        setChannelInfo({
+          name: (data as any).channel_name || 'АНТИЭЙДЖ ЛАБ',
+          description: (data as any).channel_description || 'Закрытый Telegram-канал для женщин: мотивация, рецепты, научные подходы к антиэйджу. Всё для энергии и молодости в одном месте.'
+        });
       }
     }
-    fetchPaymentLink();
+    fetchSettings();
   }, []);
 
   // For testing outside Telegram (DEV or ?test=1)
@@ -135,19 +141,19 @@ export default function TelegramApp() {
           </CardContent>
         </Card>
 
-        {testUserId && (
-          <SubscriptionContent
-            subscriber={testSubscriber}
-            isLoading={loadingTestSubscriber}
-            daysRemaining={daysRemaining}
-            tiers={tiers || []}
-            payments={payments || []}
-            paymentLink={paymentLink}
-            onUnsubscribe={handleUnsubscribe}
-            onExtend={handleExtendRequest}
-            onRefetch={refetch}
-          />
-        )}
+        <SubscriptionContent
+          subscriber={testUserId ? testSubscriber : null}
+          isLoading={testUserId ? loadingTestSubscriber : false}
+          daysRemaining={daysRemaining}
+          tiers={tiers || []}
+          payments={payments || []}
+          paymentLink={paymentLink}
+          channelInfo={channelInfo}
+          telegramUserId={testUserId}
+          onUnsubscribe={handleUnsubscribe}
+          onExtend={handleExtendRequest}
+          onRefetch={refetch}
+        />
       </main>
     );
   }
@@ -169,6 +175,8 @@ export default function TelegramApp() {
         tiers={tiers || []}
         payments={payments || []}
         paymentLink={paymentLink}
+        channelInfo={channelInfo}
+        telegramUserId={user?.id}
         onUnsubscribe={handleUnsubscribe}
         onExtend={handleExtendRequest}
         userName={user?.first_name}
@@ -178,13 +186,244 @@ export default function TelegramApp() {
   );
 }
 
-function SubscriptionContent({ 
+// Component for new users / users without active subscription
+function NewUserView({
+  channelInfo,
+  tiers,
+  telegramUserId,
+  subscriber,
+  onRefetch
+}: {
+  channelInfo: { name: string; description: string } | null;
+  tiers: any[];
+  telegramUserId?: number | null;
+  subscriber: any;
+  onRefetch?: () => void;
+}) {
+  const [selectedTier, setSelectedTier] = useState<string | null>(null);
+  const [autoRenewal, setAutoRenewal] = useState(false);
+  const [consentGiven, setConsentGiven] = useState(false);
+  const [generatingLink, setGeneratingLink] = useState(false);
+  const [creatingSubscriber, setCreatingSubscriber] = useState(false);
+  const { toast } = useToast();
+
+  const handleSelectTier = (tierId: string) => {
+    setSelectedTier(tierId);
+    setAutoRenewal(false);
+    setConsentGiven(false);
+  };
+
+  const handlePayment = async () => {
+    if (!selectedTier) return;
+    
+    if (autoRenewal && !consentGiven) {
+      toast({ title: 'Необходимо согласие', description: 'Пожалуйста, подтвердите согласие на автосписания', variant: 'destructive' });
+      return;
+    }
+
+    setGeneratingLink(true);
+    try {
+      let subscriberId = subscriber?.id;
+
+      // If no subscriber exists, create one first
+      if (!subscriberId && telegramUserId) {
+        setCreatingSubscriber(true);
+        const { data: newSubscriber, error: createError } = await supabase
+          .from('subscribers')
+          .insert({
+            telegram_user_id: telegramUserId,
+            status: 'inactive',
+            tier_id: selectedTier,
+          })
+          .select()
+          .single();
+
+        if (createError) throw createError;
+        subscriberId = newSubscriber.id;
+        setCreatingSubscriber(false);
+      }
+
+      if (!subscriberId) {
+        toast({ title: 'Ошибка', description: 'Не удалось определить пользователя', variant: 'destructive' });
+        return;
+      }
+
+      const { data, error } = await supabase.functions.invoke('create-robokassa-payment', {
+        body: {
+          subscriber_id: subscriberId,
+          tier_id: selectedTier,
+          is_recurring: autoRenewal,
+          ip_address: null,
+          user_agent: navigator.userAgent,
+        },
+      });
+
+      if (error) throw error;
+      
+      if (data?.payment_url) {
+        window.open(data.payment_url, '_blank');
+        onRefetch?.();
+      }
+    } catch (error) {
+      console.error('Error generating payment link:', error);
+      toast({ title: 'Ошибка', description: 'Не удалось создать ссылку для оплаты', variant: 'destructive' });
+    } finally {
+      setGeneratingLink(false);
+      setCreatingSubscriber(false);
+    }
+  };
+
+  const selectedTierData = tiers.find(t => t.id === selectedTier);
+
+  return (
+    <div className="p-4 space-y-6">
+      {/* Channel Header */}
+      <div className="text-center py-6">
+        <div className="w-16 h-16 bg-gradient-to-br from-primary to-primary/60 rounded-full flex items-center justify-center mx-auto mb-4">
+          <Crown className="h-8 w-8 text-primary-foreground" />
+        </div>
+        <h1 className="text-2xl font-bold mb-3">
+          🌟 {channelInfo?.name || 'АНТИЭЙДЖ ЛАБ'}
+        </h1>
+        <p className="text-muted-foreground leading-relaxed max-w-sm mx-auto">
+          {channelInfo?.description || 'Закрытый Telegram-канал для женщин: мотивация, рецепты, научные подходы к антиэйджу. Всё для энергии и молодости в одном месте.'}
+        </p>
+      </div>
+
+      {/* Tier Selection */}
+      <div className="space-y-4">
+        <h2 className="text-center text-lg font-semibold flex items-center justify-center gap-2">
+          <span>💎</span> Выберите тариф и получите мгновенный доступ:
+        </h2>
+
+        <div className="grid gap-3">
+          {tiers.map(tier => (
+            <Card 
+              key={tier.id} 
+              className={`cursor-pointer transition-all ${
+                selectedTier === tier.id 
+                  ? 'border-primary ring-2 ring-primary/30 bg-primary/5' 
+                  : 'hover:border-primary/50 hover:shadow-md'
+              }`}
+              onClick={() => handleSelectTier(tier.id)}
+            >
+              <CardContent className="flex items-center justify-between p-4">
+                <div className="flex items-center gap-3">
+                  <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                    selectedTier === tier.id ? 'border-primary bg-primary' : 'border-muted-foreground'
+                  }`}>
+                    {selectedTier === tier.id && (
+                      <CheckCircle className="h-4 w-4 text-primary-foreground" />
+                    )}
+                  </div>
+                  <div>
+                    <p className="font-semibold text-lg">{tier.name}</p>
+                    <p className="text-sm text-muted-foreground">{tier.duration_days} дней</p>
+                  </div>
+                </div>
+                <p className="text-xl font-bold">{Number(tier.price).toLocaleString('ru-RU')}₽</p>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
+
+      {/* Payment options - shown when tier is selected */}
+      {selectedTier && (
+        <Card className="border-primary/30 bg-gradient-to-b from-primary/5 to-background">
+          <CardContent className="pt-5 space-y-4">
+            <div className="text-center pb-2">
+              <p className="text-sm text-muted-foreground">Вы выбрали:</p>
+              <p className="font-semibold text-lg">{selectedTierData?.name} — {Number(selectedTierData?.price).toLocaleString('ru-RU')}₽</p>
+            </div>
+
+            {/* Auto-renewal checkbox */}
+            <div className="flex items-start space-x-3 p-3 rounded-lg bg-muted/50">
+              <Checkbox 
+                id="auto-renewal-new" 
+                checked={autoRenewal}
+                onCheckedChange={(checked) => {
+                  setAutoRenewal(checked === true);
+                  if (!checked) setConsentGiven(false);
+                }}
+              />
+              <div className="grid gap-1 leading-none">
+                <Label htmlFor="auto-renewal-new" className="font-medium cursor-pointer">
+                  Автоматическое продление
+                </Label>
+              </div>
+            </div>
+
+            {/* Consent required if auto-renewal is enabled */}
+            {autoRenewal && (
+              <div className="space-y-3 p-4 rounded-lg bg-warning/10 border border-warning/20">
+                <div className="flex items-center gap-2 text-warning">
+                  <AlertTriangle className="h-4 w-4" />
+                  <span className="text-sm font-medium">Требуется ваше согласие</span>
+                </div>
+                
+                <div className="flex items-start space-x-3">
+                  <Checkbox 
+                    id="consent-new" 
+                    checked={consentGiven}
+                    onCheckedChange={(checked) => setConsentGiven(checked === true)}
+                  />
+                  <div className="grid gap-1.5 leading-none">
+                    <Label htmlFor="consent-new" className="text-sm cursor-pointer">
+                      Я согласен на автоматические списания средств согласно условиям{' '}
+                      <a 
+                        href="https://antiage.ugrymova.ru/oferta" 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="text-primary underline"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        публичной оферты
+                      </a>
+                    </Label>
+                  </div>
+                </div>
+                
+                <p className="text-xs text-muted-foreground">
+                  При автопродлении оплата будет списываться за 1 день до окончания подписки. Вы получите уведомление за 3 дня.
+                </p>
+              </div>
+            )}
+
+            <Button 
+              className="w-full" 
+              size="lg"
+              disabled={generatingLink || creatingSubscriber || (autoRenewal && !consentGiven)}
+              onClick={handlePayment}
+            >
+              {generatingLink || creatingSubscriber ? (
+                <>
+                  <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                  {creatingSubscriber ? 'Подготовка...' : 'Создание ссылки...'}
+                </>
+              ) : (
+                <>
+                  <CreditCard className="mr-2 h-4 w-4" />
+                  Оплатить через Robokassa
+                </>
+              )}
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+function SubscriptionContent({
   subscriber, 
   isLoading, 
   daysRemaining, 
   tiers, 
   payments,
   paymentLink,
+  channelInfo,
+  telegramUserId,
   onUnsubscribe,
   onExtend,
   userName,
@@ -196,6 +435,8 @@ function SubscriptionContent({
   tiers: any[];
   payments: any[];
   paymentLink: string | null;
+  channelInfo: { name: string; description: string } | null;
+  telegramUserId?: number | null;
   onUnsubscribe: () => void;
   onExtend: (tierId: string) => void;
   userName?: string;
@@ -288,43 +529,18 @@ function SubscriptionContent({
     );
   }
 
-  if (!subscriber) {
-    return (
-      <div className="p-4">
-        <Card>
-          <CardContent className="pt-6 text-center">
-            <AlertCircle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-            <h2 className="text-lg font-semibold mb-2">Нет активной подписки</h2>
-            <p className="text-sm text-muted-foreground mb-6">
-              У вас пока нет активной подписки на канал.
-            </p>
-            
-            {paymentLink ? (
-              <Button 
-                className="w-full mb-4" 
-                size="lg"
-                onClick={() => window.open(paymentLink, '_blank')}
-              >
-                <ExternalLink className="mr-2 h-5 w-5" />
-                Оформить подписку
-              </Button>
-            ) : null}
+  const isActiveSubscriber = subscriber && subscriber.status === 'active';
 
-            <div className="space-y-2 mt-4">
-              <p className="text-xs text-muted-foreground">Доступные тарифы:</p>
-              {tiers.map(tier => (
-                <div 
-                  key={tier.id} 
-                  className="flex justify-between items-center p-3 border rounded-lg"
-                >
-                  <span className="font-medium">{tier.name}</span>
-                  <span className="font-semibold">{tier.price}₽</span>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+  // Show channel info and tier selection for new users or users without active subscription
+  if (!isActiveSubscriber) {
+    return (
+      <NewUserView
+        channelInfo={channelInfo}
+        tiers={tiers}
+        telegramUserId={telegramUserId}
+        subscriber={subscriber}
+        onRefetch={onRefetch}
+      />
     );
   }
 
