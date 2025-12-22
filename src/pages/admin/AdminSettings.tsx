@@ -25,6 +25,12 @@ interface AdminSettingsData {
   welcome_message_image_url: string | null;
   welcome_message_button_text: string | null;
   welcome_message_button_url: string | null;
+  // Notification templates
+  notification_payment_reminder: string | null;
+  notification_payment_success: string | null;
+  notification_payment_failed: string | null;
+  notification_grace_period_warning: string | null;
+  notification_subscription_expired: string | null;
 }
 
 export default function AdminSettings() {
@@ -48,6 +54,11 @@ export default function AdminSettings() {
     welcome_message_image_url: '',
     welcome_message_button_text: 'Подробнее',
     welcome_message_button_url: '',
+    notification_payment_reminder: '',
+    notification_payment_success: '',
+    notification_payment_failed: '',
+    notification_grace_period_warning: '',
+    notification_subscription_expired: '',
   });
 
   // Generate default webhook URLs
@@ -84,6 +95,11 @@ export default function AdminSettings() {
           welcome_message_image_url: (data as any).welcome_message_image_url || '',
           welcome_message_button_text: (data as any).welcome_message_button_text || 'Подробнее',
           welcome_message_button_url: (data as any).welcome_message_button_url || '',
+          notification_payment_reminder: (data as any).notification_payment_reminder || '',
+          notification_payment_success: (data as any).notification_payment_success || '',
+          notification_payment_failed: (data as any).notification_payment_failed || '',
+          notification_grace_period_warning: (data as any).notification_grace_period_warning || '',
+          notification_subscription_expired: (data as any).notification_subscription_expired || '',
         });
       }
     } catch (error) {
@@ -118,6 +134,11 @@ export default function AdminSettings() {
         welcome_message_image_url: settings.welcome_message_image_url || null,
         welcome_message_button_text: settings.welcome_message_button_text || 'Подробнее',
         welcome_message_button_url: settings.welcome_message_button_url || null,
+        notification_payment_reminder: settings.notification_payment_reminder || null,
+        notification_payment_success: settings.notification_payment_success || null,
+        notification_payment_failed: settings.notification_payment_failed || null,
+        notification_grace_period_warning: settings.notification_grace_period_warning || null,
+        notification_subscription_expired: settings.notification_subscription_expired || null,
       };
 
       let error;
@@ -363,6 +384,77 @@ export default function AdminSettings() {
                   onChange={(e) => setSettings({ ...settings, welcome_message_button_url: e.target.value })}
                 />
                 <p className="text-xs text-muted-foreground">URL для кнопки (например, ссылка на Mini App или сайт)</p>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Notification Templates */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Шаблоны уведомлений</CardTitle>
+              <CardDescription>
+                Используйте переменные в фигурных скобках: {'{channel_name}'}, {'{days}'}, {'{amount}'}, {'{payment_date}'}, {'{expires_date}'}, {'{grace_days}'}, {'{error_message}'}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="space-y-2">
+                <Label htmlFor="notification_payment_reminder">Напоминание о списании (за N дней)</Label>
+                <Textarea
+                  id="notification_payment_reminder"
+                  placeholder="⏰ Напоминание о списании..."
+                  value={settings.notification_payment_reminder || ''}
+                  onChange={(e) => setSettings({ ...settings, notification_payment_reminder: e.target.value })}
+                  rows={6}
+                />
+                <p className="text-xs text-muted-foreground">Переменные: {'{channel_name}'}, {'{days}'}, {'{amount}'}, {'{payment_date}'}</p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="notification_payment_success">Успешная оплата</Label>
+                <Textarea
+                  id="notification_payment_success"
+                  placeholder="✅ Оплата успешна..."
+                  value={settings.notification_payment_success || ''}
+                  onChange={(e) => setSettings({ ...settings, notification_payment_success: e.target.value })}
+                  rows={6}
+                />
+                <p className="text-xs text-muted-foreground">Переменные: {'{channel_name}'}, {'{amount}'}, {'{expires_date}'}</p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="notification_payment_failed">Ошибка оплаты</Label>
+                <Textarea
+                  id="notification_payment_failed"
+                  placeholder="❌ Ошибка оплаты..."
+                  value={settings.notification_payment_failed || ''}
+                  onChange={(e) => setSettings({ ...settings, notification_payment_failed: e.target.value })}
+                  rows={6}
+                />
+                <p className="text-xs text-muted-foreground">Переменные: {'{channel_name}'}, {'{amount}'}, {'{error_message}'}, {'{grace_days}'}</p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="notification_grace_period_warning">Предупреждение Grace Period</Label>
+                <Textarea
+                  id="notification_grace_period_warning"
+                  placeholder="⚠️ Последнее предупреждение..."
+                  value={settings.notification_grace_period_warning || ''}
+                  onChange={(e) => setSettings({ ...settings, notification_grace_period_warning: e.target.value })}
+                  rows={6}
+                />
+                <p className="text-xs text-muted-foreground">Переменные: {'{channel_name}'}, {'{days}'}</p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="notification_subscription_expired">Подписка завершена</Label>
+                <Textarea
+                  id="notification_subscription_expired"
+                  placeholder="❗ Подписка завершена..."
+                  value={settings.notification_subscription_expired || ''}
+                  onChange={(e) => setSettings({ ...settings, notification_subscription_expired: e.target.value })}
+                  rows={6}
+                />
+                <p className="text-xs text-muted-foreground">Переменные: {'{channel_name}'}</p>
               </div>
             </CardContent>
           </Card>
