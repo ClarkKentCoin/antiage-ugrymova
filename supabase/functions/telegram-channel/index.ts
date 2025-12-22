@@ -179,7 +179,8 @@ serve(async (req) => {
     }
 
     if (action === "kick_user") {
-      // Kick user from channel (ban and immediately unban to remove access)
+      // Kick user from channel using ban + unban to remove from channel but not leave in banned list
+      // Step 1: Ban user (removes from channel)
       const banResult = await callTelegramApi(botToken, "banChatMember", {
         chat_id: channelId,
         user_id: telegram_user_id,
@@ -187,11 +188,28 @@ serve(async (req) => {
       });
 
       if (!banResult.ok) {
-        console.error("Failed to kick user:", banResult.description);
+        console.error("Failed to ban user:", banResult.description);
         return new Response(
           JSON.stringify({ error: banResult.description || "Failed to remove user from channel" }),
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
+      }
+
+      // Step 2: Small delay for reliability
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      // Step 3: Unban user (removes from banned list so they can rejoin with new invite)
+      const unbanResult = await callTelegramApi(botToken, "unbanChatMember", {
+        chat_id: channelId,
+        user_id: telegram_user_id,
+        only_if_banned: true,
+      });
+
+      if (!unbanResult.ok) {
+        console.error("Failed to unban user (not critical):", unbanResult.description);
+        // Don't throw error - user is already removed from channel
+      } else {
+        console.log(`User ${telegram_user_id} successfully removed and unbanned`);
       }
 
       // Update subscriber status

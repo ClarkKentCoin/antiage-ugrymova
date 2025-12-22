@@ -150,9 +150,10 @@ serve(async (req) => {
         graceEndDate.setDate(graceEndDate.getDate() + gracePeriodDays);
 
         if (now >= graceEndDate) {
-          // Grace period has ended or no grace period - kick user
+          // Grace period has ended or no grace period - kick user using ban + unban
           console.log(`Kicking user ${subscriber.telegram_user_id} - grace period ended`);
           
+          // Step 1: Ban user (removes from channel)
           const banResult = await callTelegramApi(botToken, "banChatMember", {
             chat_id: channelId,
             user_id: subscriber.telegram_user_id,
@@ -160,6 +161,22 @@ serve(async (req) => {
           });
 
           if (banResult.ok) {
+            // Step 2: Small delay for reliability
+            await new Promise(resolve => setTimeout(resolve, 100));
+            
+            // Step 3: Unban user (removes from banned list so they can rejoin with new invite)
+            const unbanResult = await callTelegramApi(botToken, "unbanChatMember", {
+              chat_id: channelId,
+              user_id: subscriber.telegram_user_id,
+              only_if_banned: true,
+            });
+            
+            if (!unbanResult.ok) {
+              console.error(`Failed to unban user ${subscriber.telegram_user_id} (not critical):`, unbanResult.description);
+            } else {
+              console.log(`User ${subscriber.telegram_user_id} successfully removed and unbanned`);
+            }
+            
             await supabaseAdmin
               .from("subscribers")
               .update({ 
@@ -228,9 +245,10 @@ serve(async (req) => {
         graceEndDate.setDate(graceEndDate.getDate() + gracePeriodDays);
 
         if (now >= graceEndDate) {
-          // Grace period has ended - kick user
+          // Grace period has ended - kick user using ban + unban
           console.log(`Kicking grace period user ${subscriber.telegram_user_id}`);
           
+          // Step 1: Ban user (removes from channel)
           const banResult = await callTelegramApi(botToken, "banChatMember", {
             chat_id: channelId,
             user_id: subscriber.telegram_user_id,
@@ -238,6 +256,22 @@ serve(async (req) => {
           });
 
           if (banResult.ok) {
+            // Step 2: Small delay for reliability
+            await new Promise(resolve => setTimeout(resolve, 100));
+            
+            // Step 3: Unban user (removes from banned list so they can rejoin with new invite)
+            const unbanResult = await callTelegramApi(botToken, "unbanChatMember", {
+              chat_id: channelId,
+              user_id: subscriber.telegram_user_id,
+              only_if_banned: true,
+            });
+            
+            if (!unbanResult.ok) {
+              console.error(`Failed to unban user ${subscriber.telegram_user_id} (not critical):`, unbanResult.description);
+            } else {
+              console.log(`User ${subscriber.telegram_user_id} successfully removed and unbanned`);
+            }
+            
             await supabaseAdmin
               .from("subscribers")
               .update({ 
