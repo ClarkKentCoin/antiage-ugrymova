@@ -4,16 +4,19 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Copy, Check } from 'lucide-react';
 
-interface AdminSettings {
+interface AdminSettingsData {
   telegram_bot_token: string | null;
   telegram_channel_id: string | null;
   robokassa_merchant_login: string | null;
   robokassa_password1: string | null;
   robokassa_password2: string | null;
+  robokassa_test_mode: boolean;
+  robokassa_result_url: string | null;
   grace_period_days: number;
   reminder_days_before: number;
   payment_link: string | null;
@@ -23,16 +26,22 @@ export default function AdminSettings() {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const [settings, setSettings] = useState<AdminSettings>({
+  const [copied, setCopied] = useState(false);
+  const [settings, setSettings] = useState<AdminSettingsData>({
     telegram_bot_token: '',
     telegram_channel_id: '',
     robokassa_merchant_login: '',
     robokassa_password1: '',
     robokassa_password2: '',
+    robokassa_test_mode: true,
+    robokassa_result_url: '',
     grace_period_days: 0,
     reminder_days_before: 3,
     payment_link: '',
   });
+
+  // Generate default webhook URL
+  const defaultWebhookUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/robokassa-webhook`;
 
   useEffect(() => {
     loadSettings();
@@ -55,6 +64,8 @@ export default function AdminSettings() {
           robokassa_merchant_login: data.robokassa_merchant_login || '',
           robokassa_password1: data.robokassa_password1 || '',
           robokassa_password2: data.robokassa_password2 || '',
+          robokassa_test_mode: (data as any).robokassa_test_mode ?? true,
+          robokassa_result_url: (data as any).robokassa_result_url || defaultWebhookUrl,
           grace_period_days: data.grace_period_days || 0,
           reminder_days_before: data.reminder_days_before || 3,
           payment_link: (data as any).payment_link || '',
@@ -83,6 +94,8 @@ export default function AdminSettings() {
         robokassa_merchant_login: settings.robokassa_merchant_login || null,
         robokassa_password1: settings.robokassa_password1 || null,
         robokassa_password2: settings.robokassa_password2 || null,
+        robokassa_test_mode: settings.robokassa_test_mode,
+        robokassa_result_url: settings.robokassa_result_url || defaultWebhookUrl,
         grace_period_days: settings.grace_period_days,
         reminder_days_before: settings.reminder_days_before,
         payment_link: settings.payment_link || null,
@@ -106,13 +119,21 @@ export default function AdminSettings() {
 
       if (error) throw error;
 
-      toast({ title: 'Settings saved successfully' });
+      toast({ title: 'Настройки сохранены' });
     } catch (error) {
       console.error('Error saving settings:', error);
-      toast({ title: 'Error saving settings', variant: 'destructive' });
+      toast({ title: 'Ошибка сохранения настроек', variant: 'destructive' });
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const copyWebhookUrl = () => {
+    const url = settings.robokassa_result_url || defaultWebhookUrl;
+    navigator.clipboard.writeText(url);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+    toast({ title: 'URL скопирован' });
   };
 
   if (isLoading) {
@@ -130,8 +151,8 @@ export default function AdminSettings() {
     <AdminLayout>
       <div className="space-y-6">
         <div>
-          <h1 className="text-2xl font-semibold">Settings</h1>
-          <p className="text-muted-foreground">Configure your bot and payment settings</p>
+          <h1 className="text-2xl font-semibold">Настройки</h1>
+          <p className="text-muted-foreground">Настройте бота и платёжную систему</p>
         </div>
 
         <div className="grid gap-6 max-w-2xl">
@@ -139,7 +160,7 @@ export default function AdminSettings() {
           <Card>
             <CardHeader>
               <CardTitle>Telegram Bot</CardTitle>
-              <CardDescription>Connect your Telegram bot to manage channel members</CardDescription>
+              <CardDescription>Подключите Telegram бота для управления каналом</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
@@ -151,7 +172,7 @@ export default function AdminSettings() {
                   value={settings.telegram_bot_token || ''}
                   onChange={(e) => setSettings({ ...settings, telegram_bot_token: e.target.value })}
                 />
-                <p className="text-xs text-muted-foreground">Get this from @BotFather</p>
+                <p className="text-xs text-muted-foreground">Получите токен у @BotFather</p>
               </div>
 
               <div className="space-y-2">
@@ -162,7 +183,87 @@ export default function AdminSettings() {
                   value={settings.telegram_channel_id || ''}
                   onChange={(e) => setSettings({ ...settings, telegram_channel_id: e.target.value })}
                 />
-                <p className="text-xs text-muted-foreground">Your private channel/group ID</p>
+                <p className="text-xs text-muted-foreground">ID вашего приватного канала/группы</p>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Robokassa Settings */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Robokassa</CardTitle>
+              <CardDescription>Настройки платёжного шлюза для автоматических платежей</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="merchant_login">Идентификатор магазина (MerchantLogin)</Label>
+                <Input
+                  id="merchant_login"
+                  placeholder="your_shop_login"
+                  value={settings.robokassa_merchant_login || ''}
+                  onChange={(e) => setSettings({ ...settings, robokassa_merchant_login: e.target.value })}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="password1">Пароль #1</Label>
+                <Input
+                  id="password1"
+                  type="password"
+                  placeholder="Для генерации платежных ссылок"
+                  value={settings.robokassa_password1 || ''}
+                  onChange={(e) => setSettings({ ...settings, robokassa_password1: e.target.value })}
+                />
+                <p className="text-xs text-muted-foreground">Используется для формирования подписи при создании платежа</p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="password2">Пароль #2</Label>
+                <Input
+                  id="password2"
+                  type="password"
+                  placeholder="Для проверки уведомлений"
+                  value={settings.robokassa_password2 || ''}
+                  onChange={(e) => setSettings({ ...settings, robokassa_password2: e.target.value })}
+                />
+                <p className="text-xs text-muted-foreground">Используется для проверки подписи входящих уведомлений</p>
+              </div>
+
+              <div className="flex items-center justify-between rounded-lg border p-3">
+                <div className="space-y-0.5">
+                  <Label>Тестовый режим</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Использовать тестовые пароли Robokassa
+                  </p>
+                </div>
+                <Switch
+                  checked={settings.robokassa_test_mode}
+                  onCheckedChange={(checked) => setSettings({ ...settings, robokassa_test_mode: checked })}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="result_url">Result URL (Webhook)</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="result_url"
+                    placeholder={defaultWebhookUrl}
+                    value={settings.robokassa_result_url || defaultWebhookUrl}
+                    onChange={(e) => setSettings({ ...settings, robokassa_result_url: e.target.value })}
+                    className="flex-1"
+                  />
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    size="icon"
+                    onClick={copyWebhookUrl}
+                  >
+                    {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Укажите этот URL в настройках Robokassa → Технические настройки → Result Url
+                </p>
               </div>
             </CardContent>
           </Card>
@@ -170,8 +271,8 @@ export default function AdminSettings() {
           {/* Payment Link */}
           <Card>
             <CardHeader>
-              <CardTitle>Ссылка на оплату</CardTitle>
-              <CardDescription>Ручная ссылка для оплаты подписки (до интеграции Robokassa)</CardDescription>
+              <CardTitle>Ручная ссылка на оплату</CardTitle>
+              <CardDescription>Ссылка для оплаты до интеграции Robokassa (например, на банковский перевод)</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
@@ -187,56 +288,15 @@ export default function AdminSettings() {
             </CardContent>
           </Card>
 
-          {/* Robokassa Settings */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Robokassa (Phase 2)</CardTitle>
-              <CardDescription>Payment gateway settings - configure when ready</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="merchant_login">Merchant Login</Label>
-                <Input
-                  id="merchant_login"
-                  placeholder="Your merchant login"
-                  value={settings.robokassa_merchant_login || ''}
-                  onChange={(e) => setSettings({ ...settings, robokassa_merchant_login: e.target.value })}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="password1">Password #1</Label>
-                <Input
-                  id="password1"
-                  type="password"
-                  placeholder="For payment initiation"
-                  value={settings.robokassa_password1 || ''}
-                  onChange={(e) => setSettings({ ...settings, robokassa_password1: e.target.value })}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="password2">Password #2</Label>
-                <Input
-                  id="password2"
-                  type="password"
-                  placeholder="For result URL verification"
-                  value={settings.robokassa_password2 || ''}
-                  onChange={(e) => setSettings({ ...settings, robokassa_password2: e.target.value })}
-                />
-              </div>
-            </CardContent>
-          </Card>
-
           {/* Subscription Settings */}
           <Card>
             <CardHeader>
-              <CardTitle>Subscription Settings</CardTitle>
-              <CardDescription>Configure expiry reminders and grace periods</CardDescription>
+              <CardTitle>Настройки подписки</CardTitle>
+              <CardDescription>Напоминания и период отсрочки</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="reminder_days">Reminder Days Before</Label>
+                <Label htmlFor="reminder_days">Напоминание за (дней)</Label>
                 <Input
                   id="reminder_days"
                   type="number"
@@ -244,11 +304,11 @@ export default function AdminSettings() {
                   value={settings.reminder_days_before}
                   onChange={(e) => setSettings({ ...settings, reminder_days_before: parseInt(e.target.value) || 0 })}
                 />
-                <p className="text-xs text-muted-foreground">Days before expiry to send reminder</p>
+                <p className="text-xs text-muted-foreground">За сколько дней до окончания подписки отправить напоминание</p>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="grace_period">Grace Period (days)</Label>
+                <Label htmlFor="grace_period">Grace Period (дней)</Label>
                 <Input
                   id="grace_period"
                   type="number"
@@ -256,14 +316,14 @@ export default function AdminSettings() {
                   value={settings.grace_period_days}
                   onChange={(e) => setSettings({ ...settings, grace_period_days: parseInt(e.target.value) || 0 })}
                 />
-                <p className="text-xs text-muted-foreground">Days after expiry before removal</p>
+                <p className="text-xs text-muted-foreground">Сколько дней после окончания подписки до удаления из канала</p>
               </div>
             </CardContent>
           </Card>
 
           <Button onClick={handleSave} disabled={isSaving} className="w-fit">
             {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Save Settings
+            Сохранить настройки
           </Button>
         </div>
       </div>

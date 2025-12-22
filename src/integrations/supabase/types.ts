@@ -24,6 +24,8 @@ export type Database = {
           robokassa_merchant_login: string | null
           robokassa_password1: string | null
           robokassa_password2: string | null
+          robokassa_result_url: string | null
+          robokassa_test_mode: boolean | null
           telegram_bot_token: string | null
           telegram_channel_id: string | null
           updated_at: string
@@ -37,6 +39,8 @@ export type Database = {
           robokassa_merchant_login?: string | null
           robokassa_password1?: string | null
           robokassa_password2?: string | null
+          robokassa_result_url?: string | null
+          robokassa_test_mode?: boolean | null
           telegram_bot_token?: string | null
           telegram_channel_id?: string | null
           updated_at?: string
@@ -50,6 +54,8 @@ export type Database = {
           robokassa_merchant_login?: string | null
           robokassa_password1?: string | null
           robokassa_password2?: string | null
+          robokassa_result_url?: string | null
+          robokassa_test_mode?: boolean | null
           telegram_bot_token?: string | null
           telegram_channel_id?: string | null
           updated_at?: string
@@ -61,31 +67,43 @@ export type Database = {
           amount: number
           created_at: string
           id: string
+          invoice_id: string | null
           payment_date: string
           payment_method: string
           payment_note: string | null
+          robokassa_data: Json | null
+          status: string | null
           subscriber_id: string
           tier_id: string | null
+          transaction_type: string | null
         }
         Insert: {
           amount: number
           created_at?: string
           id?: string
+          invoice_id?: string | null
           payment_date?: string
           payment_method?: string
           payment_note?: string | null
+          robokassa_data?: Json | null
+          status?: string | null
           subscriber_id: string
           tier_id?: string | null
+          transaction_type?: string | null
         }
         Update: {
           amount?: number
           created_at?: string
           id?: string
+          invoice_id?: string | null
           payment_date?: string
           payment_method?: string
           payment_note?: string | null
+          robokassa_data?: Json | null
+          status?: string | null
           subscriber_id?: string
           tier_id?: string | null
+          transaction_type?: string | null
         }
         Relationships: [
           {
@@ -106,12 +124,15 @@ export type Database = {
       }
       subscribers: {
         Row: {
+          auto_renewal: boolean | null
           created_at: string
           first_name: string | null
           id: string
           is_in_channel: boolean | null
           last_name: string | null
+          robokassa_invoice_id: string | null
           status: string | null
+          subscriber_payment_method: string | null
           subscription_end: string | null
           subscription_start: string | null
           telegram_user_id: number
@@ -120,12 +141,15 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          auto_renewal?: boolean | null
           created_at?: string
           first_name?: string | null
           id?: string
           is_in_channel?: boolean | null
           last_name?: string | null
+          robokassa_invoice_id?: string | null
           status?: string | null
+          subscriber_payment_method?: string | null
           subscription_end?: string | null
           subscription_start?: string | null
           telegram_user_id: number
@@ -134,12 +158,15 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          auto_renewal?: boolean | null
           created_at?: string
           first_name?: string | null
           id?: string
           is_in_channel?: boolean | null
           last_name?: string | null
+          robokassa_invoice_id?: string | null
           status?: string | null
+          subscriber_payment_method?: string | null
           subscription_end?: string | null
           subscription_start?: string | null
           telegram_user_id?: number
@@ -223,6 +250,12 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "user"
+      payment_status: "pending" | "processing" | "completed" | "failed"
+      payment_transaction_type: "initial" | "recurring"
+      subscriber_payment_method:
+        | "manual"
+        | "robokassa_single"
+        | "robokassa_recurring"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -351,6 +384,13 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "user"],
+      payment_status: ["pending", "processing", "completed", "failed"],
+      payment_transaction_type: ["initial", "recurring"],
+      subscriber_payment_method: [
+        "manual",
+        "robokassa_single",
+        "robokassa_recurring",
+      ],
     },
   },
 } as const
