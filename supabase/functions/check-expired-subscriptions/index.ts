@@ -12,6 +12,29 @@ interface TelegramResponse {
   description?: string;
 }
 
+// Replace template variables with actual values
+function replaceVariables(template: string, variables: Record<string, string>): string {
+  let result = template;
+  for (const [key, value] of Object.entries(variables)) {
+    result = result.replace(new RegExp(`\\{${key}\\}`, 'g'), value);
+  }
+  return result;
+}
+
+const DEFAULT_GRACE_PERIOD_WARNING = `⚠️ Последнее предупреждение
+
+Ваша подписка на канал "{channel_name}" истекла.
+
+У вас осталось {days} дней для продления. После этого вы будете удалены из канала и потеряете доступ к архиву сообщений.
+
+💎 Продлите сейчас, чтобы сохранить доступ.`;
+
+const DEFAULT_SUBSCRIPTION_EXPIRED = `❗ Подписка завершена
+
+Ваша подписка на канал "{channel_name}" завершена, и вы были удалены из канала.
+
+Чтобы вернуть доступ и историю сообщений, оформите новую подписку.`;
+
 async function callTelegramApi(botToken: string, method: string, params: Record<string, any> = {}): Promise<TelegramResponse> {
   const url = `https://api.telegram.org/bot${botToken}/${method}`;
   
@@ -49,10 +72,10 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     );
 
-    // Get admin settings
+    // Get admin settings including notification templates
     const { data: settings, error: settingsError } = await supabaseAdmin
       .from("admin_settings")
-      .select("telegram_bot_token, telegram_channel_id, grace_period_days")
+      .select("telegram_bot_token, telegram_channel_id, grace_period_days, channel_name, notification_grace_period_warning, notification_subscription_expired")
       .limit(1)
       .maybeSingle();
 
@@ -73,6 +96,9 @@ serve(async (req) => {
     }
 
     const gracePeriodDays = settings.grace_period_days || 0;
+    const channelName = settings.channel_name || "Канал";
+    const gracePeriodWarningTemplate = settings.notification_grace_period_warning || DEFAULT_GRACE_PERIOD_WARNING;
+    const subscriptionExpiredTemplate = settings.notification_subscription_expired || DEFAULT_SUBSCRIPTION_EXPIRED;
     const now = new Date();
     
     console.log(`Grace period: ${gracePeriodDays} days`);
@@ -142,6 +168,17 @@ serve(async (req) => {
               })
               .eq("id", subscriber.id);
             
+            // Send subscription expired notification
+            const expiredMessage = replaceVariables(subscriptionExpiredTemplate, {
+              channel_name: channelName,
+            });
+            
+            await callTelegramApi(botToken, "sendMessage", {
+              chat_id: subscriber.telegram_user_id,
+              text: expiredMessage,
+              parse_mode: "HTML",
+            });
+            
             results.kicked++;
             console.log(`User ${subscriber.telegram_user_id} kicked and status set to expired`);
           } else {
@@ -162,11 +199,16 @@ serve(async (req) => {
             .update({ status: "grace_period" })
             .eq("id", subscriber.id);
           
-          // Send reminder message to user
+          // Send grace period warning notification
           const daysLeft = Math.ceil((graceEndDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+          const warningMessage = replaceVariables(gracePeriodWarningTemplate, {
+            channel_name: channelName,
+            days: String(daysLeft),
+          });
+          
           await callTelegramApi(botToken, "sendMessage", {
             chat_id: subscriber.telegram_user_id,
-            text: `⚠️ Ваша подписка истекла!\n\nУ вас есть ${daysLeft} дней для продления без потери доступа к архиву канала.\n\nПродлите сейчас, чтобы не потерять историю сообщений.`,
+            text: warningMessage,
             parse_mode: "HTML",
           });
           
@@ -203,6 +245,17 @@ serve(async (req) => {
                 is_in_channel: false 
               })
               .eq("id", subscriber.id);
+            
+            // Send subscription expired notification
+            const expiredMessage = replaceVariables(subscriptionExpiredTemplate, {
+              channel_name: channelName,
+            });
+            
+            await callTelegramApi(botToken, "sendMessage", {
+              chat_id: subscriber.telegram_user_id,
+              text: expiredMessage,
+              parse_mode: "HTML",
+            });
             
             results.kicked++;
           } else {

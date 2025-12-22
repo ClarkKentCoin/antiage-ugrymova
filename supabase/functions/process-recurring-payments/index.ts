@@ -14,6 +14,33 @@ async function md5(message: string): Promise<string> {
   return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
+// Replace template variables with actual values
+function replaceVariables(template: string, variables: Record<string, string>): string {
+  let result = template;
+  for (const [key, value] of Object.entries(variables)) {
+    result = result.replace(new RegExp(`\\{${key}\\}`, 'g'), value);
+  }
+  return result;
+}
+
+const DEFAULT_PAYMENT_SUCCESS = `✅ Оплата успешна
+
+Ваша подписка на канал "{channel_name}" успешно продлена!
+
+💰 Списано: {amount}₽
+📅 Действует до: {expires_date}
+
+Спасибо что с нами! 💙`;
+
+const DEFAULT_PAYMENT_FAILED = `❌ Ошибка оплаты
+
+Не удалось списать средства за продление подписки на канал "{channel_name}".
+
+💰 Сумма: {amount}₽
+❗ Причина: {error_message}
+
+У вас есть {grace_days} дней для продления вручную. После этого доступ к каналу будет закрыт.`;
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -55,7 +82,8 @@ serve(async (req) => {
         robokassa_invoice_id,
         subscription_tiers (
           name,
-          price
+          price,
+          duration_days
         )
       `)
       .eq("auto_renewal", true)
@@ -83,12 +111,12 @@ serve(async (req) => {
       );
     }
 
-    // Get Robokassa settings
+    // Get Robokassa and notification settings
     const { data: settings, error: settingsError } = await supabaseAdmin
       .from("admin_settings")
-      .select("robokassa_merchant_login, robokassa_password1, robokassa_test_mode")
+      .select("robokassa_merchant_login, robokassa_password1, robokassa_test_mode, telegram_bot_token, channel_name, grace_period_days, notification_payment_success, notification_payment_failed")
       .limit(1)
-      .single();
+      .maybeSingle();
 
     if (settingsError || !settings?.robokassa_merchant_login || !settings?.robokassa_password1) {
       console.error("Robokassa not configured:", settingsError);
@@ -97,6 +125,12 @@ serve(async (req) => {
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
+    const channelName = settings.channel_name || "Канал";
+    const graceDays = settings.grace_period_days || 0;
+    const successTemplate = settings.notification_payment_success || DEFAULT_PAYMENT_SUCCESS;
+    const failedTemplate = settings.notification_payment_failed || DEFAULT_PAYMENT_FAILED;
+    const botToken = settings.telegram_bot_token;
 
     const results: Array<{ subscriber_id: string; success: boolean; message: string }> = [];
 
@@ -172,18 +206,62 @@ serve(async (req) => {
         const responseText = await response.text();
         console.log(`Robokassa response for ${subscription.id}:`, responseText);
 
+        const amount = Number(tier.price).toLocaleString('ru-RU');
+
         // Check if response contains OK
         if (responseText.toUpperCase().includes("OK")) {
-          // Update payment status
+          // Calculate new expiration date
+          const currentEnd = new Date(subscription.subscription_end);
+          const newEnd = new Date(currentEnd);
+          newEnd.setDate(newEnd.getDate() + (tier.duration_days || 30));
+          
+          const expiresDate = newEnd.toLocaleDateString('ru-RU', {
+            day: 'numeric',
+            month: 'long',
+            year: 'numeric'
+          });
+
+          // Update payment status and subscription
           await supabaseAdmin
             .from("payment_history")
-            .update({ status: "processing" })
+            .update({ status: "completed" })
             .eq("id", payment.id);
+
+          await supabaseAdmin
+            .from("subscribers")
+            .update({ 
+              subscription_end: newEnd.toISOString(),
+              robokassa_invoice_id: newInvoiceId,
+              next_payment_notification_sent: false,
+            })
+            .eq("id", subscription.id);
+
+          // Send success notification
+          if (botToken) {
+            const successMessage = replaceVariables(successTemplate, {
+              channel_name: channelName,
+              amount: amount,
+              expires_date: expiresDate,
+            });
+
+            await fetch(
+              `https://api.telegram.org/bot${botToken}/sendMessage`,
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  chat_id: subscription.telegram_user_id,
+                  text: successMessage,
+                  parse_mode: "HTML",
+                }),
+              }
+            );
+          }
 
           results.push({ 
             subscriber_id: subscription.id, 
             success: true, 
-            message: "Recurring payment initiated" 
+            message: "Recurring payment completed" 
           });
         } else {
           // Mark payment as failed
@@ -194,6 +272,29 @@ serve(async (req) => {
               robokassa_data: { error: responseText }
             })
             .eq("id", payment.id);
+
+          // Send failure notification
+          if (botToken) {
+            const failedMessage = replaceVariables(failedTemplate, {
+              channel_name: channelName,
+              amount: amount,
+              error_message: responseText || "Неизвестная ошибка",
+              grace_days: String(graceDays),
+            });
+
+            await fetch(
+              `https://api.telegram.org/bot${botToken}/sendMessage`,
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  chat_id: subscription.telegram_user_id,
+                  text: failedMessage,
+                  parse_mode: "HTML",
+                }),
+              }
+            );
+          }
 
           results.push({ 
             subscriber_id: subscription.id, 

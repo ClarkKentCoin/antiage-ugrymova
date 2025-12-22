@@ -21,6 +21,11 @@ export type Database = {
           created_at: string
           grace_period_days: number | null
           id: string
+          notification_grace_period_warning: string | null
+          notification_payment_failed: string | null
+          notification_payment_reminder: string | null
+          notification_payment_success: string | null
+          notification_subscription_expired: string | null
           payment_link: string | null
           reminder_days_before: number | null
           robokassa_merchant_login: string | null
@@ -42,6 +47,11 @@ export type Database = {
           created_at?: string
           grace_period_days?: number | null
           id?: string
+          notification_grace_period_warning?: string | null
+          notification_payment_failed?: string | null
+          notification_payment_reminder?: string | null
+          notification_payment_success?: string | null
+          notification_subscription_expired?: string | null
           payment_link?: string | null
           reminder_days_before?: number | null
           robokassa_merchant_login?: string | null
@@ -63,6 +73,11 @@ export type Database = {
           created_at?: string
           grace_period_days?: number | null
           id?: string
+          notification_grace_period_warning?: string | null
+          notification_payment_failed?: string | null
+          notification_payment_reminder?: string | null
+          notification_payment_success?: string | null
+          notification_subscription_expired?: string | null
           payment_link?: string | null
           reminder_days_before?: number | null
           robokassa_merchant_login?: string | null

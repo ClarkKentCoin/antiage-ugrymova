@@ -6,6 +6,24 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Replace template variables with actual values
+function replaceVariables(template: string, variables: Record<string, string>): string {
+  let result = template;
+  for (const [key, value] of Object.entries(variables)) {
+    result = result.replace(new RegExp(`\\{${key}\\}`, 'g'), value);
+  }
+  return result;
+}
+
+const DEFAULT_PAYMENT_REMINDER = `⏰ Напоминание о списании
+
+Через {days} дней будет списана оплата за продление подписки на канал "{channel_name}".
+
+💰 Сумма: {amount}₽
+📅 Дата списания: {payment_date}
+
+Если хотите отключить автопродление, сделайте это в настройках подписки.`;
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -31,10 +49,29 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     );
 
-    // Find subscriptions expiring in exactly 3 days with auto_renewal enabled
+    // Get settings including notification template
+    const { data: settings, error: settingsError } = await supabaseAdmin
+      .from("admin_settings")
+      .select("telegram_bot_token, channel_name, notification_payment_reminder, reminder_days_before")
+      .limit(1)
+      .maybeSingle();
+
+    if (settingsError || !settings?.telegram_bot_token) {
+      console.error("Telegram bot not configured:", settingsError);
+      return new Response(
+        JSON.stringify({ error: "Telegram bot not configured" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const reminderDays = settings.reminder_days_before || 3;
+    const channelName = settings.channel_name || "Канал";
+    const messageTemplate = settings.notification_payment_reminder || DEFAULT_PAYMENT_REMINDER;
+
+    // Find subscriptions expiring in exactly reminderDays days with auto_renewal enabled
     const now = new Date();
-    const threeDaysFromNow = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000);
-    const fourDaysFromNow = new Date(now.getTime() + 4 * 24 * 60 * 60 * 1000);
+    const targetDate = new Date(now.getTime() + reminderDays * 24 * 60 * 60 * 1000);
+    const nextDay = new Date(now.getTime() + (reminderDays + 1) * 24 * 60 * 60 * 1000);
 
     const { data: subscriptions, error: subError } = await supabaseAdmin
       .from("subscribers")
@@ -51,8 +88,8 @@ serve(async (req) => {
       .eq("auto_renewal", true)
       .eq("status", "active")
       .eq("next_payment_notification_sent", false)
-      .gte("subscription_end", threeDaysFromNow.toISOString())
-      .lt("subscription_end", fourDaysFromNow.toISOString());
+      .gte("subscription_end", targetDate.toISOString())
+      .lt("subscription_end", nextDay.toISOString());
 
     if (subError) {
       console.error("Error fetching subscriptions:", subError);
@@ -68,21 +105,6 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({ success: true, notified: 0, message: "No notifications to send" }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // Get Telegram settings
-    const { data: settings, error: settingsError } = await supabaseAdmin
-      .from("admin_settings")
-      .select("telegram_bot_token")
-      .limit(1)
-      .single();
-
-    if (settingsError || !settings?.telegram_bot_token) {
-      console.error("Telegram bot not configured:", settingsError);
-      return new Response(
-        JSON.stringify({ error: "Telegram bot not configured" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -107,13 +129,13 @@ serve(async (req) => {
           year: 'numeric'
         });
 
-        const message = `⏰ <b>Уведомление об автоматическом продлении</b>
-
-Через 3 дня будет списана оплата за продление подписки:
-💰 Сумма: <b>${amount}₽</b>
-📅 Дата списания: <b>${formattedDate}</b>
-
-Отключить автопродление можно в настройках подписки.`;
+        // Replace variables in template
+        const message = replaceVariables(messageTemplate, {
+          channel_name: channelName,
+          days: String(reminderDays),
+          amount: amount,
+          payment_date: formattedDate,
+        });
 
         // Send notification via Telegram
         const response = await fetch(
