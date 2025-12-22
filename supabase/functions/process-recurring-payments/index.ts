@@ -50,6 +50,7 @@ serve(async (req) => {
       .eq("subscriber_payment_method", "robokassa_recurring")
       .eq("status", "active")
       .not("robokassa_invoice_id", "is", null)
+      .not("auto_renewal_consent_date", "is", null) // Must have consent
       .gte("subscription_end", oneDayFromNow.toISOString())
       .lte("subscription_end", threeDaysFromNow.toISOString());
 

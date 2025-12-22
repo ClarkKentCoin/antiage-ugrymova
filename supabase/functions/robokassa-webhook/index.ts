@@ -158,6 +158,7 @@ serve(async (req) => {
           .from("subscribers")
           .update({
             robokassa_invoice_id: invId,
+            next_payment_notification_sent: false, // Reset for next cycle
           })
           .eq("id", shpSubscriberId);
 
@@ -166,6 +167,17 @@ serve(async (req) => {
         } else {
           console.log(`Saved robokassa_invoice_id ${invId} for recurring payments`);
         }
+      }
+
+      // For recurring payments (transaction_type = 'recurring'), reset notification flag
+      if (payment.transaction_type === "recurring") {
+        await supabaseAdmin
+          .from("subscribers")
+          .update({
+            next_payment_notification_sent: false,
+          })
+          .eq("id", shpSubscriberId);
+        console.log(`Reset next_payment_notification_sent for ${shpSubscriberId}`);
       }
 
       // Calculate subscription end date
