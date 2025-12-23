@@ -9,6 +9,7 @@ export interface Subscriber {
   first_name: string | null;
   last_name: string | null;
   phone_number: string | null;
+  email: string | null;
   tier_id: string | null;
   subscription_start: string | null;
   subscription_end: string | null;

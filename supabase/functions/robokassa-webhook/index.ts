@@ -67,12 +67,13 @@ serve(async (req) => {
     const signatureValue = (data.SignatureValue || data.signature_value || "").toUpperCase();
     const shpSource = data.Shp_source || data.shp_source || "";
     const shpSubscriberId = data.Shp_subscriber_id || data.shp_subscriber_id || "";
+    const shpTelegramUserId = data.Shp_telegram_user_id || data.shp_telegram_user_id || "";
     const fee = data.Fee || data.fee || "";
     const email = data.EMail || data.email || "";
     const paymentMethod = data.PaymentMethod || data.payment_method || "";
     const incCurrLabel = data.IncCurrLabel || data.inc_curr_label || "";
 
-    console.log(`Processing payment: InvId=${invId}, OutSum=${outSum}, Subscriber=${shpSubscriberId}`);
+    console.log(`Processing payment: InvId=${invId}, OutSum=${outSum}, Subscriber=${shpSubscriberId}, TelegramUser=${shpTelegramUserId}, Email=${email}`);
 
     if (!outSum || !invId || !signatureValue || !shpSubscriberId) {
       console.error("Missing required parameters");
@@ -94,9 +95,9 @@ serve(async (req) => {
     const password2 = settings.robokassa_password2;
 
     // Build signature verification string
-    // Format: OutSum:InvId:Password2:Shp_source=value:Shp_subscriber_id=value
+    // Format: OutSum:InvId:Password2:Shp_source=value:Shp_subscriber_id=value:Shp_telegram_user_id=value
     // Shp parameters MUST be in alphabetical order
-    const verifyString = `${outSum}:${invId}:${password2}:Shp_source=${shpSource}:Shp_subscriber_id=${shpSubscriberId}`;
+    const verifyString = `${outSum}:${invId}:${password2}:Shp_source=${shpSource}:Shp_subscriber_id=${shpSubscriberId}:Shp_telegram_user_id=${shpTelegramUserId}`;
     
     console.log("Verify string (without password):", verifyString.replace(password2, "***"));
     
@@ -132,8 +133,23 @@ serve(async (req) => {
       inc_curr_label: incCurrLabel,
       shp_source: shpSource,
       shp_subscriber_id: shpSubscriberId,
+      shp_telegram_user_id: shpTelegramUserId,
       received_at: new Date().toISOString(),
     };
+
+    // Update subscriber email if provided
+    if (email && shpSubscriberId) {
+      const { error: emailUpdateError } = await supabaseAdmin
+        .from("subscribers")
+        .update({ email: email })
+        .eq("id", shpSubscriberId);
+
+      if (emailUpdateError) {
+        console.error("Failed to update subscriber email:", emailUpdateError);
+      } else {
+        console.log(`Updated email for subscriber ${shpSubscriberId}: ${email}`);
+      }
+    }
 
     if (payment) {
       // Update existing payment

@@ -19,6 +19,8 @@ export default function AdminSubscribers() {
       sub.telegram_username?.toLowerCase().includes(searchLower) ||
       sub.first_name?.toLowerCase().includes(searchLower) ||
       sub.last_name?.toLowerCase().includes(searchLower) ||
+      sub.email?.toLowerCase().includes(searchLower) ||
+      sub.phone_number?.includes(search) ||
       sub.telegram_user_id.toString().includes(search)
     );
   });
