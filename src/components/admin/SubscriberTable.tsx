@@ -73,12 +73,20 @@ export function SubscriberTable({ subscribers }: SubscriberTableProps) {
 
   const getDisplayName = (subscriber: Subscriber) => {
     if (subscriber.telegram_username) return `@${subscriber.telegram_username}`;
-    if (subscriber.first_name) {
-      return subscriber.last_name 
-        ? `${subscriber.first_name} ${subscriber.last_name}`
-        : subscriber.first_name;
+    if (subscriber.first_name && subscriber.last_name) {
+      return `${subscriber.first_name} ${subscriber.last_name}`;
     }
-    return `ID: ${subscriber.telegram_user_id}`;
+    if (subscriber.first_name) return subscriber.first_name;
+    return '-';
+  };
+
+  const getFullName = (subscriber: Subscriber) => {
+    if (subscriber.first_name && subscriber.last_name) {
+      return `${subscriber.first_name} ${subscriber.last_name}`;
+    }
+    if (subscriber.first_name) return subscriber.first_name;
+    if (subscriber.last_name) return subscriber.last_name;
+    return '-';
   };
 
   const getDaysRemaining = (endDate: string | null) => {
@@ -96,6 +104,7 @@ export function SubscriberTable({ subscribers }: SubscriberTableProps) {
           <TableHeader>
             <TableRow>
               <TableHead>User</TableHead>
+              <TableHead>Full Name</TableHead>
               <TableHead>Plan</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Expires</TableHead>
@@ -105,7 +114,7 @@ export function SubscriberTable({ subscribers }: SubscriberTableProps) {
           <TableBody>
             {subscribers.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
+                <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
                   No subscribers yet
                 </TableCell>
               </TableRow>
@@ -117,10 +126,13 @@ export function SubscriberTable({ subscribers }: SubscriberTableProps) {
                     <TableCell>
                       <div>
                         <p className="font-medium">{getDisplayName(subscriber)}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {subscriber.telegram_user_id}
+                        <p className="text-xs text-muted-foreground">
+                          ID: {subscriber.telegram_user_id}
                         </p>
                       </div>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {getFullName(subscriber)}
                     </TableCell>
                     <TableCell>
                       {subscriber.subscription_tiers?.name || '-'}
