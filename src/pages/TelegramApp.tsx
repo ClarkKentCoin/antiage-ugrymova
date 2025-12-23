@@ -209,7 +209,6 @@ function NewUserView({
   const [autoRenewal, setAutoRenewal] = useState(false);
   const [consentGiven, setConsentGiven] = useState(false);
   const [generatingLink, setGeneratingLink] = useState(false);
-  const [creatingSubscriber, setCreatingSubscriber] = useState(false);
   const { toast } = useToast();
 
   const handleSelectTier = (tierId: string) => {
@@ -220,62 +219,68 @@ function NewUserView({
 
   const handlePayment = async () => {
     if (!selectedTier) return;
-    
+
     if (autoRenewal && !consentGiven) {
-      toast({ title: 'Необходимо согласие', description: 'Пожалуйста, подтвердите согласие на автосписания', variant: 'destructive' });
+      toast({
+        title: 'Необходимо согласие',
+        description: 'Пожалуйста, подтвердите согласие на автосписания',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (!telegramUserId) {
+      toast({ title: 'Ошибка', description: 'Не удалось определить Telegram пользователя', variant: 'destructive' });
       return;
     }
 
     setGeneratingLink(true);
     try {
-      let subscriberId = subscriber?.id;
+      const body: Record<string, unknown> = {
+        tier_id: selectedTier,
+        is_recurring: autoRenewal,
+        ip_address: null,
+        user_agent: navigator.userAgent,
+        telegram_user_id: telegramUserId,
+      };
 
-      // If no subscriber exists, create one first
-      if (!subscriberId && telegramUserId) {
-        setCreatingSubscriber(true);
-        const { data: newSubscriber, error: createError } = await supabase
-          .from('subscribers')
-          .insert({
-            telegram_user_id: telegramUserId,
-            status: 'inactive',
-            tier_id: selectedTier,
-          })
-          .select()
-          .single();
-
-        if (createError) throw createError;
-        subscriberId = newSubscriber.id;
-        setCreatingSubscriber(false);
-      }
-
-      if (!subscriberId) {
-        toast({ title: 'Ошибка', description: 'Не удалось определить пользователя', variant: 'destructive' });
-        return;
-      }
+      // Optional: if subscriber exists (например, в тестовом режиме), передадим его
+      if (subscriber?.id) body.subscriber_id = subscriber.id;
 
       const { data, error } = await supabase.functions.invoke('create-robokassa-payment', {
-        body: {
-          subscriber_id: subscriberId,
-          tier_id: selectedTier,
-          is_recurring: autoRenewal,
-          ip_address: null,
-          user_agent: navigator.userAgent,
-          telegram_user_id: telegramUserId,
-        },
+        body,
       });
 
       if (error) throw error;
-      
+
       if (data?.payment_url) {
         window.open(data.payment_url, '_blank');
         onRefetch?.();
+      } else {
+        toast({ title: 'Ошибка', description: 'Платёжная ссылка не вернулась от сервера', variant: 'destructive' });
       }
     } catch (error) {
       console.error('Error generating payment link:', error);
-      toast({ title: 'Ошибка', description: 'Не удалось создать ссылку для оплаты', variant: 'destructive' });
+
+      const err = error as any;
+      const detailsFromContext = typeof err?.context?.body === 'string'
+        ? (() => {
+            try {
+              const parsed = JSON.parse(err.context.body);
+              return parsed?.error || parsed?.details;
+            } catch {
+              return err.context.body;
+            }
+          })()
+        : null;
+
+      toast({
+        title: 'Ошибка',
+        description: detailsFromContext || err?.message || 'Не удалось создать ссылку для оплаты',
+        variant: 'destructive',
+      });
     } finally {
       setGeneratingLink(false);
-      setCreatingSubscriber(false);
     }
   };
 
@@ -399,13 +404,13 @@ function NewUserView({
             <Button 
               className="w-full" 
               size="lg"
-              disabled={generatingLink || creatingSubscriber || (autoRenewal && !consentGiven)}
+              disabled={generatingLink || (autoRenewal && !consentGiven)}
               onClick={handlePayment}
             >
-              {generatingLink || creatingSubscriber ? (
+              {generatingLink ? (
                 <>
                   <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                  {creatingSubscriber ? 'Подготовка...' : 'Создание ссылки...'}
+                  Создание ссылки...
                 </>
               ) : (
                 <>
