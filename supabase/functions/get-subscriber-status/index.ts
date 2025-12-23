@@ -144,7 +144,9 @@ serve(async (req) => {
     const { data: subscriber, error } = await supabaseAdmin
       .from("subscribers")
       .select(
-        `id, telegram_user_id, status, subscription_start, subscription_end, auto_renewal, tier_id,
+        `id, telegram_user_id, telegram_username, first_name, last_name, phone_number,
+         status, subscription_start, subscription_end, auto_renewal, tier_id, is_in_channel,
+         created_at, updated_at,
          subscription_tiers ( id, name, price, duration_days )`,
       )
       .eq("telegram_user_id", Number(telegram_user_id))

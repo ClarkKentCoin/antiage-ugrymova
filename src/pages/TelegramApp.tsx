@@ -44,7 +44,7 @@ export default function TelegramApp() {
   const { isReady, isTelegramWebApp, user, showConfirm, hapticFeedback, webApp } = useTelegramWebApp();
   const initData = webApp?.initData ?? null;
 
-  const { data: subscriber, isLoading: loadingSubscriber, refetch: refetchSubscriber } = useSubscriber(
+  const { data: subscriber, isLoading: loadingSubscriber, refetch: refetchSubscriber, error: subscriberError } = useSubscriber(
     user?.id ?? null,
     initData,
   );
@@ -180,6 +180,31 @@ export default function TelegramApp() {
       <div className="flex min-h-screen items-center justify-center">
         <div className="animate-pulse text-muted-foreground">Загрузка...</div>
       </div>
+    );
+  }
+
+  // Show error state if subscriber query failed
+  if (subscriberError) {
+    return (
+      <main className="min-h-screen bg-background p-4">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <AlertCircle className="h-5 w-5 text-destructive" />
+              Ошибка загрузки
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Не удалось загрузить данные подписки. Попробуйте перезапустить Mini App.
+            </p>
+            <Button onClick={() => refetch()} variant="outline" className="w-full">
+              <RefreshCw className="mr-2 h-4 w-4" />
+              Повторить
+            </Button>
+          </CardContent>
+        </Card>
+      </main>
     );
   }
 
