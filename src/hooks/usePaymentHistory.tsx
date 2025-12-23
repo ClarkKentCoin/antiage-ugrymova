@@ -46,6 +46,7 @@ export function usePaymentHistory(subscriberId?: string) {
             name
           )
         `)
+        .eq('status', 'completed') // Only show completed payments
         .order('payment_date', { ascending: false });
       
       if (subscriberId) {
