@@ -2,6 +2,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
+export type PaymentStatus = 'pending' | 'completed' | 'failed';
+
 export interface PaymentRecord {
   id: string;
   subscriber_id: string;
@@ -11,6 +13,7 @@ export interface PaymentRecord {
   payment_note: string | null;
   payment_date: string;
   created_at: string;
+  status: PaymentStatus;
   subscribers?: {
     telegram_username: string | null;
     first_name: string | null;
@@ -29,7 +32,13 @@ export interface CreatePaymentInput {
   payment_note?: string;
 }
 
-export function usePaymentHistory(subscriberId?: string) {
+export interface UsePaymentHistoryOptions {
+  subscriberId?: string;
+  status?: PaymentStatus | null;
+}
+
+export function usePaymentHistory(options: UsePaymentHistoryOptions = {}) {
+  const { subscriberId, status } = options;
   return useQuery({
     queryKey: ['payment_history', subscriberId],
     queryFn: async () => {
@@ -46,8 +55,11 @@ export function usePaymentHistory(subscriberId?: string) {
             name
           )
         `)
-        .eq('status', 'completed') // Only show completed payments
-        .order('payment_date', { ascending: false });
+        .order('created_at', { ascending: false });
+      
+      if (status) {
+        query = query.eq('status', status);
+      }
       
       if (subscriberId) {
         query = query.eq('subscriber_id', subscriberId);
