@@ -40,7 +40,7 @@ export interface UsePaymentHistoryOptions {
 export function usePaymentHistory(options: UsePaymentHistoryOptions = {}) {
   const { subscriberId, status } = options;
   return useQuery({
-    queryKey: ['payment_history', subscriberId],
+    queryKey: ['payment_history', subscriberId, status],
     queryFn: async () => {
       let query = supabase
         .from('payment_history')
@@ -69,6 +69,28 @@ export function usePaymentHistory(options: UsePaymentHistoryOptions = {}) {
       
       if (error) throw error;
       return data as PaymentRecord[];
+    },
+  });
+}
+
+export function usePaymentCounts() {
+  return useQuery({
+    queryKey: ['payment_counts'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('payment_history')
+        .select('status');
+      
+      if (error) throw error;
+      
+      const counts = {
+        all: data.length,
+        completed: data.filter(p => p.status === 'completed').length,
+        pending: data.filter(p => p.status === 'pending').length,
+        failed: data.filter(p => p.status === 'failed').length,
+      };
+      
+      return counts;
     },
   });
 }
