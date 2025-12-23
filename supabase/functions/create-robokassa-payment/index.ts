@@ -1,15 +1,17 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import blueimpMd5 from "https://esm.sh/blueimp-md5@2.19.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// MD5 hash function (Robokassa signatures)
-async function md5(message: string): Promise<string> {
-  return blueimpMd5(message).toUpperCase();
+// SHA256 hash function (Robokassa signatures)
+async function sha256(message: string): Promise<string> {
+  const msgUint8 = new TextEncoder().encode(message);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", msgUint8);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('').toUpperCase();
 }
 
 serve(async (req) => {
@@ -311,7 +313,7 @@ serve(async (req) => {
     
     console.log("Signature string (without password):", signatureString.replace(password1, "***"));
     
-    const signature = await md5(signatureString);
+    const signature = await sha256(signatureString);
 
     // Build payment URL
     let paymentUrl = `https://auth.robokassa.ru/Merchant/Index.aspx`;
