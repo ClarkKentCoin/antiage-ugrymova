@@ -7,7 +7,7 @@ import { format, isAfter, isBefore, addDays } from 'date-fns';
 
 export default function AdminDashboard() {
   const { data: subscribers, isLoading: loadingSubscribers } = useSubscribers();
-  const { data: payments, isLoading: loadingPayments } = usePaymentHistory();
+  const { data: payments, isLoading: loadingPayments } = usePaymentHistory({ status: 'completed' });
 
   const activeSubscribers = subscribers?.filter(s => s.status === 'active').length || 0;
   const expiringSoon = subscribers?.filter(s => {
