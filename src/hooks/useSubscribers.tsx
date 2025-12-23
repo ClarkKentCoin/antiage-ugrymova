@@ -64,6 +64,8 @@ export function useSubscriber(telegramUserId: number | null) {
     queryFn: async () => {
       if (!telegramUserId) return null;
       
+      console.log('[useSubscriber] Fetching subscriber for telegram_user_id:', telegramUserId);
+      
       const { data, error } = await supabase
         .from('subscribers')
         .select(`
@@ -77,10 +79,15 @@ export function useSubscriber(telegramUserId: number | null) {
         .eq('telegram_user_id', telegramUserId)
         .maybeSingle();
       
+      console.log('[useSubscriber] Result:', { data, error });
+      
       if (error) throw error;
       return data as Subscriber | null;
     },
     enabled: !!telegramUserId,
+    staleTime: 0, // Always refetch when mounted
+    refetchOnMount: 'always', // Critical for mobile timing
+    refetchOnWindowFocus: true,
   });
 }
 
