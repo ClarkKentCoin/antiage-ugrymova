@@ -161,7 +161,25 @@ export function useCreateSubscriber() {
         if (paymentError) throw paymentError;
       }
 
-      // Auto-send invite to the new subscriber
+      // Call edge function to:
+      // 1. Send payment success notification
+      // 2. Send invite to channel
+      try {
+        // First send notification about successful subscription
+        await supabase.functions.invoke('subscriber-status-change', {
+          body: {
+            action: 'new_subscriber',
+            subscriber_id: subscriber.id,
+            telegram_user_id: input.telegram_user_id,
+            subscription_end: input.subscription_end,
+            amount: input.amount,
+          },
+        });
+      } catch (notifyError) {
+        console.error('Failed to send new subscriber notification:', notifyError);
+      }
+
+      // Then send invite link
       try {
         const { data: inviteResult } = await supabase.functions.invoke('telegram-channel', {
           body: { 
@@ -181,15 +199,15 @@ export function useCreateSubscriber() {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['subscribers'] });
       if (data.inviteResult?.message_sent) {
-        toast({ title: 'Подписчик добавлен', description: 'Приглашение отправлено в Telegram' });
+        toast({ title: 'Подписчик добавлен', description: 'Уведомление и приглашение отправлены в Telegram' });
       } else if (data.inviteResult?.invite_link) {
         navigator.clipboard.writeText(data.inviteResult.invite_link);
         toast({ 
           title: 'Подписчик добавлен', 
-          description: 'Пользователь должен запустить бота. Ссылка скопирована.' 
+          description: 'Уведомление отправлено. Пользователь должен запустить бота. Ссылка скопирована.' 
         });
       } else {
-        toast({ title: 'Подписчик добавлен' });
+        toast({ title: 'Подписчик добавлен', description: 'Уведомление отправлено' });
       }
     },
     onError: (error: Error) => {
@@ -203,7 +221,24 @@ export function useUpdateSubscriber() {
   const { toast } = useToast();
 
   return useMutation({
-    mutationFn: async ({ id, ...updates }: Partial<Subscriber> & { id: string }) => {
+    mutationFn: async ({ 
+      id, 
+      _oldStatus, 
+      ...updates 
+    }: Partial<Subscriber> & { id: string; _oldStatus?: string }) => {
+      // First get current subscriber to compare status
+      const { data: currentSubscriber, error: fetchError } = await supabase
+        .from('subscribers')
+        .select('telegram_user_id, status, subscription_end')
+        .eq('id', id)
+        .single();
+
+      if (fetchError) throw fetchError;
+
+      const oldStatus = _oldStatus || currentSubscriber?.status;
+      const newStatus = updates.status;
+
+      // Update the subscriber
       const { data, error } = await supabase
         .from('subscribers')
         .update(updates)
@@ -212,14 +247,40 @@ export function useUpdateSubscriber() {
         .single();
 
       if (error) throw error;
+
+      // If status changed, call edge function to handle kick/notifications
+      if (newStatus && oldStatus !== newStatus && currentSubscriber?.telegram_user_id) {
+        try {
+          console.log(`Status changed: ${oldStatus} -> ${newStatus}, triggering edge function`);
+          
+          const { error: fnError } = await supabase.functions.invoke('subscriber-status-change', {
+            body: {
+              action: 'status_change',
+              subscriber_id: id,
+              telegram_user_id: currentSubscriber.telegram_user_id,
+              old_status: oldStatus,
+              new_status: newStatus,
+              subscription_end: updates.subscription_end || currentSubscriber.subscription_end,
+            },
+          });
+
+          if (fnError) {
+            console.error('Status change edge function error:', fnError);
+            // Don't throw - the update succeeded, just log the notification failure
+          }
+        } catch (e) {
+          console.error('Failed to trigger status change actions:', e);
+        }
+      }
+
       return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['subscribers'] });
-      toast({ title: 'Subscriber updated successfully' });
+      toast({ title: 'Подписчик обновлён' });
     },
     onError: (error: Error) => {
-      toast({ title: 'Error updating subscriber', description: error.message, variant: 'destructive' });
+      toast({ title: 'Ошибка обновления', description: error.message, variant: 'destructive' });
     },
   });
 }
