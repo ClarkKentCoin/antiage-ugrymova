@@ -34,6 +34,24 @@ const statusConfig: Record<string, { label: string; className: string }> = {
   grace_period: { label: 'Льготный период', className: 'bg-warning/10 text-warning border-warning/20' },
 };
 
+// В Telegram Mini App `window.open(..., "_blank")` часто блокируется.
+// Используем нативный Telegram WebApp API, если он доступен.
+const openExternalUrl = (url: string) => {
+  const tg = window.Telegram?.WebApp;
+
+  try {
+    if (tg?.openLink) {
+      tg.openLink(url);
+      return;
+    }
+  } catch {
+    // ignore
+  }
+
+  // Fallback for regular browsers / environments without Telegram API
+  window.location.href = url;
+};
+
 export default function TelegramApp() {
   const { isReady, isTelegramWebApp, user, showConfirm, hapticFeedback } = useTelegramWebApp();
   const { data: subscriber, isLoading: loadingSubscriber, refetch: refetchSubscriber } = useSubscriber(user?.id || null);
@@ -254,7 +272,7 @@ function NewUserView({
       if (error) throw error;
 
       if (data?.payment_url) {
-        window.open(data.payment_url, '_blank');
+        openExternalUrl(data.payment_url);
         onRefetch?.();
       } else {
         toast({ title: 'Ошибка', description: 'Платёжная ссылка не вернулась от сервера', variant: 'destructive' });
@@ -478,7 +496,7 @@ function GracePeriodView({
       if (error) throw error;
       
       if (data?.payment_url) {
-        window.open(data.payment_url, '_blank');
+        openExternalUrl(data.payment_url);
         onRefetch?.();
       }
     } catch (error) {
@@ -697,7 +715,7 @@ function SubscriptionContent({
       if (error) throw error;
       
       if (data?.payment_url) {
-        window.open(data.payment_url, '_blank');
+        openExternalUrl(data.payment_url);
       }
     } catch (error) {
       console.error('Error generating payment link:', error);
