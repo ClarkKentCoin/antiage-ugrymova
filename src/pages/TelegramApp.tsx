@@ -42,32 +42,13 @@ const openPaymentUrl = (url: string) => {
 
 export default function TelegramApp() {
   const { isReady, isTelegramWebApp, user, showConfirm, hapticFeedback } = useTelegramWebApp();
-  const { data: subscriber, isLoading: loadingSubscriber, refetch: refetchSubscriber } = useSubscriber(user?.id || null);
+  const { data: subscriber, isLoading: loadingSubscriber, refetch: refetchSubscriber } = useSubscriber(user?.id ?? null);
   const { data: tiers } = useActiveTiers();
   const [paymentLink, setPaymentLink] = useState<string | null>(null);
   const { toast } = useToast();
 
   const [channelInfo, setChannelInfo] = useState<{ name: string; description: string } | null>(null);
   const [gracePeriodDays, setGracePeriodDays] = useState<number>(0);
-
-  // Debug logging for subscription check (temporary)
-  useEffect(() => {
-    console.log('[TelegramApp] isReady:', isReady);
-    console.log('[TelegramApp] isTelegramWebApp:', isTelegramWebApp);
-    console.log('[TelegramApp] user:', user);
-    console.log('[TelegramApp] user?.id (telegram_user_id):', user?.id);
-    console.log('[TelegramApp] subscriber:', subscriber);
-    console.log('[TelegramApp] subscriber?.status:', subscriber?.status);
-    console.log('[TelegramApp] loadingSubscriber:', loadingSubscriber);
-  }, [isReady, isTelegramWebApp, user, subscriber, loadingSubscriber]);
-
-  // Refetch subscriber when user becomes available (important for mobile timing)
-  useEffect(() => {
-    if (user?.id && !subscriber && !loadingSubscriber) {
-      console.log('[TelegramApp] User available, refetching subscriber for telegram_user_id:', user.id);
-      refetchSubscriber();
-    }
-  }, [user?.id, subscriber, loadingSubscriber, refetchSubscriber]);
 
   // Fetch settings from admin_settings
   useEffect(() => {
@@ -81,7 +62,9 @@ export default function TelegramApp() {
         setPaymentLink((data as any).payment_link);
         setChannelInfo({
           name: (data as any).channel_name || 'АНТИЭЙДЖ ЛАБ',
-          description: (data as any).channel_description || 'Закрытый Telegram-канал для женщин: мотивация, рецепты, научные подходы к антиэйджу. Всё для энергии и молодости в одном месте.'
+          description:
+            (data as any).channel_description ||
+            'Закрытый Telegram-канал для женщин: мотивация, рецепты, научные подходы к антиэйджу. Всё для энергии и молодости в одном месте.',
         });
         setGracePeriodDays((data as any).grace_period_days || 0);
       }

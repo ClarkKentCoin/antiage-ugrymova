@@ -14,9 +14,12 @@ export interface Subscriber {
   subscription_end: string | null;
   status: string;
   is_in_channel: boolean;
+  auto_renewal?: boolean;
+  auto_renewal_consent_date?: string | null;
   created_at: string;
   updated_at: string;
   subscription_tiers?: {
+    id?: string;
     name: string;
     duration_days: number;
     price: number;
@@ -51,7 +54,7 @@ export function useSubscribers() {
           )
         `)
         .order('created_at', { ascending: false });
-      
+
       if (error) throw error;
       return data as Subscriber[];
     },
@@ -62,15 +65,14 @@ export function useSubscriber(telegramUserId: number | null) {
   return useQuery({
     queryKey: ['subscriber', telegramUserId],
     queryFn: async () => {
-      if (!telegramUserId) return null;
-      
-      console.log('[useSubscriber] Fetching subscriber for telegram_user_id:', telegramUserId);
-      
+      if (telegramUserId == null) return null;
+
       const { data, error } = await supabase
         .from('subscribers')
         .select(`
           *,
           subscription_tiers (
+            id,
             name,
             duration_days,
             price
@@ -78,16 +80,15 @@ export function useSubscriber(telegramUserId: number | null) {
         `)
         .eq('telegram_user_id', telegramUserId)
         .maybeSingle();
-      
-      console.log('[useSubscriber] Result:', { data, error });
-      
+
       if (error) throw error;
       return data as Subscriber | null;
     },
-    enabled: !!telegramUserId,
-    staleTime: 0, // Always refetch when mounted
-    refetchOnMount: 'always', // Critical for mobile timing
-    refetchOnWindowFocus: true,
+    enabled: telegramUserId != null,
+    staleTime: 0,
+    gcTime: 0,
+    refetchOnMount: true,
+    refetchOnWindowFocus: false,
   });
 }
 
