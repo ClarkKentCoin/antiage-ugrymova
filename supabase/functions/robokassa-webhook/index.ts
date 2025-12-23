@@ -251,19 +251,19 @@ serve(async (req) => {
       }
     }
 
-    // Send invite to the subscriber
+    // Send invite and success message to the subscriber
     try {
-      const { data: subscriber } = await supabaseAdmin
+      const { data: subscriberData } = await supabaseAdmin
         .from("subscribers")
-        .select("telegram_user_id")
+        .select("telegram_user_id, subscription_end")
         .eq("id", shpSubscriberId)
         .single();
 
-      if (subscriber?.telegram_user_id) {
-        // Get telegram settings
+      if (subscriberData?.telegram_user_id) {
+        // Get telegram settings including notification template
         const { data: telegramSettings } = await supabaseAdmin
           .from("admin_settings")
-          .select("telegram_bot_token, telegram_channel_id")
+          .select("telegram_bot_token, telegram_channel_id, channel_name, notification_payment_success")
           .limit(1)
           .single();
 
@@ -289,21 +289,53 @@ serve(async (req) => {
 
           const inviteResult = await inviteResponse.json();
 
-          if (inviteResult.ok) {
-            // Send invite to user
+          // First send the success payment message from settings
+          if (telegramSettings.notification_payment_success) {
+            // Format the expires date
+            const expiresDate = subscriberData.subscription_end 
+              ? new Date(subscriberData.subscription_end).toLocaleDateString('ru-RU', {
+                  day: 'numeric',
+                  month: 'long',
+                  year: 'numeric'
+                })
+              : 'неизвестно';
+            
+            // Replace template variables
+            let successMessage = telegramSettings.notification_payment_success
+              .replace(/{channel_name}/g, telegramSettings.channel_name || 'канал')
+              .replace(/{amount}/g, outSum)
+              .replace(/{expires_date}/g, expiresDate);
+
             await fetch(
               `https://api.telegram.org/bot${telegramSettings.telegram_bot_token}/sendMessage`,
               {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                  chat_id: subscriber.telegram_user_id,
-                  text: `🎉 Оплата получена! Спасибо!\n\nПерейдите по ссылке, чтобы присоединиться к каналу:\n${inviteResult.result.invite_link}\n\n⚠️ Ссылка одноразовая и действует только для вас.`,
+                  chat_id: subscriberData.telegram_user_id,
+                  text: successMessage,
                   parse_mode: "HTML",
                 }),
               }
             );
-            console.log(`Sent invite link to user ${subscriber.telegram_user_id}`);
+            console.log(`Sent success payment message to user ${subscriberData.telegram_user_id}`);
+          }
+
+          // Then send the invite link
+          if (inviteResult.ok) {
+            await fetch(
+              `https://api.telegram.org/bot${telegramSettings.telegram_bot_token}/sendMessage`,
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  chat_id: subscriberData.telegram_user_id,
+                  text: `🔗 Перейдите по ссылке, чтобы присоединиться к каналу:\n${inviteResult.result.invite_link}\n\n⚠️ Ссылка одноразовая и действует только для вас.`,
+                  parse_mode: "HTML",
+                }),
+              }
+            );
+            console.log(`Sent invite link to user ${subscriberData.telegram_user_id}`);
           }
         }
       }
