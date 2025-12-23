@@ -4,7 +4,7 @@ project_id = "zmewfhnaycjuvpjxkiin"
 verify_jwt = true
 
 [functions.create-robokassa-payment]
-verify_jwt = true
+verify_jwt = false
 
 [functions.robokassa-webhook]
 verify_jwt = false

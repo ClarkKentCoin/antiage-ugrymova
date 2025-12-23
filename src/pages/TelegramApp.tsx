@@ -260,6 +260,7 @@ function NewUserView({
           is_recurring: autoRenewal,
           ip_address: null,
           user_agent: navigator.userAgent,
+          telegram_user_id: telegramUserId,
         },
       });
 
@@ -465,6 +466,7 @@ function GracePeriodView({
           is_recurring: autoRenewal,
           ip_address: null,
           user_agent: navigator.userAgent,
+          telegram_user_id: telegramUserId,
         },
       });
 
@@ -683,6 +685,7 @@ function SubscriptionContent({
           is_recurring: autoRenewal,
           ip_address: null,
           user_agent: navigator.userAgent,
+          telegram_user_id: telegramUserId,
         },
       });
 
