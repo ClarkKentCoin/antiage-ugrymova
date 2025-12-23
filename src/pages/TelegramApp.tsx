@@ -80,7 +80,7 @@ export default function TelegramApp() {
 
   // Prevent fetching *all* payments when we don't know the subscriber yet
   const paymentSubscriberId = activeSubscriber?.id ?? '00000000-0000-0000-0000-000000000000';
-  const { data: payments } = usePaymentHistory(paymentSubscriberId);
+  const { data: payments } = usePaymentHistory({ subscriberId: paymentSubscriberId, status: 'completed' });
 
   const daysRemaining = activeSubscriber?.subscription_end
     ? differenceInDays(new Date(activeSubscriber.subscription_end), new Date())
