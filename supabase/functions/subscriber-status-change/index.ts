@@ -12,6 +12,8 @@ interface TelegramResponse {
   description?: string;
 }
 
+const INVITE_LINK_EXPIRY_SECONDS = 600; // 10 minutes
+
 // Replace template variables with actual values
 function replaceVariables(template: string, variables: Record<string, string>): string {
   let result = template;
@@ -66,6 +68,93 @@ async function callTelegramApi(
   });
 
   return response.json();
+}
+
+// Revoke old invite links for a subscriber
+async function revokeOldInviteLinks(
+  supabaseAdmin: any,
+  botToken: string,
+  channelId: string,
+  subscriberId: string
+): Promise<void> {
+  // Get all non-revoked links for this subscriber
+  const { data: oldLinks, error } = await supabaseAdmin
+    .from("invite_links")
+    .select("id, invite_link")
+    .eq("subscriber_id", subscriberId)
+    .eq("revoked", false);
+
+  if (error) {
+    console.error("Error fetching old invite links:", error.message);
+    return;
+  }
+
+  if (!oldLinks || oldLinks.length === 0) {
+    return;
+  }
+
+  console.log(`Revoking ${oldLinks.length} old invite links for subscriber ${subscriberId}`);
+
+  for (const link of oldLinks) {
+    // Revoke the link in Telegram
+    const revokeResult = await callTelegramApi(botToken, "revokeChatInviteLink", {
+      chat_id: channelId,
+      invite_link: link.invite_link,
+    });
+
+    if (!revokeResult.ok) {
+      console.log(`Could not revoke link (may be expired): ${revokeResult.description}`);
+    }
+
+    // Mark as revoked in database
+    await supabaseAdmin
+      .from("invite_links")
+      .update({ revoked: true, revoked_at: new Date().toISOString() })
+      .eq("id", link.id);
+  }
+}
+
+// Create and save a new invite link with expiry
+async function createAndSaveInviteLink(
+  supabaseAdmin: any,
+  botToken: string,
+  channelId: string,
+  subscriberId: string
+): Promise<{ success: boolean; invite_link?: string; error?: string }> {
+  const expireDate = Math.floor(Date.now() / 1000) + INVITE_LINK_EXPIRY_SECONDS;
+  const expiresAt = new Date(Date.now() + INVITE_LINK_EXPIRY_SECONDS * 1000).toISOString();
+
+  // Create invite link with expiration
+  const inviteResult = await callTelegramApi(botToken, "createChatInviteLink", {
+    chat_id: channelId,
+    expire_date: expireDate,
+    member_limit: 1, // Also keep member_limit as additional protection
+    creates_join_request: false,
+  });
+
+  console.log("createChatInviteLink result:", JSON.stringify(inviteResult));
+
+  if (!inviteResult.ok) {
+    console.error("Failed to create invite link:", inviteResult.description);
+    return { success: false, error: inviteResult.description || "Failed to create invite link" };
+  }
+
+  // Save the link to database
+  const { error: insertError } = await supabaseAdmin
+    .from("invite_links")
+    .insert({
+      subscriber_id: subscriberId,
+      invite_link: inviteResult.result.invite_link,
+      expires_at: expiresAt,
+      revoked: false,
+    });
+
+  if (insertError) {
+    console.error("Error saving invite link to database:", insertError.message);
+    // Continue anyway - the link was created successfully
+  }
+
+  return { success: true, invite_link: inviteResult.result.invite_link };
 }
 
 serve(async (req) => {
@@ -175,6 +264,7 @@ serve(async (req) => {
       kicked?: boolean;
       notification_sent?: boolean;
       invite_sent?: boolean;
+      invite_link?: string;
       error?: string;
     } = {};
 
@@ -187,7 +277,10 @@ serve(async (req) => {
       ) {
         console.log(`Kicking user ${telegram_user_id} due to status change to ${new_status}`);
 
-        if (channelId) {
+        if (channelId && subscriber_id) {
+          // First revoke all old invite links so user can't rejoin with them
+          await revokeOldInviteLinks(supabaseAdmin, botToken, channelId, subscriber_id);
+
           // Step 1: Ban user (removes from channel)
           const banResult = await callTelegramApi(botToken, "banChatMember", {
             chat_id: channelId,
@@ -293,31 +386,47 @@ serve(async (req) => {
 
         results.notification_sent = msgResult.ok;
 
-        // Send invite link
-        if (channelId) {
-          // First unban user (in case they were banned)
-          await callTelegramApi(botToken, "unbanChatMember", {
-            chat_id: channelId,
-            user_id: telegram_user_id,
-            only_if_banned: true,
-          });
+        // Check if user is already in channel
+        if (channelId && subscriber_id) {
+          const { data: subscriber } = await supabaseAdmin
+            .from("subscribers")
+            .select("is_in_channel")
+            .eq("id", subscriber_id)
+            .maybeSingle();
 
-          // Create invite link
-          const inviteResult = await callTelegramApi(botToken, "createChatInviteLink", {
-            chat_id: channelId,
-            member_limit: 1,
-            creates_join_request: false,
-          });
-
-          if (inviteResult.ok) {
-            // Send invite to user
-            const inviteMsgResult = await callTelegramApi(botToken, "sendMessage", {
-              chat_id: telegram_user_id,
-              text: `🎉 Перейдите по ссылке, чтобы присоединиться к каналу:\n${inviteResult.result.invite_link}\n\n⚠️ Ссылка одноразовая и действует только для вас.`,
-              parse_mode: "HTML",
+          if (subscriber?.is_in_channel) {
+            console.log(`User ${telegram_user_id} is already in channel, skipping invite`);
+            results.invite_sent = false;
+          } else {
+            // First unban user (in case they were banned)
+            await callTelegramApi(botToken, "unbanChatMember", {
+              chat_id: channelId,
+              user_id: telegram_user_id,
+              only_if_banned: true,
             });
 
-            results.invite_sent = inviteMsgResult.ok;
+            // Revoke old invite links
+            await revokeOldInviteLinks(supabaseAdmin, botToken, channelId, subscriber_id);
+
+            // Create new invite link with expiration
+            const inviteResult = await createAndSaveInviteLink(
+              supabaseAdmin,
+              botToken,
+              channelId,
+              subscriber_id
+            );
+
+            if (inviteResult.success && inviteResult.invite_link) {
+              // Send invite to user
+              const inviteMsgResult = await callTelegramApi(botToken, "sendMessage", {
+                chat_id: telegram_user_id,
+                text: `🎉 Перейдите по ссылке, чтобы присоединиться к каналу:\n${inviteResult.invite_link}\n\n⚠️ Ссылка одноразовая и действует 10 минут.`,
+                parse_mode: "HTML",
+              });
+
+              results.invite_sent = inviteMsgResult.ok;
+              results.invite_link = inviteResult.invite_link;
+            }
           }
         }
       }

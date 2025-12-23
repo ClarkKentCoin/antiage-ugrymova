@@ -95,6 +95,44 @@ export type Database = {
         }
         Relationships: []
       }
+      invite_links: {
+        Row: {
+          created_at: string
+          expires_at: string
+          id: string
+          invite_link: string
+          revoked: boolean
+          revoked_at: string | null
+          subscriber_id: string
+        }
+        Insert: {
+          created_at?: string
+          expires_at: string
+          id?: string
+          invite_link: string
+          revoked?: boolean
+          revoked_at?: string | null
+          subscriber_id: string
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string
+          id?: string
+          invite_link?: string
+          revoked?: boolean
+          revoked_at?: string | null
+          subscriber_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invite_links_subscriber_id_fkey"
+            columns: ["subscriber_id"]
+            isOneToOne: false
+            referencedRelation: "subscribers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       payment_history: {
         Row: {
           amount: number
