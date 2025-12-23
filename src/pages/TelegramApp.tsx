@@ -50,6 +50,25 @@ export default function TelegramApp() {
   const [channelInfo, setChannelInfo] = useState<{ name: string; description: string } | null>(null);
   const [gracePeriodDays, setGracePeriodDays] = useState<number>(0);
 
+  // Debug logging for subscription check (temporary)
+  useEffect(() => {
+    console.log('[TelegramApp] isReady:', isReady);
+    console.log('[TelegramApp] isTelegramWebApp:', isTelegramWebApp);
+    console.log('[TelegramApp] user:', user);
+    console.log('[TelegramApp] user?.id (telegram_user_id):', user?.id);
+    console.log('[TelegramApp] subscriber:', subscriber);
+    console.log('[TelegramApp] subscriber?.status:', subscriber?.status);
+    console.log('[TelegramApp] loadingSubscriber:', loadingSubscriber);
+  }, [isReady, isTelegramWebApp, user, subscriber, loadingSubscriber]);
+
+  // Refetch subscriber when user becomes available (important for mobile timing)
+  useEffect(() => {
+    if (user?.id && !subscriber && !loadingSubscriber) {
+      console.log('[TelegramApp] User available, refetching subscriber for telegram_user_id:', user.id);
+      refetchSubscriber();
+    }
+  }, [user?.id, subscriber, loadingSubscriber, refetchSubscriber]);
+
   // Fetch settings from admin_settings
   useEffect(() => {
     async function fetchSettings() {
