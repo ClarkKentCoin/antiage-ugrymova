@@ -20,3 +20,6 @@ verify_jwt = true
 
 [functions.telegram-bot-webhook]
 verify_jwt = false
+
+[functions.get-subscriber-status]
+verify_jwt = false

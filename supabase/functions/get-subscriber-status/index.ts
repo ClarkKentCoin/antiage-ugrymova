@@ -1,7 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { crypto } from "https://deno.land/std@0.168.0/crypto/mod.ts";
-import { encodeHex } from "https://deno.land/std@0.168.0/encoding/hex.ts";
+import { encode as hexEncode } from "https://deno.land/std@0.168.0/encoding/hex.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -9,11 +8,24 @@ const corsHeaders = {
 };
 
 const enc = new TextEncoder();
+const dec = new TextDecoder();
+
+async function hmacSha256(key: Uint8Array, message: string): Promise<string> {
+  const cryptoKey = await crypto.subtle.importKey(
+    "raw",
+    key.buffer as ArrayBuffer,
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const sig = await crypto.subtle.sign("HMAC", cryptoKey, enc.encode(message));
+  return dec.decode(hexEncode(new Uint8Array(sig)));
+}
 
 async function hmacSha256Raw(key: Uint8Array, message: string): Promise<Uint8Array> {
   const cryptoKey = await crypto.subtle.importKey(
     "raw",
-    key,
+    key.buffer as ArrayBuffer,
     { name: "HMAC", hash: "SHA-256" },
     false,
     ["sign"],
@@ -50,15 +62,17 @@ async function isValidInitData(initData: string, botToken: string): Promise<{ ok
     const secret = await hmacSha256Raw(enc.encode("WebAppData"), botToken);
 
     // computedHash = HMAC_SHA256(key=secretKey, message=data_check_string)
-    const computed = await hmacSha256Raw(secret, dataCheckString);
-    const computedHex = encodeHex(computed);
+    const computedHex = await hmacSha256(secret, dataCheckString);
 
-    if (computedHex !== receivedHash) return { ok: false, reason: "hash_mismatch" };
+    if (computedHex !== receivedHash) {
+      console.log("Hash mismatch:", { computed: computedHex, received: receivedHash });
+      return { ok: false, reason: "hash_mismatch" };
+    }
 
     const userStr = params.get("user");
     if (!userStr) return { ok: false, reason: "missing_user" };
 
-    let user: any;
+    let user: Record<string, unknown>;
     try {
       user = JSON.parse(userStr);
     } catch {
@@ -70,6 +84,7 @@ async function isValidInitData(initData: string, botToken: string): Promise<{ ok
 
     return { ok: true, telegramUserId: id };
   } catch (e) {
+    console.error("isValidInitData error:", e);
     return { ok: false, reason: e instanceof Error ? e.message : "unknown" };
   }
 }
@@ -85,6 +100,8 @@ serve(async (req) => {
 
     const { telegram_user_id, init_data } = await req.json();
 
+    console.log("get-subscriber-status request:", { telegram_user_id, hasInitData: !!init_data });
+
     if (!telegram_user_id || !init_data) {
       return new Response(
         JSON.stringify({ error: "telegram_user_id and init_data are required" }),
@@ -99,6 +116,7 @@ serve(async (req) => {
       .maybeSingle();
 
     if (settingsError || !settings?.telegram_bot_token) {
+      console.error("Settings error:", settingsError);
       return new Response(
         JSON.stringify({ error: "telegram_bot_not_configured" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
@@ -106,6 +124,8 @@ serve(async (req) => {
     }
 
     const validation = await isValidInitData(init_data, settings.telegram_bot_token);
+    console.log("Validation result:", validation);
+
     if (!validation.ok) {
       return new Response(
         JSON.stringify({ error: "invalid_init_data", reason: validation.reason }),
@@ -114,6 +134,7 @@ serve(async (req) => {
     }
 
     if (validation.telegramUserId !== Number(telegram_user_id)) {
+      console.log("User ID mismatch:", { validated: validation.telegramUserId, requested: telegram_user_id });
       return new Response(
         JSON.stringify({ error: "user_id_mismatch" }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
@@ -130,17 +151,21 @@ serve(async (req) => {
       .maybeSingle();
 
     if (error) {
+      console.error("DB error:", error);
       return new Response(
         JSON.stringify({ error: "db_error", details: error.message }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
+    console.log("Returning subscriber:", subscriber?.id, subscriber?.status);
+
     return new Response(
       JSON.stringify({ subscriber: subscriber ?? null }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (error) {
+    console.error("get-subscriber-status error:", error);
     const message = error instanceof Error ? error.message : "Unknown error";
     return new Response(
       JSON.stringify({ error: message }),
