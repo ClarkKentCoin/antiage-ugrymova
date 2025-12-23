@@ -26,3 +26,6 @@ verify_jwt = false
 
 [functions.subscriber-status-change]
 verify_jwt = true
+
+[functions.cleanup-expired-invites]
+verify_jwt = true
