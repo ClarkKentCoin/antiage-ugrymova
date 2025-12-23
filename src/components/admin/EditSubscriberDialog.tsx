@@ -47,6 +47,7 @@ export function EditSubscriberDialog({ subscriber, open, onOpenChange }: EditSub
     telegram_username: '',
     first_name: '',
     last_name: '',
+    email: '',
     tier_id: '',
     status: '',
   });
@@ -57,6 +58,7 @@ export function EditSubscriberDialog({ subscriber, open, onOpenChange }: EditSub
         telegram_username: subscriber.telegram_username || '',
         first_name: subscriber.first_name || '',
         last_name: subscriber.last_name || '',
+        email: subscriber.email || '',
         tier_id: subscriber.tier_id || '',
         status: subscriber.status,
       });
@@ -72,6 +74,7 @@ export function EditSubscriberDialog({ subscriber, open, onOpenChange }: EditSub
       telegram_username: formData.telegram_username || null,
       first_name: formData.first_name || null,
       last_name: formData.last_name || null,
+      email: formData.email || null,
       tier_id: formData.tier_id || null,
       status: formData.status,
     }, {
@@ -121,6 +124,17 @@ export function EditSubscriberDialog({ subscriber, open, onOpenChange }: EditSub
                     onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
                   />
                 </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="email@example.com"
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                />
               </div>
 
               <div className="space-y-2">
