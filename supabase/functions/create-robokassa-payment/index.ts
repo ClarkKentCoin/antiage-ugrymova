@@ -29,9 +29,9 @@ serve(async (req) => {
     );
 
     // Parse request body first to check source
-    const { subscriber_id, tier_id, is_recurring, ip_address, user_agent, telegram_user_id } = await req.json();
+    const { subscriber_id, tier_id, is_recurring, ip_address, user_agent, telegram_user_id, telegram_username, first_name, last_name } = await req.json();
 
-    console.log("Request received:", { subscriber_id, tier_id, is_recurring, telegram_user_id });
+    console.log("Request received:", { subscriber_id, tier_id, is_recurring, telegram_user_id, telegram_username, first_name, last_name });
 
     if (!tier_id) {
       return new Response(
@@ -105,11 +105,44 @@ serve(async (req) => {
       }
 
       if (!subscriber) {
-        // Create new subscriber
+        // Get admin settings to fetch telegram bot token
+        const { data: settingsForBot } = await supabaseAdmin
+          .from("admin_settings")
+          .select("telegram_bot_token")
+          .limit(1)
+          .single();
+
+        // Try to get user info from Telegram API
+        let tgUsername = telegram_username || null;
+        let tgFirstName = first_name || null;
+        let tgLastName = last_name || null;
+
+        if (settingsForBot?.telegram_bot_token) {
+          try {
+            const telegramResponse = await fetch(
+              `https://api.telegram.org/bot${settingsForBot.telegram_bot_token}/getChat?chat_id=${telegram_user_id}`
+            );
+            const telegramData = await telegramResponse.json();
+            
+            if (telegramData.ok && telegramData.result) {
+              tgUsername = telegramData.result.username || tgUsername;
+              tgFirstName = telegramData.result.first_name || tgFirstName;
+              tgLastName = telegramData.result.last_name || tgLastName;
+              console.log(`Got user info from Telegram: @${tgUsername}, ${tgFirstName} ${tgLastName}`);
+            }
+          } catch (tgError) {
+            console.error("Failed to fetch user info from Telegram:", tgError);
+          }
+        }
+
+        // Create new subscriber with user info
         const { data: newSubscriber, error: createError } = await supabaseAdmin
           .from("subscribers")
           .insert({
             telegram_user_id: telegram_user_id,
+            telegram_username: tgUsername,
+            first_name: tgFirstName,
+            last_name: tgLastName,
             status: "inactive",
             tier_id: tier_id,
           })
@@ -125,7 +158,7 @@ serve(async (req) => {
         }
 
         subscriber = newSubscriber;
-        console.log(`Created new subscriber: ${subscriber.id} for telegram_user_id: ${telegram_user_id}`);
+        console.log(`Created new subscriber: ${subscriber.id} for telegram_user_id: ${telegram_user_id} with username: ${tgUsername}`);
       }
 
       resolvedSubscriberId = subscriber.id;
