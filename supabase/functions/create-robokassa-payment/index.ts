@@ -1,19 +1,15 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { crypto } from "https://deno.land/std@0.168.0/crypto/mod.ts";
-import { encode } from "https://deno.land/std@0.168.0/encoding/hex.ts";
+import blueimpMd5 from "https://esm.sh/blueimp-md5@2.19.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// MD5 hash function using Deno std crypto
+// MD5 hash function (Robokassa signatures)
 async function md5(message: string): Promise<string> {
-  const data = new TextEncoder().encode(message);
-  const hash = await crypto.subtle.digest("MD5", data);
-  const hexBytes = encode(new Uint8Array(hash));
-  return new TextDecoder().decode(hexBytes);
+  return blueimpMd5(message).toUpperCase();
 }
 
 serve(async (req) => {

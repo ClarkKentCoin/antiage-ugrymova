@@ -1,12 +1,10 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import blueimpMd5 from "https://esm.sh/blueimp-md5@2.19.0";
 
-// MD5 hash function
+// MD5 hash function (Robokassa signatures)
 async function md5(message: string): Promise<string> {
-  const msgUint8 = new TextEncoder().encode(message);
-  const hashBuffer = await crypto.subtle.digest("MD5", msgUint8);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  return blueimpMd5(message).toUpperCase();
 }
 
 // Parse form data from POST body
