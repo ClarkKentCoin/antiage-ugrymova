@@ -198,6 +198,7 @@ export type Database = {
           auto_renewal: boolean | null
           auto_renewal_consent_date: string | null
           created_at: string
+          email: string | null
           first_name: string | null
           id: string
           is_in_channel: boolean | null
@@ -218,6 +219,7 @@ export type Database = {
           auto_renewal?: boolean | null
           auto_renewal_consent_date?: string | null
           created_at?: string
+          email?: string | null
           first_name?: string | null
           id?: string
           is_in_channel?: boolean | null
@@ -238,6 +240,7 @@ export type Database = {
           auto_renewal?: boolean | null
           auto_renewal_consent_date?: string | null
           created_at?: string
+          email?: string | null
           first_name?: string | null
           id?: string
           is_in_channel?: boolean | null

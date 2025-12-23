@@ -105,6 +105,7 @@ export function SubscriberTable({ subscribers }: SubscriberTableProps) {
             <TableRow>
               <TableHead>User</TableHead>
               <TableHead>Full Name</TableHead>
+              <TableHead>Email</TableHead>
               <TableHead>Phone</TableHead>
               <TableHead>Plan</TableHead>
               <TableHead>Status</TableHead>
@@ -115,7 +116,7 @@ export function SubscriberTable({ subscribers }: SubscriberTableProps) {
           <TableBody>
             {subscribers.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
+                <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
                   No subscribers yet
                 </TableCell>
               </TableRow>
@@ -134,6 +135,9 @@ export function SubscriberTable({ subscribers }: SubscriberTableProps) {
                     </TableCell>
                     <TableCell className="text-muted-foreground">
                       {getFullName(subscriber)}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {subscriber.email || '-'}
                     </TableCell>
                     <TableCell className="text-muted-foreground">
                       {subscriber.phone_number || '-'}

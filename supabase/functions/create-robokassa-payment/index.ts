@@ -305,10 +305,13 @@ serve(async (req) => {
     // Shp parameters in alphabetical order
     const shpSource = "telegram";
     const shpSubscriberId = resolvedSubscriberId;
+    const shpTelegramUserId = subscriber.telegram_user_id.toString();
 
     // Build signature string
-    // Format: MerchantLogin:OutSum:InvoiceID:Receipt:Password1:Shp_source=value:Shp_subscriber_id=value
-    const signatureString = `${merchantLogin}:${outSum}:${invoiceId}:${receiptJson}:${password1}:Shp_source=${shpSource}:Shp_subscriber_id=${shpSubscriberId}`;
+    // Format: MerchantLogin:OutSum:InvoiceID:Receipt:Password1:Shp_source=value:Shp_subscriber_id=value:Shp_telegram_user_id=value
+    const signatureString = `${merchantLogin}:${outSum}:${invoiceId}:${receiptJson}:${password1}:Shp_source=${shpSource}:Shp_subscriber_id=${shpSubscriberId}:Shp_telegram_user_id=${shpTelegramUserId}`;
+    
+    console.log("Signature string (without password):", signatureString.replace(password1, "***"));
     
     console.log("Signature string (without password):", signatureString.replace(password1, "***"));
     
@@ -333,8 +336,9 @@ serve(async (req) => {
     
     paymentUrl += `&Shp_source=${shpSource}`;
     paymentUrl += `&Shp_subscriber_id=${shpSubscriberId}`;
+    paymentUrl += `&Shp_telegram_user_id=${shpTelegramUserId}`;
 
-    console.log(`Generated payment URL for subscriber ${resolvedSubscriberId}`);
+    console.log(`Generated payment URL for subscriber ${resolvedSubscriberId}, telegram_user_id: ${shpTelegramUserId}`);
 
     return new Response(
       JSON.stringify({ 
