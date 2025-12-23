@@ -63,12 +63,11 @@ export function useSubscribers() {
 
 export function useSubscriber(telegramUserId: number | null, initData?: string | null) {
   return useQuery({
-    queryKey: ['subscriber', telegramUserId],
+    queryKey: ['subscriber', telegramUserId, initData ? 'telegram' : 'direct'],
     queryFn: async () => {
       if (telegramUserId == null) return null;
 
-      // In Telegram Mini App we cannot read `subscribers` table directly (restricted access),
-      // so we use a backend function that validates Telegram initData and returns the subscriber.
+      // In Telegram Mini App we use a backend function that validates initData
       if (initData) {
         const { data, error } = await supabase.functions.invoke('get-subscriber-status', {
           body: {
@@ -77,7 +76,22 @@ export function useSubscriber(telegramUserId: number | null, initData?: string |
           },
         });
 
-        if (error) throw error;
+        // Handle edge function errors
+        if (error) {
+          console.error('[useSubscriber] Edge function error:', error);
+          throw error;
+        }
+
+        // Handle application-level errors returned from edge function
+        if (data?.error) {
+          console.error('[useSubscriber] API error:', data.error, data.reason);
+          // For invalid_init_data or other auth errors, return null (user not found/not authorized)
+          if (data.error === 'invalid_init_data' || data.error === 'user_id_mismatch') {
+            return null;
+          }
+          throw new Error(data.error);
+        }
+
         return (data?.subscriber ?? null) as Subscriber | null;
       }
 
@@ -104,6 +118,7 @@ export function useSubscriber(telegramUserId: number | null, initData?: string |
     gcTime: 0,
     refetchOnMount: true,
     refetchOnWindowFocus: false,
+    retry: false, // Don't retry on error - if initData is invalid, retrying won't help
   });
 }
 
