@@ -23,3 +23,6 @@ verify_jwt = false
 
 [functions.get-subscriber-status]
 verify_jwt = false
+
+[functions.subscriber-status-change]
+verify_jwt = true
