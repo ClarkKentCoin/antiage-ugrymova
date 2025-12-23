@@ -61,12 +61,27 @@ export function useSubscribers() {
   });
 }
 
-export function useSubscriber(telegramUserId: number | null) {
+export function useSubscriber(telegramUserId: number | null, initData?: string | null) {
   return useQuery({
     queryKey: ['subscriber', telegramUserId],
     queryFn: async () => {
       if (telegramUserId == null) return null;
 
+      // In Telegram Mini App we cannot read `subscribers` table directly (restricted access),
+      // so we use a backend function that validates Telegram initData and returns the subscriber.
+      if (initData) {
+        const { data, error } = await supabase.functions.invoke('get-subscriber-status', {
+          body: {
+            telegram_user_id: telegramUserId,
+            init_data: initData,
+          },
+        });
+
+        if (error) throw error;
+        return (data?.subscriber ?? null) as Subscriber | null;
+      }
+
+      // Fallback for dev/test flows (no Telegram initData available)
       const { data, error } = await supabase
         .from('subscribers')
         .select(`

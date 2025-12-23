@@ -41,8 +41,13 @@ const openPaymentUrl = (url: string) => {
 };
 
 export default function TelegramApp() {
-  const { isReady, isTelegramWebApp, user, showConfirm, hapticFeedback } = useTelegramWebApp();
-  const { data: subscriber, isLoading: loadingSubscriber, refetch: refetchSubscriber } = useSubscriber(user?.id ?? null);
+  const { isReady, isTelegramWebApp, user, showConfirm, hapticFeedback, webApp } = useTelegramWebApp();
+  const initData = webApp?.initData ?? null;
+
+  const { data: subscriber, isLoading: loadingSubscriber, refetch: refetchSubscriber } = useSubscriber(
+    user?.id ?? null,
+    initData,
+  );
   const { data: tiers } = useActiveTiers();
   const [paymentLink, setPaymentLink] = useState<string | null>(null);
   const { toast } = useToast();
