@@ -8,6 +8,7 @@ export interface Subscriber {
   telegram_username: string | null;
   first_name: string | null;
   last_name: string | null;
+  phone_number: string | null;
   tier_id: string | null;
   subscription_start: string | null;
   subscription_end: string | null;

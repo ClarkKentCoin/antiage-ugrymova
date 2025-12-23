@@ -165,6 +165,7 @@ export type Database = {
           is_in_channel: boolean | null
           last_name: string | null
           next_payment_notification_sent: boolean | null
+          phone_number: string | null
           robokassa_invoice_id: string | null
           status: string | null
           subscriber_payment_method: string | null
@@ -184,6 +185,7 @@ export type Database = {
           is_in_channel?: boolean | null
           last_name?: string | null
           next_payment_notification_sent?: boolean | null
+          phone_number?: string | null
           robokassa_invoice_id?: string | null
           status?: string | null
           subscriber_payment_method?: string | null
@@ -203,6 +205,7 @@ export type Database = {
           is_in_channel?: boolean | null
           last_name?: string | null
           next_payment_notification_sent?: boolean | null
+          phone_number?: string | null
           robokassa_invoice_id?: string | null
           status?: string | null
           subscriber_payment_method?: string | null
