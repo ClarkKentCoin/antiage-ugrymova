@@ -12,6 +12,8 @@ interface TelegramResponse {
   description?: string;
 }
 
+const INVITE_LINK_EXPIRY_SECONDS = 600; // 10 minutes
+
 async function callTelegramApi(botToken: string, method: string, params: Record<string, any> = {}): Promise<TelegramResponse> {
   const url = `https://api.telegram.org/bot${botToken}/${method}`;
   
@@ -22,6 +24,93 @@ async function callTelegramApi(botToken: string, method: string, params: Record<
   });
   
   return response.json();
+}
+
+// Revoke old invite links for a subscriber
+async function revokeOldInviteLinks(
+  supabaseAdmin: any,
+  botToken: string,
+  channelId: string,
+  subscriberId: string
+): Promise<void> {
+  // Get all non-revoked links for this subscriber
+  const { data: oldLinks, error } = await supabaseAdmin
+    .from("invite_links")
+    .select("id, invite_link")
+    .eq("subscriber_id", subscriberId)
+    .eq("revoked", false);
+
+  if (error) {
+    console.error("Error fetching old invite links:", error.message);
+    return;
+  }
+
+  if (!oldLinks || oldLinks.length === 0) {
+    return;
+  }
+
+  console.log(`Revoking ${oldLinks.length} old invite links for subscriber ${subscriberId}`);
+
+  for (const link of oldLinks) {
+    // Revoke the link in Telegram
+    const revokeResult = await callTelegramApi(botToken, "revokeChatInviteLink", {
+      chat_id: channelId,
+      invite_link: link.invite_link,
+    });
+
+    if (!revokeResult.ok) {
+      console.log(`Could not revoke link (may be expired): ${revokeResult.description}`);
+    }
+
+    // Mark as revoked in database
+    await supabaseAdmin
+      .from("invite_links")
+      .update({ revoked: true, revoked_at: new Date().toISOString() })
+      .eq("id", link.id);
+  }
+}
+
+// Create and save a new invite link with expiry
+async function createAndSaveInviteLink(
+  supabaseAdmin: any,
+  botToken: string,
+  channelId: string,
+  subscriberId: string
+): Promise<{ success: boolean; invite_link?: string; error?: string }> {
+  const expireDate = Math.floor(Date.now() / 1000) + INVITE_LINK_EXPIRY_SECONDS;
+  const expiresAt = new Date(Date.now() + INVITE_LINK_EXPIRY_SECONDS * 1000).toISOString();
+
+  // Create invite link with expiration
+  const inviteResult = await callTelegramApi(botToken, "createChatInviteLink", {
+    chat_id: channelId,
+    expire_date: expireDate,
+    member_limit: 1, // Also keep member_limit as additional protection
+    creates_join_request: false,
+  });
+
+  console.log("createChatInviteLink result:", JSON.stringify(inviteResult));
+
+  if (!inviteResult.ok) {
+    console.error("Failed to create invite link:", inviteResult.description);
+    return { success: false, error: inviteResult.description || "Failed to create invite link" };
+  }
+
+  // Save the link to database
+  const { error: insertError } = await supabaseAdmin
+    .from("invite_links")
+    .insert({
+      subscriber_id: subscriberId,
+      invite_link: inviteResult.result.invite_link,
+      expires_at: expiresAt,
+      revoked: false,
+    });
+
+  if (insertError) {
+    console.error("Error saving invite link to database:", insertError.message);
+    // Continue anyway - the link was created successfully
+  }
+
+  return { success: true, invite_link: inviteResult.result.invite_link };
 }
 
 serve(async (req) => {
@@ -123,23 +212,28 @@ serve(async (req) => {
     console.log(`Processing action: ${action} for user: ${telegram_user_id}, channel: ${channelId}`);
 
     if (action === "create_invite_link") {
-      // Create a unique invite link for the user
-      const result = await callTelegramApi(botToken, "createChatInviteLink", {
-        chat_id: channelId,
-        member_limit: 1, // Single-use link
-        creates_join_request: false,
-      });
+      // Revoke old links first if subscriber_id is provided
+      if (subscriber_id) {
+        await revokeOldInviteLinks(supabaseAdmin, botToken, channelId, subscriber_id);
+      }
 
-      if (!result.ok) {
-        console.error("Failed to create invite link:", result.description);
+      // Create a unique invite link for the user with expiration
+      const result = await createAndSaveInviteLink(
+        supabaseAdmin,
+        botToken,
+        channelId,
+        subscriber_id
+      );
+
+      if (!result.success) {
         return new Response(
-          JSON.stringify({ error: result.description || "Failed to create invite link" }),
+          JSON.stringify({ error: result.error }),
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
 
       return new Response(
-        JSON.stringify({ success: true, invite_link: result.result.invite_link }),
+        JSON.stringify({ success: true, invite_link: result.invite_link }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -154,16 +248,22 @@ serve(async (req) => {
 
       console.log("Unban result:", unbanResult);
 
-      // Create invite link for the user
-      const inviteResult = await callTelegramApi(botToken, "createChatInviteLink", {
-        chat_id: channelId,
-        member_limit: 1,
-        creates_join_request: false,
-      });
+      // Revoke old links first if subscriber_id is provided
+      if (subscriber_id) {
+        await revokeOldInviteLinks(supabaseAdmin, botToken, channelId, subscriber_id);
+      }
 
-      if (!inviteResult.ok) {
+      // Create invite link with expiration
+      const result = await createAndSaveInviteLink(
+        supabaseAdmin,
+        botToken,
+        channelId,
+        subscriber_id
+      );
+
+      if (!result.success) {
         return new Response(
-          JSON.stringify({ error: inviteResult.description || "Failed to create invite link" }),
+          JSON.stringify({ error: result.error }),
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
@@ -171,7 +271,7 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({ 
           success: true, 
-          invite_link: inviteResult.result.invite_link,
+          invite_link: result.invite_link,
           message: "User unbanned and invite link created" 
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -179,6 +279,11 @@ serve(async (req) => {
     }
 
     if (action === "kick_user") {
+      // First revoke all old invite links so user can't rejoin with them
+      if (subscriber_id) {
+        await revokeOldInviteLinks(supabaseAdmin, botToken, channelId, subscriber_id);
+      }
+
       // Kick user from channel using ban + unban to remove from channel but not leave in banned list
       // Step 1: Ban user (removes from channel)
       const banResult = await callTelegramApi(botToken, "banChatMember", {
@@ -273,22 +378,51 @@ serve(async (req) => {
     }
 
     if (action === "send_invite") {
-      // Send invite link directly to the user via bot
-      console.log(`Creating invite link for channel ${channelId}`);
-      
-      // First create the invite link
-      const inviteResult = await callTelegramApi(botToken, "createChatInviteLink", {
-        chat_id: channelId,
-        member_limit: 1,
-        creates_join_request: false,
-      });
+      // Check if user is already in channel
+      const { data: subscriber } = await supabaseAdmin
+        .from("subscribers")
+        .select("is_in_channel")
+        .eq("id", subscriber_id)
+        .maybeSingle();
 
-      console.log("createChatInviteLink result:", JSON.stringify(inviteResult));
+      if (subscriber?.is_in_channel) {
+        // User is already in channel - send message without invite
+        console.log(`User ${telegram_user_id} is already in channel, sending info message`);
+        
+        const msgResult = await callTelegramApi(botToken, "sendMessage", {
+          chat_id: telegram_user_id,
+          text: "✅ Вы уже являетесь участником канала!",
+          parse_mode: "HTML",
+        });
 
-      if (!inviteResult.ok) {
-        console.error("Failed to create invite link:", inviteResult.description);
         return new Response(
-          JSON.stringify({ error: inviteResult.description || "Failed to create invite link" }),
+          JSON.stringify({ 
+            success: true, 
+            already_member: true,
+            message_sent: msgResult.ok 
+          }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Revoke old invite links first
+      if (subscriber_id) {
+        await revokeOldInviteLinks(supabaseAdmin, botToken, channelId, subscriber_id);
+      }
+
+      console.log(`Creating invite link for channel ${channelId} with 10 minute expiry`);
+      
+      // Create new invite link with expiration
+      const result = await createAndSaveInviteLink(
+        supabaseAdmin,
+        botToken,
+        channelId,
+        subscriber_id
+      );
+
+      if (!result.success) {
+        return new Response(
+          JSON.stringify({ error: result.error }),
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
@@ -297,7 +431,7 @@ serve(async (req) => {
       console.log(`Sending invite link to user ${telegram_user_id}`);
       const messageResult = await callTelegramApi(botToken, "sendMessage", {
         chat_id: telegram_user_id,
-        text: `🎉 Ваша подписка активирована!\n\nПерейдите по ссылке, чтобы присоединиться к каналу:\n${inviteResult.result.invite_link}\n\n⚠️ Ссылка одноразовая и действует только для вас.`,
+        text: `🎉 Ваша подписка активирована!\n\nПерейдите по ссылке, чтобы присоединиться к каналу:\n${result.invite_link}\n\n⚠️ Ссылка одноразовая и действует 10 минут.`,
         parse_mode: "HTML",
       });
 
@@ -309,7 +443,7 @@ serve(async (req) => {
         return new Response(
           JSON.stringify({ 
             success: true, 
-            invite_link: inviteResult.result.invite_link,
+            invite_link: result.invite_link,
             message_sent: false,
             error: messageResult.description || "Could not send message to user. They may need to start the bot first."
           }),
@@ -320,7 +454,7 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({ 
           success: true, 
-          invite_link: inviteResult.result.invite_link,
+          invite_link: result.invite_link,
           message_sent: true 
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
