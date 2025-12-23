@@ -34,21 +34,9 @@ const statusConfig: Record<string, { label: string; className: string }> = {
   grace_period: { label: 'Льготный период', className: 'bg-warning/10 text-warning border-warning/20' },
 };
 
-// В Telegram Mini App `window.open(..., "_blank")` часто блокируется.
-// Используем нативный Telegram WebApp API, если он доступен.
-const openExternalUrl = (url: string) => {
-  const tg = window.Telegram?.WebApp;
-
-  try {
-    if (tg?.openLink) {
-      tg.openLink(url);
-      return;
-    }
-  } catch {
-    // ignore
-  }
-
-  // Fallback for regular browsers / environments without Telegram API
+// Прямой переход на оплату без диалогов Telegram
+// Robokassa не поддерживает Telegram Payment API, поэтому используем window.location.href
+const openPaymentUrl = (url: string) => {
   window.location.href = url;
 };
 
@@ -272,7 +260,8 @@ function NewUserView({
       if (error) throw error;
 
       if (data?.payment_url) {
-        openExternalUrl(data.payment_url);
+        toast({ title: 'Переход к оплате...', description: 'Сейчас откроется страница оплаты' });
+        openPaymentUrl(data.payment_url);
         onRefetch?.();
       } else {
         toast({ title: 'Ошибка', description: 'Платёжная ссылка не вернулась от сервера', variant: 'destructive' });
@@ -496,7 +485,8 @@ function GracePeriodView({
       if (error) throw error;
       
       if (data?.payment_url) {
-        openExternalUrl(data.payment_url);
+        toast({ title: 'Переход к оплате...', description: 'Сейчас откроется страница оплаты' });
+        openPaymentUrl(data.payment_url);
         onRefetch?.();
       }
     } catch (error) {
@@ -715,7 +705,8 @@ function SubscriptionContent({
       if (error) throw error;
       
       if (data?.payment_url) {
-        openExternalUrl(data.payment_url);
+        toast({ title: 'Переход к оплате...', description: 'Сейчас откроется страница оплаты' });
+        openPaymentUrl(data.payment_url);
       }
     } catch (error) {
       console.error('Error generating payment link:', error);
