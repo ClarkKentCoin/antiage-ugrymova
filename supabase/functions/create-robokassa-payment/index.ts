@@ -28,72 +28,112 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     );
 
-    // Authentication check - require valid user session
+    // Parse request body first to check source
+    const { subscriber_id, tier_id, is_recurring, ip_address, user_agent, telegram_user_id } = await req.json();
+
+    console.log("Request received:", { subscriber_id, tier_id, is_recurring, telegram_user_id });
+
+    if (!tier_id) {
+      return new Response(
+        JSON.stringify({ error: "tier_id is required" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Check if this is a request from Telegram mini app (has telegram_user_id) or from admin panel
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      console.error("No authorization header provided");
-      return new Response(
-        JSON.stringify({ error: "Unauthorized - No authorization header" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
+    let isAdmin = false;
+    let resolvedSubscriberId = subscriber_id;
 
-    // Create a client with the user's token to verify their identity
-    const supabaseUser = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_ANON_KEY") ?? "",
-      {
-        global: {
-          headers: { Authorization: authHeader },
-        },
+    // If there's an auth header, verify admin access
+    if (authHeader) {
+      const supabaseUser = createClient(
+        Deno.env.get("SUPABASE_URL") ?? "",
+        Deno.env.get("SUPABASE_ANON_KEY") ?? "",
+        {
+          global: {
+            headers: { Authorization: authHeader },
+          },
+        }
+      );
+
+      const { data: { user } } = await supabaseUser.auth.getUser();
+      
+      if (user) {
+        console.log(`Authenticated user: ${user.id}`);
+        
+        // Check if user has admin role
+        const { data: roleData } = await supabaseAdmin
+          .from("user_roles")
+          .select("role")
+          .eq("user_id", user.id)
+          .eq("role", "admin")
+          .maybeSingle();
+
+        isAdmin = !!roleData;
+        if (isAdmin) {
+          console.log(`Admin access verified for user: ${user.id}`);
+        }
       }
-    );
-
-    // Verify the user's token
-    const { data: { user }, error: authError } = await supabaseUser.auth.getUser();
-    
-    if (authError || !user) {
-      console.error("Auth error:", authError?.message || "No user found");
-      return new Response(
-        JSON.stringify({ error: "Unauthorized - Invalid token" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
     }
 
-    console.log(`Authenticated user: ${user.id}`);
+    // If not admin, require telegram_user_id for validation
+    if (!isAdmin) {
+      if (!telegram_user_id) {
+        console.log("Non-admin request without telegram_user_id");
+        return new Response(
+          JSON.stringify({ error: "Unauthorized - telegram_user_id required for non-admin requests" }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
 
-    // Check if user has admin role
-    const { data: roleData, error: roleError } = await supabaseAdmin
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", user.id)
-      .eq("role", "admin")
-      .maybeSingle();
+      console.log(`Telegram user request: ${telegram_user_id}`);
 
-    if (roleError) {
-      console.error("Role check error:", roleError.message);
-      return new Response(
-        JSON.stringify({ error: "Error checking permissions" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      // Find or create subscriber by telegram_user_id
+      let { data: subscriber, error: subError } = await supabaseAdmin
+        .from("subscribers")
+        .select("id")
+        .eq("telegram_user_id", telegram_user_id)
+        .maybeSingle();
+
+      if (subError) {
+        console.error("Error finding subscriber:", subError);
+        return new Response(
+          JSON.stringify({ error: "Error finding subscriber" }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      if (!subscriber) {
+        // Create new subscriber
+        const { data: newSubscriber, error: createError } = await supabaseAdmin
+          .from("subscribers")
+          .insert({
+            telegram_user_id: telegram_user_id,
+            status: "inactive",
+            tier_id: tier_id,
+          })
+          .select("id")
+          .single();
+
+        if (createError) {
+          console.error("Error creating subscriber:", createError);
+          return new Response(
+            JSON.stringify({ error: "Error creating subscriber" }),
+            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        subscriber = newSubscriber;
+        console.log(`Created new subscriber: ${subscriber.id} for telegram_user_id: ${telegram_user_id}`);
+      }
+
+      resolvedSubscriberId = subscriber.id;
     }
 
-    if (!roleData) {
-      console.error(`User ${user.id} does not have admin role`);
+    if (!resolvedSubscriberId) {
       return new Response(
-        JSON.stringify({ error: "Forbidden - Admin access required" }),
-        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    console.log(`Admin access verified for user: ${user.id}`);
-
-    // Parse request body
-    const { subscriber_id, tier_id, is_recurring, ip_address, user_agent } = await req.json();
-
-    if (!subscriber_id || !tier_id) {
-      return new Response(
-        JSON.stringify({ error: "subscriber_id and tier_id are required" }),
+        JSON.stringify({ error: "subscriber_id is required" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -128,11 +168,11 @@ serve(async (req) => {
       );
     }
 
-    // Get subscriber info
+    // Verify subscriber exists
     const { data: subscriber, error: subscriberError } = await supabaseAdmin
       .from("subscribers")
-      .select("telegram_user_id, telegram_username")
-      .eq("id", subscriber_id)
+      .select("id, telegram_user_id, telegram_username")
+      .eq("id", resolvedSubscriberId)
       .single();
 
     if (subscriberError || !subscriber) {
@@ -149,7 +189,7 @@ serve(async (req) => {
       const { error: consentError } = await supabaseAdmin
         .from("subscription_consent_log")
         .insert({
-          subscriber_id,
+          subscriber_id: resolvedSubscriberId,
           consent_type: "auto_renewal_enabled",
           ip_address: ip_address || null,
           user_agent: user_agent || null,
@@ -158,7 +198,7 @@ serve(async (req) => {
       if (consentError) {
         console.error("Failed to log consent:", consentError);
       } else {
-        console.log(`Logged auto_renewal consent for subscriber ${subscriber_id}`);
+        console.log(`Logged auto_renewal consent for subscriber ${resolvedSubscriberId}`);
       }
 
       // Update subscriber with consent date and auto_renewal flag
@@ -169,7 +209,7 @@ serve(async (req) => {
           auto_renewal_consent_date: new Date().toISOString(),
           next_payment_notification_sent: false,
         })
-        .eq("id", subscriber_id);
+        .eq("id", resolvedSubscriberId);
 
       if (updateError) {
         console.error("Failed to update subscriber consent date:", updateError);
@@ -185,7 +225,7 @@ serve(async (req) => {
     const { data: payment, error: paymentError } = await supabaseAdmin
       .from("payment_history")
       .insert({
-        subscriber_id,
+        subscriber_id: resolvedSubscriberId,
         tier_id,
         amount: tier.price,
         invoice_id: invoiceId,
@@ -199,7 +239,7 @@ serve(async (req) => {
     if (paymentError) {
       console.error("Payment creation error:", paymentError);
       return new Response(
-        JSON.stringify({ error: "Failed to create payment record" }),
+        JSON.stringify({ error: "Failed to create payment record", details: paymentError.message }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -231,7 +271,7 @@ serve(async (req) => {
 
     // Shp parameters in alphabetical order
     const shpSource = "telegram";
-    const shpSubscriberId = subscriber_id;
+    const shpSubscriberId = resolvedSubscriberId;
 
     // Build signature string
     // Format: MerchantLogin:OutSum:InvoiceID:Receipt:Password1:Shp_source=value:Shp_subscriber_id=value
@@ -261,7 +301,7 @@ serve(async (req) => {
     paymentUrl += `&Shp_source=${shpSource}`;
     paymentUrl += `&Shp_subscriber_id=${shpSubscriberId}`;
 
-    console.log(`Generated payment URL for subscriber ${subscriber_id}`);
+    console.log(`Generated payment URL for subscriber ${resolvedSubscriberId}`);
 
     return new Response(
       JSON.stringify({ 
