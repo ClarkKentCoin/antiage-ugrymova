@@ -807,9 +807,17 @@ function SubscriptionContent({
 
   return (
     <div className="p-4 space-y-4">
-      {/* Header */}
+      {/* Channel Header */}
       <div className="text-center py-4">
-        <Crown className="h-8 w-8 text-primary mx-auto mb-2" />
+        <div className="w-16 h-16 bg-gradient-to-br from-primary to-primary/60 rounded-full flex items-center justify-center mx-auto mb-4">
+          <Crown className="h-8 w-8 text-primary-foreground" />
+        </div>
+        <h2 className="text-2xl font-bold mb-2">
+          🌟 {channelInfo?.name || 'АНТИЭЙДЖ ЛАБ'}
+        </h2>
+        <p className="text-muted-foreground text-sm mb-4 max-w-sm mx-auto">
+          {channelInfo?.description || 'Закрытый Telegram-канал для женщин: мотивация, рецепты, научные подходы к антиэйджу. Всё для энергии и молодости в одном месте.'}
+        </p>
         <h1 className="text-xl font-semibold">
           {userName ? `Привет, ${userName}!` : 'Моя подписка'}
         </h1>
