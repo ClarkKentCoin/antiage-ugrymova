@@ -1,5 +1,4 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import md5 from "https://esm.sh/md5@2.3.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -7,9 +6,15 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Robokassa signatures: SignatureValue is MD5 (Password#1)
-function robokassaSignature(message: string): string {
-  return String(md5(message)).toUpperCase();
+// Robokassa signatures: SignatureValue uses SHA256 (Password#1) when configured in merchant settings
+async function robokassaSignature(message: string): Promise<string> {
+  const msgUint8 = new TextEncoder().encode(message);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", msgUint8);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("")
+    .toUpperCase();
 }
 
 serve(async (req) => {
@@ -319,7 +324,7 @@ serve(async (req) => {
       signatureString.replace(password1, "***")
     );
 
-    const signature = robokassaSignature(signatureString);
+    const signature = await robokassaSignature(signatureString);
 
     // Build payment URL (Robokassa expects InvId param name)
     let paymentUrl = `https://auth.robokassa.ru/Merchant/Index.aspx`;
