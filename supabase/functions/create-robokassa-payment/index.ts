@@ -286,11 +286,12 @@ serve(async (req) => {
         sum: Number(tier.price),
         payment_method: "full_payment",
         payment_object: "service",
-        tax: "none"
-      }]
+        tax: "none",
+      }],
     };
 
     const receiptJson = JSON.stringify(receipt);
+    // IMPORTANT: signature must use the same value that is sent in the Receipt query param
     const receiptEncoded = encodeURIComponent(receiptJson);
 
     // Robokassa parameters
@@ -307,7 +308,7 @@ serve(async (req) => {
 
     // Build signature string
     // Format: MerchantLogin:OutSum:InvId:Receipt:Password1:Shp_source=value:Shp_subscriber_id=value:Shp_telegram_user_id=value
-    const signatureString = `${merchantLogin}:${outSum}:${invoiceId}:${receiptJson}:${password1}:Shp_source=${shpSource}:Shp_subscriber_id=${shpSubscriberId}:Shp_telegram_user_id=${shpTelegramUserId}`;
+    const signatureString = `${merchantLogin}:${outSum}:${invoiceId}:${receiptEncoded}:${password1}:Shp_source=${shpSource}:Shp_subscriber_id=${shpSubscriberId}:Shp_telegram_user_id=${shpTelegramUserId}`;
 
     console.log(
       "Signature string (without password):",
