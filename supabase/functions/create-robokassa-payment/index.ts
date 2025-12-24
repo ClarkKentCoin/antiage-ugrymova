@@ -306,7 +306,8 @@ serve(async (req) => {
 
     // Build signature string
     // Format: MerchantLogin:OutSum:InvId:Receipt:Password1:Shp_source=value:Shp_subscriber_id=value:Shp_telegram_user_id=value
-    const signatureString = `${merchantLogin}:${outSum}:${invoiceId}:${receiptEncoded}:${password1}:Shp_source=${shpSource}:Shp_subscriber_id=${shpSubscriberId}:Shp_telegram_user_id=${shpTelegramUserId}`;
+    // IMPORTANT: Robokassa signs the *raw* Receipt JSON (not URL-encoded). URL-encode it only when putting into query params.
+    const signatureString = `${merchantLogin}:${outSum}:${invoiceId}:${receiptJson}:${password1}:Shp_source=${shpSource}:Shp_subscriber_id=${shpSubscriberId}:Shp_telegram_user_id=${shpTelegramUserId}`;
 
     console.log(
       "Signature string (without password):",
