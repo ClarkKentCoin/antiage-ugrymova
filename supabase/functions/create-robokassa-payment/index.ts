@@ -306,32 +306,33 @@ serve(async (req) => {
     const shpTelegramUserId = subscriber.telegram_user_id.toString();
 
     // Build signature string
-    // Format: MerchantLogin:OutSum:InvoiceID:Receipt:Password1:Shp_source=value:Shp_subscriber_id=value:Shp_telegram_user_id=value
+    // Format: MerchantLogin:OutSum:InvId:Receipt:Password1:Shp_source=value:Shp_subscriber_id=value:Shp_telegram_user_id=value
     const signatureString = `${merchantLogin}:${outSum}:${invoiceId}:${receiptJson}:${password1}:Shp_source=${shpSource}:Shp_subscriber_id=${shpSubscriberId}:Shp_telegram_user_id=${shpTelegramUserId}`;
-    
-    console.log("Signature string (without password):", signatureString.replace(password1, "***"));
-    
-    console.log("Signature string (without password):", signatureString.replace(password1, "***"));
-    
+
+    console.log(
+      "Signature string (without password):",
+      signatureString.replace(password1, "***")
+    );
+
     const signature = await sha256(signatureString);
 
-    // Build payment URL
+    // Build payment URL (Robokassa expects InvId param name)
     let paymentUrl = `https://auth.robokassa.ru/Merchant/Index.aspx`;
     paymentUrl += `?MerchantLogin=${encodeURIComponent(merchantLogin)}`;
     paymentUrl += `&OutSum=${outSum}`;
-    paymentUrl += `&InvoiceID=${invoiceId}`;
+    paymentUrl += `&InvId=${invoiceId}`;
     paymentUrl += `&Description=${description}`;
     paymentUrl += `&SignatureValue=${signature}`;
     paymentUrl += `&Receipt=${receiptEncoded}`;
-    
+
     if (is_recurring) {
       paymentUrl += `&Recurring=true`;
     }
-    
+
     if (isTest) {
       paymentUrl += `&IsTest=1`;
     }
-    
+
     paymentUrl += `&Shp_source=${shpSource}`;
     paymentUrl += `&Shp_subscriber_id=${shpSubscriberId}`;
     paymentUrl += `&Shp_telegram_user_id=${shpTelegramUserId}`;
