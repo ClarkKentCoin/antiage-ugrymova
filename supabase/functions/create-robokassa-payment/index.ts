@@ -289,8 +289,13 @@ serve(async (req) => {
     };
 
     const receiptJson = JSON.stringify(receipt);
-    // IMPORTANT: signature must use the same value that is sent in the Receipt query param
-    const receiptEncoded = encodeURIComponent(receiptJson);
+
+    // IMPORTANT (Robokassa docs):
+    // - For SignatureValue calculation you must use URL-encoded Receipt (once).
+    // - For GET requests, if the value contains non-latin symbols, it must be URL-encoded *again* when forming the URL.
+    //   (In our case Receipt contains tier.name, which is often in Russian.)
+    const receiptEncodedForSignature = encodeURIComponent(receiptJson);
+    const receiptEncodedForUrl = encodeURIComponent(receiptEncodedForSignature);
 
     // Robokassa parameters
     const merchantLogin = settings.robokassa_merchant_login;
@@ -305,9 +310,9 @@ serve(async (req) => {
     const shpTelegramUserId = subscriber.telegram_user_id.toString();
 
     // Build signature string
-    // Format: MerchantLogin:OutSum:InvId:Receipt:Password1:Shp_source=value:Shp_subscriber_id=value:Shp_telegram_user_id=value
-    // IMPORTANT: Robokassa signs the *raw* Receipt JSON (not URL-encoded). URL-encode it only when putting into query params.
-    const signatureString = `${merchantLogin}:${outSum}:${invoiceId}:${receiptJson}:${password1}:Shp_source=${shpSource}:Shp_subscriber_id=${shpSubscriberId}:Shp_telegram_user_id=${shpTelegramUserId}`;
+    // Format: MerchantLogin:OutSum:InvId:Receipt:Password1:Shp_xxx=yyy...
+    // Receipt here must be encoded ONCE (same as docs example for SignatureValue base).
+    const signatureString = `${merchantLogin}:${outSum}:${invoiceId}:${receiptEncodedForSignature}:${password1}:Shp_source=${shpSource}:Shp_subscriber_id=${shpSubscriberId}:Shp_telegram_user_id=${shpTelegramUserId}`;
 
     console.log(
       "Signature string (without password):",
@@ -323,7 +328,7 @@ serve(async (req) => {
     paymentUrl += `&InvId=${invoiceId}`;
     paymentUrl += `&Description=${description}`;
     paymentUrl += `&SignatureValue=${signature}`;
-    paymentUrl += `&Receipt=${receiptEncoded}`;
+    paymentUrl += `&Receipt=${receiptEncodedForUrl}`;
 
     if (is_recurring) {
       paymentUrl += `&Recurring=true`;
