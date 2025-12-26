@@ -407,40 +407,59 @@ function NewUserView({
               </div>
             </div>
 
-            {/* Consent required if auto-renewal is enabled */}
+            {/* Info and consent required if auto-renewal is enabled */}
             {autoRenewal && (
-              <div className="space-y-3 p-4 rounded-lg bg-warning/10 border border-warning/20">
-                <div className="flex items-center gap-2 text-warning">
-                  <AlertTriangle className="h-4 w-4" />
-                  <span className="text-sm font-medium">Требуется ваше согласие</span>
+              <>
+                {/* Info bubble about Russian cards only */}
+                <div className="p-4 rounded-lg bg-primary/10 border border-primary/20">
+                  <p className="text-sm text-foreground">
+                    <span className="font-medium">Важно!</span> Режим Автоматическое продление пока доступен только для оплат с карт РФ. Если вы оплачиваете зарубежными картами и картами стран СНГ — пожалуйста снимите галочку Автоматическое продление. Полные правила оплаты вы можете ознакомиться по{' '}
+                    <a 
+                      href="https://antiage.ugrymova.ru/#faq" 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="text-primary underline font-medium"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      этой ссылке
+                    </a>.
+                  </p>
                 </div>
-                
-                <div className="flex items-start space-x-3">
-                  <Checkbox 
-                    id="consent-new" 
-                    checked={consentGiven}
-                    onCheckedChange={(checked) => setConsentGiven(checked === true)}
-                  />
-                  <div className="grid gap-1.5 leading-none">
-                    <Label htmlFor="consent-new" className="text-sm cursor-pointer">
-                      Я согласен на автоматические списания средств согласно условиям{' '}
-                      <a 
-                        href="https://antiage.ugrymova.ru/oferta" 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="text-primary underline"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        публичной оферты
-                      </a>
-                    </Label>
+
+                {/* Consent block */}
+                <div className="space-y-3 p-4 rounded-lg bg-warning/10 border border-warning/20">
+                  <div className="flex items-center gap-2 text-warning">
+                    <AlertTriangle className="h-4 w-4" />
+                    <span className="text-sm font-medium">Требуется ваше согласие</span>
                   </div>
+                  
+                  <div className="flex items-start space-x-3">
+                    <Checkbox 
+                      id="consent-new" 
+                      checked={consentGiven}
+                      onCheckedChange={(checked) => setConsentGiven(checked === true)}
+                    />
+                    <div className="grid gap-1.5 leading-none">
+                      <Label htmlFor="consent-new" className="text-sm cursor-pointer">
+                        Я согласен на автоматические списания средств согласно условиям{' '}
+                        <a 
+                          href="https://antiage.ugrymova.ru/oferta" 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-primary underline"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          публичной оферты
+                        </a>
+                      </Label>
+                    </div>
+                  </div>
+                  
+                  <p className="text-xs text-muted-foreground">
+                    При автопродлении оплата будет списываться за 1 день до окончания подписки. Вы получите уведомление за 3 дня.
+                  </p>
                 </div>
-                
-                <p className="text-xs text-muted-foreground">
-                  При автопродлении оплата будет списываться за 1 день до окончания подписки. Вы получите уведомление за 3 дня.
-                </p>
-              </div>
+              </>
             )}
 
             <Button 
