@@ -53,7 +53,7 @@ export default function TelegramApp() {
   const { toast } = useToast();
 
   const [channelInfo, setChannelInfo] = useState<{ name: string; description: string } | null>(null);
-  const [gracePeriodDays, setGracePeriodDays] = useState<number>(0);
+  const [gracePeriodDays, setGracePeriodDays] = useState<number | null>(null);
 
   // Fetch settings from admin_settings
   useEffect(() => {
@@ -71,7 +71,10 @@ export default function TelegramApp() {
             (data as any).channel_description ||
             'Закрытый Telegram-канал для женщин: мотивация, рецепты, научные подходы к антиэйджу. Всё для энергии и молодости в одном месте.',
         });
-        setGracePeriodDays((data as any).grace_period_days || 0);
+        setGracePeriodDays((data as any).grace_period_days ?? 0);
+        console.log('[TelegramApp] Loaded grace_period_days:', (data as any).grace_period_days);
+      } else {
+        setGracePeriodDays(0);
       }
     }
     fetchSettings();
@@ -703,7 +706,7 @@ function SubscriptionContent({
   onExtend: (tierId: string) => void;
   userName?: string;
   onRefetch?: () => void;
-  gracePeriodDays?: number;
+  gracePeriodDays?: number | null;
 }) {
   const [selectedTier, setSelectedTier] = useState<string | null>(null);
   const [autoRenewal, setAutoRenewal] = useState(false);
@@ -799,10 +802,21 @@ function SubscriptionContent({
 
   // Calculate grace period days remaining
   let graceDaysRemaining = 0;
-  if (isGracePeriod && subscriber.subscription_end) {
+  const effectiveGracePeriodDays = gracePeriodDays ?? 0;
+  
+  if (isGracePeriod && subscriber.subscription_end && effectiveGracePeriodDays > 0) {
     const subscriptionEnd = new Date(subscriber.subscription_end);
-    const graceEndDate = addDays(subscriptionEnd, gracePeriodDays);
+    const graceEndDate = addDays(subscriptionEnd, effectiveGracePeriodDays);
     graceDaysRemaining = Math.max(0, differenceInDays(graceEndDate, new Date()));
+    console.log('[GracePeriod] subscriptionEnd:', subscriptionEnd, 'graceEndDate:', graceEndDate, 'gracePeriodDays:', effectiveGracePeriodDays, 'graceDaysRemaining:', graceDaysRemaining);
+  } else if (isGracePeriod && subscriber.subscription_end && gracePeriodDays === null) {
+    // Grace period days not loaded yet - wait for it
+    console.log('[GracePeriod] Waiting for gracePeriodDays to load...');
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="animate-pulse text-muted-foreground">Загрузка...</div>
+      </div>
+    );
   }
 
   // Show grace period warning
