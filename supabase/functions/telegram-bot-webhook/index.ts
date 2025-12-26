@@ -1,11 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
-
 interface TelegramUpdate {
   update_id: number;
   message?: {
@@ -44,8 +39,22 @@ async function callTelegramApi(botToken: string, method: string, params: Record<
 }
 
 serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+  // Only accept POST requests from Telegram
+  if (req.method !== "POST") {
+    console.log(`Rejected ${req.method} request - only POST allowed`);
+    return new Response("Method not allowed", { status: 405 });
+  }
+
+  // Verify Telegram webhook secret token
+  const webhookSecret = Deno.env.get("TELEGRAM_WEBHOOK_SECRET");
+  if (webhookSecret) {
+    const receivedToken = req.headers.get("X-Telegram-Bot-Api-Secret-Token");
+    if (!receivedToken || receivedToken !== webhookSecret) {
+      console.error("Invalid or missing webhook secret token");
+      return new Response("Unauthorized", { status: 401 });
+    }
+  } else {
+    console.warn("TELEGRAM_WEBHOOK_SECRET not configured - webhook verification disabled");
   }
 
   try {
@@ -65,7 +74,7 @@ serve(async (req) => {
       console.error("Settings error:", settingsError);
       return new Response(
         JSON.stringify({ error: "Bot not configured" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 400, headers: { "Content-Type": "application/json" } }
       );
     }
 
@@ -139,14 +148,14 @@ serve(async (req) => {
 
       return new Response(
         JSON.stringify({ ok: true }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { headers: { "Content-Type": "application/json" } }
       );
     }
 
     // Return ok for other updates
     return new Response(
       JSON.stringify({ ok: true }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { headers: { "Content-Type": "application/json" } }
     );
 
   } catch (error) {
@@ -154,7 +163,7 @@ serve(async (req) => {
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
     return new Response(
       JSON.stringify({ error: errorMessage }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { status: 500, headers: { "Content-Type": "application/json" } }
     );
   }
 });
