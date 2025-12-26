@@ -32,6 +32,7 @@ const statusVariants: Record<string, string> = {
   expired: 'status-expired',
   inactive: 'status-inactive',
   cancelled: 'status-cancelled',
+  grace_period: 'bg-amber-100 text-amber-800 border-amber-300',
 };
 
 export function SubscriberTable({ subscribers }: SubscriberTableProps) {
@@ -97,6 +98,15 @@ export function SubscriberTable({ subscribers }: SubscriberTableProps) {
     return diff;
   };
 
+  // Calculate days in grace period (days since subscription ended)
+  const getGracePeriodDays = (subscriber: Subscriber) => {
+    if (subscriber.status !== 'grace_period' || !subscriber.subscription_end) return null;
+    const end = new Date(subscriber.subscription_end);
+    const now = new Date();
+    const daysSinceExpired = Math.ceil((now.getTime() - end.getTime()) / (1000 * 60 * 60 * 24));
+    return daysSinceExpired;
+  };
+
   return (
     <>
       <div className="rounded-lg border border-border bg-card">
@@ -109,6 +119,7 @@ export function SubscriberTable({ subscribers }: SubscriberTableProps) {
               <TableHead>Phone</TableHead>
               <TableHead>Plan</TableHead>
               <TableHead>Status</TableHead>
+              <TableHead>Grace Period</TableHead>
               <TableHead>Expires</TableHead>
               <TableHead className="w-[80px]"></TableHead>
             </TableRow>
@@ -116,13 +127,14 @@ export function SubscriberTable({ subscribers }: SubscriberTableProps) {
           <TableBody>
             {subscribers.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
+                <TableCell colSpan={9} className="h-24 text-center text-muted-foreground">
                   No subscribers yet
                 </TableCell>
               </TableRow>
             ) : (
               subscribers.map((subscriber) => {
                 const daysRemaining = getDaysRemaining(subscriber.subscription_end);
+                const gracePeriodDays = getGracePeriodDays(subscriber);
                 return (
                   <TableRow key={subscriber.id}>
                     <TableCell>
@@ -146,9 +158,19 @@ export function SubscriberTable({ subscribers }: SubscriberTableProps) {
                       {subscriber.subscription_tiers?.name || '-'}
                     </TableCell>
                     <TableCell>
-                      <Badge variant="outline" className={statusVariants[subscriber.status]}>
-                        {subscriber.status}
+                      <Badge variant="outline" className={statusVariants[subscriber.status] || statusVariants.inactive}>
+                        {subscriber.status === 'grace_period' ? 'Grace Period' : subscriber.status}
                       </Badge>
+                    </TableCell>
+                    <TableCell>
+                      {gracePeriodDays !== null ? (
+                        <div className="flex items-center gap-1">
+                          <span className="text-amber-600 font-medium">{gracePeriodDays}</span>
+                          <span className="text-xs text-muted-foreground">день</span>
+                        </div>
+                      ) : (
+                        <span className="text-muted-foreground">-</span>
+                      )}
                     </TableCell>
                     <TableCell>
                       {subscriber.subscription_end ? (
