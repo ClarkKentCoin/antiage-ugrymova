@@ -10,7 +10,8 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { format, differenceInDays, addDays } from 'date-fns';
 import { ru } from 'date-fns/locale';
-import { Calendar, CreditCard, Crown, AlertCircle, Clock, ExternalLink, RefreshCw, CheckCircle, XCircle, AlertTriangle } from 'lucide-react';
+import { Calendar, CreditCard, AlertCircle, Clock, ExternalLink, RefreshCw, CheckCircle, XCircle, AlertTriangle } from 'lucide-react';
+import logoUgrymova from '@/assets/logo-ugrymova.png';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -332,8 +333,8 @@ function NewUserView({
     <div className="p-4 space-y-6">
       {/* Channel Header */}
       <div className="text-center py-6">
-        <div className="w-16 h-16 bg-gradient-to-br from-primary to-primary/60 rounded-full flex items-center justify-center mx-auto mb-4">
-          <Crown className="h-8 w-8 text-primary-foreground" />
+        <div className="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4 overflow-hidden bg-background shadow-md">
+          <img src={logoUgrymova} alt="Ugrymova" className="w-full h-full object-contain p-2" />
         </div>
         <h1 className="text-2xl font-bold mb-3">
           🌟 {channelInfo?.name || 'АНТИЭЙДЖ ЛАБ'}
@@ -893,8 +894,8 @@ function SubscriptionContent({
     <div className="p-4 space-y-4">
       {/* Channel Header */}
       <div className="text-center py-4">
-        <div className="w-16 h-16 bg-gradient-to-br from-primary to-primary/60 rounded-full flex items-center justify-center mx-auto mb-4">
-          <Crown className="h-8 w-8 text-primary-foreground" />
+        <div className="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4 overflow-hidden bg-background shadow-md">
+          <img src={logoUgrymova} alt="Ugrymova" className="w-full h-full object-contain p-2" />
         </div>
         <h2 className="text-2xl font-bold mb-2">
           🌟 {channelInfo?.name || 'АНТИЭЙДЖ ЛАБ'}
