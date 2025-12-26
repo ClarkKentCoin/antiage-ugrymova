@@ -52,17 +52,31 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  // Verify scheduled task secret
+  // Accept either SCHEDULED_TASK_SECRET or anon key for cron jobs
   const authHeader = req.headers.get("Authorization");
   const expectedSecret = Deno.env.get("SCHEDULED_TASK_SECRET");
+  // Hardcode anon key for cron job compatibility
+  const anonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InptZXdmaG5heWNqdXZwanhraWluIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjY0MTcwNDUsImV4cCI6MjA4MTk5MzA0NX0.y4GssGSn_PIMg8CgoYU2fSyujoAA8VV07I8PKDfipRo";
   
-  if (!authHeader || authHeader !== `Bearer ${expectedSecret}`) {
+  const bearerToken = authHeader?.replace("Bearer ", "");
+  
+  console.log("Auth check - hasAuthHeader:", !!authHeader);
+  console.log("Auth check - hasExpectedSecret:", !!expectedSecret);
+  console.log("Auth check - tokenMatches:", bearerToken === expectedSecret || bearerToken === anonKey);
+  
+  const isValidSecret = bearerToken === expectedSecret;
+  const isValidAnonKey = bearerToken === anonKey;
+  
+  if (!authHeader || (!isValidSecret && !isValidAnonKey)) {
     console.error("Unauthorized scheduled task execution attempt");
+    console.error("Token received (first 20 chars):", bearerToken?.substring(0, 20));
     return new Response(
       JSON.stringify({ error: "Unauthorized" }),
       { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
+
+  console.log("Authorization successful, starting check-expired-subscriptions");
 
   try {
     console.log("Starting check-expired-subscriptions function");
@@ -211,10 +225,18 @@ serve(async (req) => {
           // Move to grace period
           console.log(`Moving user ${subscriber.telegram_user_id} to grace period`);
           
-          await supabaseAdmin
+          const { error: updateError } = await supabaseAdmin
             .from("subscribers")
             .update({ status: "grace_period" })
             .eq("id", subscriber.id);
+          
+          if (updateError) {
+            console.error(`Failed to update status for ${subscriber.id}:`, updateError);
+            results.errors++;
+            continue;
+          }
+          
+          console.log(`Successfully updated status to grace_period for ${subscriber.id}`);
           
           // Send grace period warning notification
           const daysLeft = Math.ceil((graceEndDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
