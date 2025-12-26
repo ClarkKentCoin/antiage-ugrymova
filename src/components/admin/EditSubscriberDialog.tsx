@@ -167,6 +167,7 @@ export function EditSubscriberDialog({ subscriber, open, onOpenChange }: EditSub
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="active">Активен</SelectItem>
+                    <SelectItem value="grace_period">Грейс период</SelectItem>
                     <SelectItem value="inactive">Неактивен</SelectItem>
                     <SelectItem value="expired">Истёк</SelectItem>
                     <SelectItem value="cancelled">Отменён</SelectItem>
