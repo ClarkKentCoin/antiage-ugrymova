@@ -59,24 +59,16 @@ serve(async (req) => {
   const anonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InptZXdmaG5heWNqdXZwanhraWluIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjY0MTcwNDUsImV4cCI6MjA4MTk5MzA0NX0.y4GssGSn_PIMg8CgoYU2fSyujoAA8VV07I8PKDfipRo";
   
   const bearerToken = authHeader?.replace("Bearer ", "");
-  
-  console.log("Auth check - hasAuthHeader:", !!authHeader);
-  console.log("Auth check - hasExpectedSecret:", !!expectedSecret);
-  console.log("Auth check - tokenMatches:", bearerToken === expectedSecret || bearerToken === anonKey);
-  
   const isValidSecret = bearerToken === expectedSecret;
   const isValidAnonKey = bearerToken === anonKey;
   
   if (!authHeader || (!isValidSecret && !isValidAnonKey)) {
     console.error("Unauthorized scheduled task execution attempt");
-    console.error("Token received (first 20 chars):", bearerToken?.substring(0, 20));
     return new Response(
       JSON.stringify({ error: "Unauthorized" }),
       { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
-
-  console.log("Authorization successful, starting check-expired-subscriptions");
 
   try {
     console.log("Starting check-expired-subscriptions function");
