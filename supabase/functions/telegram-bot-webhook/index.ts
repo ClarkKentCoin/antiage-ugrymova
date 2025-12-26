@@ -45,16 +45,20 @@ serve(async (req) => {
     return new Response("Method not allowed", { status: 405 });
   }
 
-  // Verify Telegram webhook secret token
+  // Verify Telegram webhook secret token - REQUIRED for security
   const webhookSecret = Deno.env.get("TELEGRAM_WEBHOOK_SECRET");
-  if (webhookSecret) {
-    const receivedToken = req.headers.get("X-Telegram-Bot-Api-Secret-Token");
-    if (!receivedToken || receivedToken !== webhookSecret) {
-      console.error("Invalid or missing webhook secret token");
-      return new Response("Unauthorized", { status: 401 });
-    }
-  } else {
-    console.warn("TELEGRAM_WEBHOOK_SECRET not configured - webhook verification disabled");
+  if (!webhookSecret) {
+    console.error("TELEGRAM_WEBHOOK_SECRET not configured - webhook disabled for security");
+    return new Response(
+      JSON.stringify({ error: "Webhook not configured" }),
+      { status: 503, headers: { "Content-Type": "application/json" } }
+    );
+  }
+
+  const receivedToken = req.headers.get("X-Telegram-Bot-Api-Secret-Token");
+  if (!receivedToken || receivedToken !== webhookSecret) {
+    console.error("Invalid or missing webhook secret token");
+    return new Response("Unauthorized", { status: 401 });
   }
 
   try {
