@@ -300,10 +300,11 @@ serve(async (req) => {
                 })
               : 'неизвестно';
             
-            // Replace template variables
+            // Replace template variables - format amount as integer (no decimals)
+            const formattedAmount = Math.round(parseFloat(outSum)).toString();
             let successMessage = telegramSettings.notification_payment_success
               .replace(/{channel_name}/g, telegramSettings.channel_name || 'канал')
-              .replace(/{amount}/g, outSum)
+              .replace(/{amount}/g, formattedAmount)
               .replace(/{expires_date}/g, expiresDate);
 
             await fetch(
