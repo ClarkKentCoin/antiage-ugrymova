@@ -111,6 +111,9 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     );
+    
+    // Store computed subscription end date for use in Telegram notification
+    let computedNewEndISO: string | null = null;
 
     // Parse POST data
     const data = await parseFormData(req);
@@ -305,7 +308,7 @@ serve(async (req) => {
         }
         
         // Store newEndISO for use in Telegram notification
-        (payment as any)._computedNewEndISO = newEndISO;
+        computedNewEndISO = newEndISO;
       }
     } else {
       // No pending payment found - create a completed one
@@ -339,9 +342,6 @@ serve(async (req) => {
     }
 
     // Send invite and success message to the subscriber
-    // Get the computed new end date if available
-    const computedNewEndISO = payment ? (payment as any)._computedNewEndISO : null;
-    
     try {
       const { data: subscriberData } = await supabaseAdmin
         .from("subscribers")
