@@ -64,9 +64,9 @@ export function computeDurationDays(unit: IntervalUnit, count: number): number {
     case 'week':
       return count * 7;
     case 'month':
-      return 30; // Fixed legacy value, actual calculation uses calendar intervals
+      return count * 30;
     case 'year':
-      return 365; // Fixed legacy value, actual calculation uses calendar intervals
+      return count * 365;
     default:
       return count;
   }

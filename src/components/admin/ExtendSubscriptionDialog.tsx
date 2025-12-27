@@ -119,16 +119,19 @@ export function ExtendSubscriptionDialog({ subscriber, open, onOpenChange }: Ext
             </Select>
           </div>
 
-          {selectedTier && (
-            <div className="rounded-lg bg-primary/10 p-3 text-sm">
-              <p className="text-foreground">
-                Новый срок:{' '}
-                <span className="font-medium">
-                  {formatDateInTimezone(getNewEndDate()!, getTierInterval(selectedTier).timezone)}
-                </span>
-              </p>
-            </div>
-          )}
+          {selectedTier && (() => {
+            const newEnd = getNewEndDate();
+            return (
+              <div className="rounded-lg bg-primary/10 p-3 text-sm">
+                <p className="text-foreground">
+                  Новый срок:{' '}
+                  <span className="font-medium">
+                    {newEnd ? formatDateInTimezone(newEnd, getTierInterval(selectedTier).timezone) : '—'}
+                  </span>
+                </p>
+              </div>
+            );
+          })()}
 
           <div className="space-y-2">
             <Label htmlFor="payment_note">Примечание к платежу</Label>
