@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Pencil, Trash2 } from 'lucide-react';
-import { SubscriptionTier, useDeleteTier } from '@/hooks/useSubscriptionTiers';
+import { SubscriptionTier, useDeleteTier, formatDuration } from '@/hooks/useSubscriptionTiers';
 import { EditTierDialog } from './EditTierDialog';
 
 interface TierCardProps {
@@ -15,7 +15,7 @@ export function TierCard({ tier }: TierCardProps) {
   const deleteTier = useDeleteTier();
 
   const handleDelete = () => {
-    if (confirm('Are you sure you want to delete this tier?')) {
+    if (confirm('Вы уверены, что хотите удалить этот тариф?')) {
       deleteTier.mutate(tier.id);
     }
   };
@@ -31,20 +31,20 @@ export function TierCard({ tier }: TierCardProps) {
             )}
           </div>
           <Badge variant={tier.is_active ? 'default' : 'secondary'}>
-            {tier.is_active ? 'Active' : 'Inactive'}
+            {tier.is_active ? 'Активен' : 'Неактивен'}
           </Badge>
         </CardHeader>
         <CardContent>
           <div className="flex items-baseline gap-1 mb-4">
             <span className="text-3xl font-bold">{tier.price}</span>
             <span className="text-muted-foreground">₽</span>
-            <span className="text-muted-foreground ml-1">/ {tier.duration_days} days</span>
+            <span className="text-muted-foreground ml-1">/ {formatDuration(tier)}</span>
           </div>
           
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
               <Pencil className="h-4 w-4 mr-1" />
-              Edit
+              Изменить
             </Button>
             <Button 
               variant="outline" 
@@ -53,7 +53,7 @@ export function TierCard({ tier }: TierCardProps) {
               className="text-destructive hover:text-destructive"
             >
               <Trash2 className="h-4 w-4 mr-1" />
-              Delete
+              Удалить
             </Button>
           </div>
         </CardContent>
