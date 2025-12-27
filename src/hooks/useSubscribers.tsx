@@ -24,6 +24,9 @@ export interface Subscriber {
     name: string;
     duration_days: number;
     price: number;
+    interval_unit?: string | null;
+    interval_count?: number | null;
+    billing_timezone?: string | null;
   } | null;
 }
 
@@ -51,7 +54,10 @@ export function useSubscribers() {
           subscription_tiers (
             name,
             duration_days,
-            price
+            price,
+            interval_unit,
+            interval_count,
+            billing_timezone
           )
         `)
         .order('created_at', { ascending: false });
@@ -105,7 +111,10 @@ export function useSubscriber(telegramUserId: number | null, initData?: string |
             id,
             name,
             duration_days,
-            price
+            price,
+            interval_unit,
+            interval_count,
+            billing_timezone
           )
         `)
         .eq('telegram_user_id', telegramUserId)

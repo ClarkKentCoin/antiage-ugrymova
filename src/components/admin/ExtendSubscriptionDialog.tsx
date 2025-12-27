@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { addDays, format } from 'date-fns';
 import {
   Dialog,
   DialogContent,
@@ -17,8 +16,9 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Subscriber, useUpdateSubscriber } from '@/hooks/useSubscribers';
-import { useSubscriptionTiers } from '@/hooks/useSubscriptionTiers';
+import { useSubscriptionTiers, formatDuration } from '@/hooks/useSubscriptionTiers';
 import { useCreatePayment } from '@/hooks/usePaymentHistory';
+import { computeNextEndISO, getTierInterval, formatDateInTimezone } from '@/lib/dateUtils';
 
 interface ExtendSubscriptionDialogProps {
   subscriber: Subscriber | null;
@@ -38,29 +38,28 @@ export function ExtendSubscriptionDialog({ subscriber, open, onOpenChange }: Ext
 
   const selectedTier = tiers?.find((t) => t.id === formData.tier_id);
   
-  const getNewEndDate = () => {
+  // Compute new end date using calendar intervals with stacking
+  const getNewEndDate = (): string | null => {
     if (!selectedTier) return null;
     
-    const baseDate = subscriber?.subscription_end 
-      ? new Date(subscriber.subscription_end)
-      : new Date();
+    const nowISO = new Date().toISOString();
+    const currentEndISO = subscriber?.subscription_end || null;
+    const { unit, count, timezone } = getTierInterval(selectedTier);
     
-    // If subscription is expired, start from today
-    const startFrom = baseDate > new Date() ? baseDate : new Date();
-    return addDays(startFrom, selectedTier.duration_days);
+    return computeNextEndISO(nowISO, currentEndISO, unit, count, timezone);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!subscriber || !selectedTier) return;
 
-    const newEndDate = getNewEndDate();
+    const newEndISO = getNewEndDate();
     
-    // Update subscriber
+    // Update subscriber - never overwrite subscription_start if already set
     updateSubscriber.mutate({
       id: subscriber.id,
       tier_id: formData.tier_id,
-      subscription_end: newEndDate?.toISOString(),
+      subscription_end: newEndISO || undefined,
       status: 'active',
     }, {
       onSuccess: () => {
@@ -70,7 +69,7 @@ export function ExtendSubscriptionDialog({ subscriber, open, onOpenChange }: Ext
           tier_id: formData.tier_id,
           amount: selectedTier.price,
           payment_method: 'manual',
-          payment_note: formData.payment_note || `Extended subscription: ${selectedTier.name}`,
+          payment_note: formData.payment_note || `Продление подписки: ${selectedTier.name}`,
         });
         
         onOpenChange(false);
@@ -83,17 +82,17 @@ export function ExtendSubscriptionDialog({ subscriber, open, onOpenChange }: Ext
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>Extend Subscription</DialogTitle>
+          <DialogTitle>Продлить подписку</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           {subscriber && (
             <div className="rounded-lg bg-muted p-3">
               <p className="text-sm text-muted-foreground">
-                Current expiry:{' '}
+                Текущий срок:{' '}
                 <span className="font-medium text-foreground">
                   {subscriber.subscription_end 
-                    ? format(new Date(subscriber.subscription_end), 'MMMM d, yyyy')
-                    : 'No active subscription'
+                    ? formatDateInTimezone(subscriber.subscription_end)
+                    : 'Нет активной подписки'
                   }
                 </span>
               </p>
@@ -101,19 +100,19 @@ export function ExtendSubscriptionDialog({ subscriber, open, onOpenChange }: Ext
           )}
 
           <div className="space-y-2">
-            <Label htmlFor="tier">Add Time Period</Label>
+            <Label htmlFor="tier">Добавить период</Label>
             <Select
               value={formData.tier_id}
               onValueChange={(value) => setFormData({ ...formData, tier_id: value })}
               required
             >
               <SelectTrigger>
-                <SelectValue placeholder="Select a tier" />
+                <SelectValue placeholder="Выберите тариф" />
               </SelectTrigger>
               <SelectContent>
                 {tiers?.filter(t => t.is_active).map((tier) => (
                   <SelectItem key={tier.id} value={tier.id}>
-                    {tier.name} - {tier.price}₽ ({tier.duration_days} days)
+                    {tier.name} - {tier.price}₽ ({formatDuration(tier)})
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -123,19 +122,19 @@ export function ExtendSubscriptionDialog({ subscriber, open, onOpenChange }: Ext
           {selectedTier && (
             <div className="rounded-lg bg-primary/10 p-3 text-sm">
               <p className="text-foreground">
-                New expiry date:{' '}
+                Новый срок:{' '}
                 <span className="font-medium">
-                  {format(getNewEndDate()!, 'MMMM d, yyyy')}
+                  {formatDateInTimezone(getNewEndDate()!, getTierInterval(selectedTier).timezone)}
                 </span>
               </p>
             </div>
           )}
 
           <div className="space-y-2">
-            <Label htmlFor="payment_note">Payment Note</Label>
+            <Label htmlFor="payment_note">Примечание к платежу</Label>
             <Textarea
               id="payment_note"
-              placeholder="e.g., Cash payment received..."
+              placeholder="Например: Оплата наличными..."
               value={formData.payment_note}
               onChange={(e) => setFormData({ ...formData, payment_note: e.target.value })}
               rows={2}
@@ -144,10 +143,10 @@ export function ExtendSubscriptionDialog({ subscriber, open, onOpenChange }: Ext
 
           <div className="flex justify-end gap-3 pt-4">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
+              Отмена
             </Button>
             <Button type="submit" disabled={updateSubscriber.isPending}>
-              {updateSubscriber.isPending ? 'Extending...' : 'Extend Subscription'}
+              {updateSubscriber.isPending ? 'Продление...' : 'Продлить подписку'}
             </Button>
           </div>
         </form>
