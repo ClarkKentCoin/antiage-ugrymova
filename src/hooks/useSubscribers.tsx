@@ -138,23 +138,62 @@ export function useCreateSubscriber() {
 
   return useMutation({
     mutationFn: async (input: CreateSubscriberInput) => {
-      // First create the subscriber
-      const { data: subscriber, error: subscriberError } = await supabase
+      // Check if subscriber already exists
+      const { data: existingSubscriber } = await supabase
         .from('subscribers')
-        .insert({
-          telegram_user_id: input.telegram_user_id,
+        .select('id, subscription_start')
+        .eq('telegram_user_id', input.telegram_user_id)
+        .maybeSingle();
+
+      let subscriber;
+      let wasUpdated = false;
+
+      if (existingSubscriber) {
+        // Update existing subscriber - never overwrite subscription_start if already set
+        const updateData: Record<string, unknown> = {
           telegram_username: input.telegram_username,
           first_name: input.first_name,
           last_name: input.last_name,
           tier_id: input.tier_id,
-          subscription_start: input.subscription_start,
           subscription_end: input.subscription_end,
           status: input.status || 'active',
-        })
-        .select()
-        .single();
+        };
 
-      if (subscriberError) throw subscriberError;
+        // Only set subscription_start if it was null before
+        if (!existingSubscriber.subscription_start && input.subscription_start) {
+          updateData.subscription_start = input.subscription_start;
+        }
+
+        const { data: updatedSubscriber, error: updateError } = await supabase
+          .from('subscribers')
+          .update(updateData)
+          .eq('id', existingSubscriber.id)
+          .select()
+          .single();
+
+        if (updateError) throw updateError;
+        subscriber = updatedSubscriber;
+        wasUpdated = true;
+      } else {
+        // Insert new subscriber
+        const { data: newSubscriber, error: insertError } = await supabase
+          .from('subscribers')
+          .insert({
+            telegram_user_id: input.telegram_user_id,
+            telegram_username: input.telegram_username,
+            first_name: input.first_name,
+            last_name: input.last_name,
+            tier_id: input.tier_id,
+            subscription_start: input.subscription_start,
+            subscription_end: input.subscription_end,
+            status: input.status || 'active',
+          })
+          .select()
+          .single();
+
+        if (insertError) throw insertError;
+        subscriber = newSubscriber;
+      }
 
       // If payment info provided, create payment record
       if (input.amount && input.tier_id) {
@@ -178,7 +217,7 @@ export function useCreateSubscriber() {
         // First send notification about successful subscription
         await supabase.functions.invoke('subscriber-status-change', {
           body: {
-            action: 'new_subscriber',
+            action: wasUpdated ? 'subscription_renewed' : 'new_subscriber',
             subscriber_id: subscriber.id,
             telegram_user_id: input.telegram_user_id,
             subscription_end: input.subscription_end,
@@ -186,7 +225,7 @@ export function useCreateSubscriber() {
           },
         });
       } catch (notifyError) {
-        console.error('Failed to send new subscriber notification:', notifyError);
+        console.error('Failed to send subscriber notification:', notifyError);
       }
 
       // Then send invite link
@@ -199,25 +238,26 @@ export function useCreateSubscriber() {
           },
         });
         
-        return { ...subscriber, inviteResult };
+        return { ...subscriber, inviteResult, wasUpdated };
       } catch (inviteError) {
         // Don't fail the whole operation if invite fails
         console.error('Failed to send invite:', inviteError);
-        return { ...subscriber, inviteResult: null };
+        return { ...subscriber, inviteResult: null, wasUpdated };
       }
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['subscribers'] });
+      const title = data.wasUpdated ? 'Подписчик обновлён' : 'Подписчик добавлен';
       if (data.inviteResult?.message_sent) {
-        toast({ title: 'Подписчик добавлен', description: 'Уведомление и приглашение отправлены в Telegram' });
+        toast({ title, description: 'Уведомление и приглашение отправлены в Telegram' });
       } else if (data.inviteResult?.invite_link) {
         navigator.clipboard.writeText(data.inviteResult.invite_link);
         toast({ 
-          title: 'Подписчик добавлен', 
+          title, 
           description: 'Уведомление отправлено. Пользователь должен запустить бота. Ссылка скопирована.' 
         });
       } else {
-        toast({ title: 'Подписчик добавлен', description: 'Уведомление отправлено' });
+        toast({ title, description: 'Уведомление отправлено' });
       }
     },
     onError: (error: Error) => {
