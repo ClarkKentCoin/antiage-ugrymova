@@ -60,6 +60,33 @@ This project is built with:
 - shadcn-ui
 - Tailwind CSS
 
+## Environment Variables
+
+Copy `.env.example` to `.env` and fill in your values:
+
+| Variable | Description |
+|----------|-------------|
+| `VITE_SUPABASE_PROJECT_ID` | Your Supabase project ID |
+| `VITE_SUPABASE_PUBLISHABLE_KEY` | Supabase anon/public key |
+| `VITE_SUPABASE_URL` | Supabase project URL |
+
+### Edge Function Secrets (Lovable Cloud)
+
+These secrets are configured in Lovable Cloud and available to edge functions:
+
+| Secret | Description |
+|--------|-------------|
+| `SUPABASE_SERVICE_ROLE_KEY` | Auto-provided by Lovable Cloud |
+| `SUPABASE_ANON_KEY` | Auto-provided by Lovable Cloud |
+| `SUPABASE_URL` | Auto-provided by Lovable Cloud |
+| `SUPABASE_DB_URL` | Auto-provided by Lovable Cloud |
+| `TELEGRAM_WEBHOOK_SECRET` | Secret token for Telegram webhook verification |
+| `SCHEDULED_TASK_SECRET` | Secret for scheduled task authentication |
+
+### Admin Settings (Database)
+
+Robokassa and Telegram bot credentials are stored in the `admin_settings` database table and configured via the admin panel.
+
 ## How can I deploy this project?
 
 Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
