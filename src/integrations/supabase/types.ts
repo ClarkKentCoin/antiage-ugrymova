@@ -307,30 +307,39 @@ export type Database = {
       }
       subscription_tiers: {
         Row: {
+          billing_timezone: string
           created_at: string
           description: string | null
           duration_days: number
           id: string
+          interval_count: number
+          interval_unit: string
           is_active: boolean | null
           name: string
           price: number
           updated_at: string
         }
         Insert: {
+          billing_timezone?: string
           created_at?: string
           description?: string | null
           duration_days: number
           id?: string
+          interval_count?: number
+          interval_unit?: string
           is_active?: boolean | null
           name: string
           price: number
           updated_at?: string
         }
         Update: {
+          billing_timezone?: string
           created_at?: string
           description?: string | null
           duration_days?: number
           id?: string
+          interval_count?: number
+          interval_unit?: string
           is_active?: boolean | null
           name?: string
           price?: number
