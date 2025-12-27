@@ -274,16 +274,19 @@ export function AddSubscriberDialog({ open, onOpenChange }: AddSubscriberDialogP
             </Select>
           </div>
 
-          {selectedTier && (
-            <div className="rounded-lg bg-muted p-3 text-sm">
-              <p className="text-muted-foreground">
-                Подписка истечёт{' '}
-                <span className="font-medium text-foreground">
-                  {formatDateInTimezone(getNewEndDate()!, getTierInterval(selectedTier).timezone)}
-                </span>
-              </p>
-            </div>
-          )}
+          {selectedTier && (() => {
+            const newEnd = getNewEndDate();
+            return (
+              <div className="rounded-lg bg-muted p-3 text-sm">
+                <p className="text-muted-foreground">
+                  Подписка истечёт{' '}
+                  <span className="font-medium text-foreground">
+                    {newEnd ? formatDateInTimezone(newEnd, getTierInterval(selectedTier).timezone) : '—'}
+                  </span>
+                </p>
+              </div>
+            );
+          })()}
 
           {/* Payment Method Selection */}
           <div className="space-y-3">

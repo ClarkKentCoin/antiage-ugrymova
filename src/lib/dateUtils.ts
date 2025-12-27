@@ -67,7 +67,7 @@ export function getTierInterval(tier: {
   billing_timezone?: string | null;
   duration_days: number;
 }): { unit: IntervalUnit; count: number; timezone: string } {
-  if (tier.interval_unit && tier.interval_count) {
+  if (tier.interval_unit != null && tier.interval_count != null) {
     return {
       unit: tier.interval_unit,
       count: tier.interval_count,
