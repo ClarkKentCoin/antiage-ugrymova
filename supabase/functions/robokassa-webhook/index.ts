@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { DateTime } from "https://esm.sh/luxon@3.4.4";
 
 // SHA256 hash function (Robokassa signatures)
 async function sha256(message: string): Promise<string> {
@@ -35,6 +36,61 @@ async function parseFormData(req: Request): Promise<Record<string, string>> {
     result[key] = value;
   });
   return result;
+}
+
+/**
+ * Compute next subscription end date using calendar-based intervals.
+ * Preserves time-of-day in the specified timezone.
+ * 
+ * @param nowISO - Current time as UTC ISO string
+ * @param currentEndISO - Current subscription end as UTC ISO string (can be null)
+ * @param unit - Interval unit: 'day', 'week', 'month', 'year'
+ * @param count - Number of units to add
+ * @param tz - IANA timezone (e.g., 'Europe/Moscow')
+ * @returns New end date as UTC ISO string
+ */
+function computeNextEndISO(
+  nowISO: string,
+  currentEndISO: string | null,
+  unit: string,
+  count: number,
+  tz: string
+): string {
+  const nowUTC = DateTime.fromISO(nowISO, { zone: 'utc' });
+  const currentEndUTC = currentEndISO 
+    ? DateTime.fromISO(currentEndISO, { zone: 'utc' }) 
+    : null;
+
+  // Renewal stacking: extend from max(now, currentEnd if in future)
+  const startFromUTC = (currentEndUTC && currentEndUTC > nowUTC) ? currentEndUTC : nowUTC;
+  
+  // Convert to local timezone
+  const startLocal = startFromUTC.setZone(tz);
+  
+  // Add interval based on unit
+  let endLocal: DateTime;
+  switch (unit) {
+    case 'week':
+      endLocal = startLocal.plus({ weeks: count });
+      break;
+    case 'month':
+      endLocal = startLocal.plus({ months: count });
+      break;
+    case 'year':
+      endLocal = startLocal.plus({ years: count });
+      break;
+    case 'day':
+    default:
+      endLocal = startLocal.plus({ days: count });
+      break;
+  }
+  
+  // Convert back to UTC and return as ISO string
+  const endUTC = endLocal.toUTC();
+  
+  console.log(`[computeNextEndISO] nowISO=${nowISO}, currentEndISO=${currentEndISO}, startFromISO=${startFromUTC.toISO()}, interval_unit=${unit}, interval_count=${count}, billing_timezone=${tz}, newEndISO=${endUTC.toISO()}`);
+  
+  return endUTC.toISO()!;
 }
 
 serve(async (req) => {
@@ -196,11 +252,32 @@ serve(async (req) => {
         console.log(`Reset next_payment_notification_sent for ${shpSubscriberId}`);
       }
 
-      // Calculate subscription end date
+      // Calculate subscription end date using calendar intervals
       const tier = payment.subscription_tiers;
       if (tier) {
-        const now = new Date();
-        const endDate = new Date(now.getTime() + tier.duration_days * 24 * 60 * 60 * 1000);
+        const nowISO = new Date().toISOString();
+        
+        // Get current subscription end from subscriber
+        const { data: currentSubscriber } = await supabaseAdmin
+          .from("subscribers")
+          .select("subscription_end")
+          .eq("id", shpSubscriberId)
+          .maybeSingle();
+        
+        const currentEndISO = currentSubscriber?.subscription_end || null;
+        
+        // Use tier's interval fields with fallback to duration_days
+        const intervalUnit = tier.interval_unit || 'day';
+        const intervalCount = tier.interval_count || tier.duration_days || 30;
+        const billingTimezone = tier.billing_timezone || 'Europe/Moscow';
+        
+        const newEndISO = computeNextEndISO(
+          nowISO,
+          currentEndISO,
+          intervalUnit,
+          intervalCount,
+          billingTimezone
+        );
 
         // Activate subscription
         const { error: activateError } = await supabaseAdmin
@@ -208,8 +285,8 @@ serve(async (req) => {
           .update({
             status: "active",
             tier_id: payment.tier_id,
-            subscription_start: now.toISOString(),
-            subscription_end: endDate.toISOString(),
+            subscription_start: nowISO,
+            subscription_end: newEndISO,
             subscriber_payment_method: payment.payment_method,
           })
           .eq("id", shpSubscriberId);
@@ -217,7 +294,7 @@ serve(async (req) => {
         if (activateError) {
           console.error("Subscription activation error:", activateError);
         } else {
-          console.log(`Activated subscription for ${shpSubscriberId} until ${endDate.toISOString()}`);
+          console.log(`Activated subscription for ${shpSubscriberId} until ${newEndISO}`);
         }
       }
     } else {
@@ -291,13 +368,11 @@ serve(async (req) => {
 
           // First send the success payment message from settings
           if (telegramSettings.notification_payment_success) {
-            // Format the expires date
+            // Format the expires date in Moscow timezone
             const expiresDate = subscriberData.subscription_end 
-              ? new Date(subscriberData.subscription_end).toLocaleDateString('ru-RU', {
-                  day: 'numeric',
-                  month: 'long',
-                  year: 'numeric'
-                })
+              ? DateTime.fromISO(subscriberData.subscription_end, { zone: 'utc' })
+                  .setZone('Europe/Moscow')
+                  .toLocaleString({ day: 'numeric', month: 'long', year: 'numeric' }, { locale: 'ru' })
               : 'неизвестно';
             
             // Replace template variables - format amount as integer (no decimals)

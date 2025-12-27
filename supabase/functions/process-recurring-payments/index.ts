@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { DateTime } from "https://esm.sh/luxon@3.4.4";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -21,6 +22,61 @@ function replaceVariables(template: string, variables: Record<string, string>): 
     result = result.replace(new RegExp(`\\{${key}\\}`, 'g'), value);
   }
   return result;
+}
+
+/**
+ * Compute next subscription end date using calendar-based intervals.
+ * Preserves time-of-day in the specified timezone.
+ * 
+ * @param nowISO - Current time as UTC ISO string
+ * @param currentEndISO - Current subscription end as UTC ISO string (can be null)
+ * @param unit - Interval unit: 'day', 'week', 'month', 'year'
+ * @param count - Number of units to add
+ * @param tz - IANA timezone (e.g., 'Europe/Moscow')
+ * @returns New end date as UTC ISO string
+ */
+function computeNextEndISO(
+  nowISO: string,
+  currentEndISO: string | null,
+  unit: string,
+  count: number,
+  tz: string
+): string {
+  const nowUTC = DateTime.fromISO(nowISO, { zone: 'utc' });
+  const currentEndUTC = currentEndISO 
+    ? DateTime.fromISO(currentEndISO, { zone: 'utc' }) 
+    : null;
+
+  // Renewal stacking: extend from max(now, currentEnd if in future)
+  const startFromUTC = (currentEndUTC && currentEndUTC > nowUTC) ? currentEndUTC : nowUTC;
+  
+  // Convert to local timezone
+  const startLocal = startFromUTC.setZone(tz);
+  
+  // Add interval based on unit
+  let endLocal: DateTime;
+  switch (unit) {
+    case 'week':
+      endLocal = startLocal.plus({ weeks: count });
+      break;
+    case 'month':
+      endLocal = startLocal.plus({ months: count });
+      break;
+    case 'year':
+      endLocal = startLocal.plus({ years: count });
+      break;
+    case 'day':
+    default:
+      endLocal = startLocal.plus({ days: count });
+      break;
+  }
+  
+  // Convert back to UTC and return as ISO string
+  const endUTC = endLocal.toUTC();
+  
+  console.log(`[computeNextEndISO] nowISO=${nowISO}, currentEndISO=${currentEndISO}, startFromISO=${startFromUTC.toISO()}, interval_unit=${unit}, interval_count=${count}, billing_timezone=${tz}, newEndISO=${endUTC.toISO()}`);
+  
+  return endUTC.toISO()!;
 }
 
 const DEFAULT_PAYMENT_SUCCESS = `✅ Оплата успешна
@@ -83,7 +139,10 @@ serve(async (req) => {
         subscription_tiers (
           name,
           price,
-          duration_days
+          duration_days,
+          interval_unit,
+          interval_count,
+          billing_timezone
         )
       `)
       .eq("auto_renewal", true)
@@ -210,16 +269,27 @@ serve(async (req) => {
 
         // Check if response contains OK
         if (responseText.toUpperCase().includes("OK")) {
-          // Calculate new expiration date
-          const currentEnd = new Date(subscription.subscription_end);
-          const newEnd = new Date(currentEnd);
-          newEnd.setDate(newEnd.getDate() + (tier.duration_days || 30));
+          // Calculate new expiration date using calendar intervals
+          const nowISO = new Date().toISOString();
+          const currentEndISO = subscription.subscription_end;
           
-          const expiresDate = newEnd.toLocaleDateString('ru-RU', {
-            day: 'numeric',
-            month: 'long',
-            year: 'numeric'
-          });
+          // Use tier's interval fields with fallback to duration_days
+          const intervalUnit = tier.interval_unit || 'day';
+          const intervalCount = tier.interval_count || tier.duration_days || 30;
+          const billingTimezone = tier.billing_timezone || 'Europe/Moscow';
+          
+          const newEndISO = computeNextEndISO(
+            nowISO,
+            currentEndISO,
+            intervalUnit,
+            intervalCount,
+            billingTimezone
+          );
+          
+          // Format expires date in Moscow timezone for notification
+          const expiresDate = DateTime.fromISO(newEndISO, { zone: 'utc' })
+            .setZone(billingTimezone)
+            .toLocaleString({ day: 'numeric', month: 'long', year: 'numeric' }, { locale: 'ru' });
 
           // Update payment status and subscription
           await supabaseAdmin
@@ -230,7 +300,7 @@ serve(async (req) => {
           await supabaseAdmin
             .from("subscribers")
             .update({ 
-              subscription_end: newEnd.toISOString(),
+              subscription_end: newEndISO,
               robokassa_invoice_id: newInvoiceId,
               next_payment_notification_sent: false,
             })
