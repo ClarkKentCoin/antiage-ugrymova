@@ -120,13 +120,14 @@ export function ExtendSubscriptionDialog({ subscriber, open, onOpenChange }: Ext
           </div>
 
           {selectedTier && (() => {
+            const interval = getTierInterval(selectedTier);
             const newEnd = getNewEndDate();
             return (
               <div className="rounded-lg bg-primary/10 p-3 text-sm">
                 <p className="text-foreground">
                   Новый срок:{' '}
                   <span className="font-medium">
-                    {newEnd ? formatDateInTimezone(newEnd, getTierInterval(selectedTier).timezone) : '—'}
+                    {newEnd ? formatDateInTimezone(newEnd, interval.timezone) : '—'}
                   </span>
                 </p>
               </div>
