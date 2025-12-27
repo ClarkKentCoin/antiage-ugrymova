@@ -257,13 +257,14 @@ serve(async (req) => {
       if (tier) {
         const nowISO = new Date().toISOString();
         
-        // Get current subscription end from subscriber
+        // Get current subscription_start and subscription_end from subscriber
         const { data: currentSubscriber } = await supabaseAdmin
           .from("subscribers")
-          .select("subscription_end")
+          .select("subscription_start, subscription_end")
           .eq("id", shpSubscriberId)
           .maybeSingle();
         
+        const currentStartISO = currentSubscriber?.subscription_start || null;
         const currentEndISO = currentSubscriber?.subscription_end || null;
         
         // Use tier's interval fields with fallback to duration_days
@@ -279,16 +280,22 @@ serve(async (req) => {
           billingTimezone
         );
 
-        // Activate subscription
+        // Activate subscription - only set subscription_start if it's currently null
+        const updateData: Record<string, any> = {
+          status: "active",
+          tier_id: payment.tier_id,
+          subscription_end: newEndISO,
+          subscriber_payment_method: payment.payment_method,
+        };
+        
+        // Only set subscription_start on first activation, not on renewals
+        if (!currentStartISO) {
+          updateData.subscription_start = nowISO;
+        }
+
         const { error: activateError } = await supabaseAdmin
           .from("subscribers")
-          .update({
-            status: "active",
-            tier_id: payment.tier_id,
-            subscription_start: nowISO,
-            subscription_end: newEndISO,
-            subscriber_payment_method: payment.payment_method,
-          })
+          .update(updateData)
           .eq("id", shpSubscriberId);
 
         if (activateError) {
@@ -296,6 +303,9 @@ serve(async (req) => {
         } else {
           console.log(`Activated subscription for ${shpSubscriberId} until ${newEndISO}`);
         }
+        
+        // Store newEndISO for use in Telegram notification
+        (payment as any)._computedNewEndISO = newEndISO;
       }
     } else {
       // No pending payment found - create a completed one
@@ -329,10 +339,13 @@ serve(async (req) => {
     }
 
     // Send invite and success message to the subscriber
+    // Get the computed new end date if available
+    const computedNewEndISO = payment ? (payment as any)._computedNewEndISO : null;
+    
     try {
       const { data: subscriberData } = await supabaseAdmin
         .from("subscribers")
-        .select("telegram_user_id, subscription_end")
+        .select("telegram_user_id")
         .eq("id", shpSubscriberId)
         .single();
 
@@ -368,9 +381,9 @@ serve(async (req) => {
 
           // First send the success payment message from settings
           if (telegramSettings.notification_payment_success) {
-            // Format the expires date in Moscow timezone
-            const expiresDate = subscriberData.subscription_end 
-              ? DateTime.fromISO(subscriberData.subscription_end, { zone: 'utc' })
+            // Use the NEW computed subscription_end (newEndISO), not old value
+            const expiresDate = computedNewEndISO 
+              ? DateTime.fromISO(computedNewEndISO, { zone: 'utc' })
                   .setZone('Europe/Moscow')
                   .toLocaleString({ day: 'numeric', month: 'long', year: 'numeric' }, { locale: 'ru' })
               : 'неизвестно';
