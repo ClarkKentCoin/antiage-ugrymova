@@ -275,13 +275,14 @@ export function AddSubscriberDialog({ open, onOpenChange }: AddSubscriberDialogP
           </div>
 
           {selectedTier && (() => {
+            const interval = getTierInterval(selectedTier);
             const newEnd = getNewEndDate();
             return (
               <div className="rounded-lg bg-muted p-3 text-sm">
                 <p className="text-muted-foreground">
                   Подписка истечёт{' '}
                   <span className="font-medium text-foreground">
-                    {newEnd ? formatDateInTimezone(newEnd, getTierInterval(selectedTier).timezone) : '—'}
+                    {newEnd ? formatDateInTimezone(newEnd, interval.timezone) : '—'}
                   </span>
                 </p>
               </div>
