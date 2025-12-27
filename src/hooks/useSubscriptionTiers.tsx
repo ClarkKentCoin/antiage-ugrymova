@@ -56,6 +56,7 @@ export function deriveIntervalFromDays(durationDays: number): { unit: IntervalUn
 }
 
 // Helper to compute duration_days from interval (for backward compatibility)
+// For month/year, use fixed values to prevent legacy code from misinterpreting
 export function computeDurationDays(unit: IntervalUnit, count: number): number {
   switch (unit) {
     case 'day':
@@ -63,9 +64,9 @@ export function computeDurationDays(unit: IntervalUnit, count: number): number {
     case 'week':
       return count * 7;
     case 'month':
-      return count * 30; // Approximate for legacy display
+      return 30; // Fixed legacy value, actual calculation uses calendar intervals
     case 'year':
-      return count * 365; // Approximate for legacy display
+      return 365; // Fixed legacy value, actual calculation uses calendar intervals
     default:
       return count;
   }
@@ -73,8 +74,9 @@ export function computeDurationDays(unit: IntervalUnit, count: number): number {
 
 // Helper to format duration for display
 export function formatDuration(tier: SubscriptionTier): string {
-  const unit = tier.interval_unit || deriveIntervalFromDays(tier.duration_days).unit;
-  const count = tier.interval_count || deriveIntervalFromDays(tier.duration_days).count;
+  const derived = deriveIntervalFromDays(tier.duration_days);
+  const unit = tier.interval_unit ?? derived.unit;
+  const count = tier.interval_count ?? derived.count;
 
   const labels: Record<IntervalUnit, { singular: string; plural: string }> = {
     day: { singular: 'день', plural: 'дней' },
