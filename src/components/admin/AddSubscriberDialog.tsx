@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { addDays, format } from 'date-fns';
 import {
   Dialog,
   DialogContent,
@@ -19,11 +18,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { useSubscriptionTiers } from '@/hooks/useSubscriptionTiers';
+import { useSubscriptionTiers, formatDuration } from '@/hooks/useSubscriptionTiers';
 import { useCreateSubscriber } from '@/hooks/useSubscribers';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Copy, ExternalLink } from 'lucide-react';
+import { computeNextEndISO, getTierInterval, formatDateInTimezone } from '@/lib/dateUtils';
 
 interface AddSubscriberDialogProps {
   open: boolean;
@@ -51,6 +51,16 @@ export function AddSubscriberDialog({ open, onOpenChange }: AddSubscriberDialogP
 
   const selectedTier = tiers?.find((t) => t.id === formData.tier_id);
 
+  // Compute new end date using calendar intervals
+  const getNewEndDate = (): string | null => {
+    if (!selectedTier) return null;
+    
+    const nowISO = new Date().toISOString();
+    const { unit, count, timezone } = getTierInterval(selectedTier);
+    
+    return computeNextEndISO(nowISO, null, unit, count, timezone);
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -73,11 +83,9 @@ export function AddSubscriberDialog({ open, onOpenChange }: AddSubscriberDialogP
       return;
     }
     
-    // Manual payment - activate immediately
-    const now = new Date();
-    const endDate = selectedTier 
-      ? addDays(now, selectedTier.duration_days)
-      : null;
+    // Manual payment - activate immediately using calendar intervals
+    const nowISO = new Date().toISOString();
+    const endDateISO = getNewEndDate();
 
     createSubscriber.mutate({
       telegram_user_id: parseInt(formData.telegram_user_id),
@@ -85,8 +93,8 @@ export function AddSubscriberDialog({ open, onOpenChange }: AddSubscriberDialogP
       first_name: formData.first_name || undefined,
       last_name: formData.last_name || undefined,
       tier_id: formData.tier_id || undefined,
-      subscription_start: now.toISOString(),
-      subscription_end: endDate?.toISOString(),
+      subscription_start: nowISO,
+      subscription_end: endDateISO || undefined,
       status: 'active',
       payment_note: formData.payment_note || undefined,
       amount: selectedTier?.price,
@@ -259,7 +267,7 @@ export function AddSubscriberDialog({ open, onOpenChange }: AddSubscriberDialogP
               <SelectContent>
                 {tiers?.filter(t => t.is_active).map((tier) => (
                   <SelectItem key={tier.id} value={tier.id}>
-                    {tier.name} - {tier.price}₽ ({tier.duration_days} дн.)
+                    {tier.name} - {tier.price}₽ ({formatDuration(tier)})
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -271,7 +279,7 @@ export function AddSubscriberDialog({ open, onOpenChange }: AddSubscriberDialogP
               <p className="text-muted-foreground">
                 Подписка истечёт{' '}
                 <span className="font-medium text-foreground">
-                  {format(addDays(new Date(), selectedTier.duration_days), 'd MMMM yyyy')}
+                  {formatDateInTimezone(getNewEndDate()!, getTierInterval(selectedTier).timezone)}
                 </span>
               </p>
             </div>
