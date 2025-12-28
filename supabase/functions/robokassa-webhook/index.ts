@@ -345,7 +345,7 @@ serve(async (req) => {
     try {
       const { data: subscriberData } = await supabaseAdmin
         .from("subscribers")
-        .select("telegram_user_id")
+        .select("telegram_user_id, is_in_channel")
         .eq("id", shpSubscriberId)
         .single();
 
@@ -358,86 +358,19 @@ serve(async (req) => {
           .single();
 
         if (telegramSettings?.telegram_bot_token && telegramSettings?.telegram_channel_id) {
-          // Create invite link
           let channelId = telegramSettings.telegram_channel_id.toString();
           if (!channelId.startsWith("-100") && channelId.startsWith("-")) {
             channelId = "-100" + channelId.substring(1);
           }
 
-          // Step 1: Revoke previous non-revoked invite links for this subscriber
-          const { data: previousLinks, error: linksError } = await supabaseAdmin
-            .from("invite_links")
-            .select("id, invite_link")
-            .eq("subscriber_id", shpSubscriberId)
-            .eq("revoked", false);
-
-          if (linksError) {
-            console.error("[robokassa] Failed to fetch previous invite links:", linksError);
-          } else if (previousLinks && previousLinks.length > 0) {
-            console.log(`[robokassa] Found ${previousLinks.length} previous invite links to revoke`);
-            
-            for (const link of previousLinks) {
-              // Revoke the invite link in Telegram
-              const revokeResponse = await fetch(
-                `https://api.telegram.org/bot${telegramSettings.telegram_bot_token}/revokeChatInviteLink`,
-                {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    chat_id: channelId,
-                    invite_link: link.invite_link,
-                  }),
-                }
-              );
-              const revokeResult = await revokeResponse.json();
-              
-              if (!revokeResult.ok) {
-                console.error(`[robokassa] Failed to revoke link ${link.id}:`, revokeResult.description);
-              }
-
-              // Mark as revoked in database
-              await supabaseAdmin
-                .from("invite_links")
-                .update({ 
-                  revoked: true, 
-                  revoked_at: new Date().toISOString() 
-                })
-                .eq("id", link.id);
-            }
-            
-            console.log(`[robokassa] invite revoked count: ${previousLinks.length}`);
-          }
-
-          // Step 2: Create new invite link with expire_date (10 minutes = 600 seconds)
-          const expireTimestamp = Math.floor(Date.now() / 1000) + 600;
-          const expiresAtISO = new Date(expireTimestamp * 1000).toISOString();
-
-          const inviteResponse = await fetch(
-            `https://api.telegram.org/bot${telegramSettings.telegram_bot_token}/createChatInviteLink`,
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                chat_id: channelId,
-                member_limit: 1,
-                creates_join_request: false,
-                expire_date: expireTimestamp,
-              }),
-            }
-          );
-
-          const inviteResult = await inviteResponse.json();
-
           // First send the success payment message from settings
           if (telegramSettings.notification_payment_success) {
-            // Use the NEW computed subscription_end (newEndISO), not old value
             const expiresDate = computedNewEndISO 
               ? DateTime.fromISO(computedNewEndISO, { zone: 'utc' })
                   .setZone('Europe/Moscow')
                   .toLocaleString({ day: 'numeric', month: 'long', year: 'numeric' }, { locale: 'ru' })
               : 'неизвестно';
             
-            // Replace template variables - format amount as integer (no decimals)
             const formattedAmount = Math.round(parseFloat(outSum)).toString();
             let successMessage = telegramSettings.notification_payment_success
               .replace(/{channel_name}/g, telegramSettings.channel_name || 'канал')
@@ -456,44 +389,132 @@ serve(async (req) => {
                 }),
               }
             );
-            console.log(`Sent success payment message to user ${subscriberData.telegram_user_id}`);
+            console.log(`[robokassa] Sent success payment message to user ${subscriberData.telegram_user_id}`);
           }
 
-          // Then send the invite link and store it
-          if (inviteResult.ok) {
-            const newInviteLink = inviteResult.result.invite_link;
-
-            // Step 3: Store new invite link in invite_links table
-            const { error: insertError } = await supabaseAdmin
-              .from("invite_links")
-              .insert({
-                subscriber_id: shpSubscriberId,
-                invite_link: newInviteLink,
-                expires_at: expiresAtISO,
-                revoked: false,
-              });
-
-            if (insertError) {
-              console.error("[robokassa] Failed to store invite link:", insertError);
-            } else {
-              console.log(`[robokassa] invite created (10 min, single-use) for subscriber ${shpSubscriberId}`);
-            }
-
-            await fetch(
-              `https://api.telegram.org/bot${telegramSettings.telegram_bot_token}/sendMessage`,
+          // Check if user is already in channel - skip invite generation
+          if (subscriberData.is_in_channel === true) {
+            console.log(`[robokassa] User ${subscriberData.telegram_user_id} already in channel, skipping invite generation`);
+          } else {
+            // Step 1: Unban the user if they were previously banned
+            console.log(`[robokassa] Unbanning user ${subscriberData.telegram_user_id} if banned`);
+            const unbanResponse = await fetch(
+              `https://api.telegram.org/bot${telegramSettings.telegram_bot_token}/unbanChatMember`,
               {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                  chat_id: subscriberData.telegram_user_id,
-                  text: `🔗 Перейдите по ссылке, чтобы присоединиться к каналу:\n${newInviteLink}\n\n⚠️ Ссылка одноразовая и действует 10 минут.`,
-                  parse_mode: "HTML",
+                  chat_id: channelId,
+                  user_id: subscriberData.telegram_user_id,
+                  only_if_banned: true,
                 }),
               }
             );
-            console.log(`Sent invite link to user ${subscriberData.telegram_user_id}`);
-          } else {
-            console.error("[robokassa] Failed to create invite link:", inviteResult.description);
+            const unbanResult = await unbanResponse.json();
+            if (unbanResult.ok) {
+              console.log(`[robokassa] User ${subscriberData.telegram_user_id} unbanned successfully`);
+            } else {
+              console.log(`[robokassa] Unban result: ${unbanResult.description || 'user was not banned'}`);
+            }
+
+            // Step 2: Revoke previous non-revoked invite links for this subscriber
+            const { data: previousLinks, error: linksError } = await supabaseAdmin
+              .from("invite_links")
+              .select("id, invite_link")
+              .eq("subscriber_id", shpSubscriberId)
+              .eq("revoked", false);
+
+            if (linksError) {
+              console.error("[robokassa] Failed to fetch previous invite links:", linksError);
+            } else if (previousLinks && previousLinks.length > 0) {
+              console.log(`[robokassa] Found ${previousLinks.length} previous invite links to revoke`);
+              
+              for (const link of previousLinks) {
+                const revokeResponse = await fetch(
+                  `https://api.telegram.org/bot${telegramSettings.telegram_bot_token}/revokeChatInviteLink`,
+                  {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      chat_id: channelId,
+                      invite_link: link.invite_link,
+                    }),
+                  }
+                );
+                const revokeResult = await revokeResponse.json();
+                
+                if (!revokeResult.ok) {
+                  console.error(`[robokassa] Failed to revoke link ${link.id}:`, revokeResult.description);
+                }
+
+                await supabaseAdmin
+                  .from("invite_links")
+                  .update({ 
+                    revoked: true, 
+                    revoked_at: new Date().toISOString() 
+                  })
+                  .eq("id", link.id);
+              }
+              
+              console.log(`[robokassa] invite revoked count: ${previousLinks.length}`);
+            }
+
+            // Step 3: Create new invite link with expire_date (10 minutes = 600 seconds)
+            const nowUnix = Math.floor(Date.now() / 1000);
+            const expireTimestamp = nowUnix + 600;
+            const expiresAtISO = new Date(expireTimestamp * 1000).toISOString();
+
+            const inviteResponse = await fetch(
+              `https://api.telegram.org/bot${telegramSettings.telegram_bot_token}/createChatInviteLink`,
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  chat_id: channelId,
+                  member_limit: 1,
+                  creates_join_request: false,
+                  expire_date: expireTimestamp,
+                }),
+              }
+            );
+
+            const inviteResult = await inviteResponse.json();
+
+            if (inviteResult.ok) {
+              const newInviteLink = inviteResult.result.invite_link;
+
+              // Step 4: Store new invite link in invite_links table
+              const { error: insertError } = await supabaseAdmin
+                .from("invite_links")
+                .insert({
+                  subscriber_id: shpSubscriberId,
+                  invite_link: newInviteLink,
+                  expires_at: expiresAtISO,
+                  revoked: false,
+                });
+
+              if (insertError) {
+                console.error("[robokassa] Failed to store invite link:", insertError);
+              } else {
+                console.log(`[robokassa] invite created (10 min, single-use) for subscriber ${shpSubscriberId}`);
+              }
+
+              await fetch(
+                `https://api.telegram.org/bot${telegramSettings.telegram_bot_token}/sendMessage`,
+                {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    chat_id: subscriberData.telegram_user_id,
+                    text: `🔗 Перейдите по ссылке, чтобы присоединиться к каналу:\n${newInviteLink}\n\n⚠️ Ссылка одноразовая и действует 10 минут.`,
+                    parse_mode: "HTML",
+                  }),
+                }
+              );
+              console.log(`[robokassa] Sent invite link to user ${subscriberData.telegram_user_id}`);
+            } else {
+              console.error("[robokassa] Failed to create invite link:", inviteResult.description);
+            }
           }
         }
       }
