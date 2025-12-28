@@ -13,7 +13,6 @@ export default function AdminLogin() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isSignUp, setIsSignUp] = useState(false);
 
   if (isLoading) {
     return (
@@ -47,18 +46,9 @@ export default function AdminLogin() {
     setError('');
     setIsSubmitting(true);
 
-    if (isSignUp) {
-      const { error } = await signUp(email, password);
-      if (error) {
-        setError(error.message);
-      } else {
-        setError('Account created! Please wait for admin privileges to be granted.');
-      }
-    } else {
-      const { error } = await signIn(email, password);
-      if (error) {
-        setError(error.message);
-      }
+    const { error } = await signIn(email, password);
+    if (error) {
+      setError(error.message);
     }
     
     setIsSubmitting(false);
@@ -68,15 +58,15 @@ export default function AdminLogin() {
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl">{isSignUp ? 'Create Account' : 'Admin Login'}</CardTitle>
+          <CardTitle className="text-2xl">Admin Login</CardTitle>
           <CardDescription>
-            {isSignUp ? 'Sign up to request admin access' : 'Sign in to access the subscription manager'}
+            Sign in to access the subscription manager
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             {error && (
-              <div className={`rounded-lg p-3 text-sm ${error.includes('created') ? 'bg-green-500/10 text-green-600' : 'bg-destructive/10 text-destructive'}`}>
+              <div className="rounded-lg p-3 text-sm bg-destructive/10 text-destructive">
                 {error}
               </div>
             )}
@@ -107,34 +97,8 @@ export default function AdminLogin() {
 
             <Button type="submit" className="w-full" disabled={isSubmitting}>
               {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {isSignUp ? 'Sign Up' : 'Sign In'}
+              Sign In
             </Button>
-
-            <div className="text-center text-sm">
-              {isSignUp ? (
-                <p>
-                  Already have an account?{' '}
-                  <button
-                    type="button"
-                    onClick={() => { setIsSignUp(false); setError(''); }}
-                    className="text-primary hover:underline"
-                  >
-                    Sign in
-                  </button>
-                </p>
-              ) : (
-                <p>
-                  Need an account?{' '}
-                  <button
-                    type="button"
-                    onClick={() => { setIsSignUp(true); setError(''); }}
-                    className="text-primary hover:underline"
-                  >
-                    Sign up
-                  </button>
-                </p>
-              )}
-            </div>
           </form>
         </CardContent>
       </Card>
