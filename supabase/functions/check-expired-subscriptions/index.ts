@@ -156,10 +156,34 @@ serve(async (req) => {
         graceEndDate.setDate(graceEndDate.getDate() + gracePeriodDays);
 
         if (now >= graceEndDate) {
-          // Grace period has ended or no grace period - kick user using ban + unban
-          console.log(`Kicking user ${subscriber.telegram_user_id} - grace period ended`);
+          // Grace period has ended or no grace period - ban user permanently
+          console.log(`[check-expired] Banning user ${subscriber.telegram_user_id} - grace period ended`);
           
-          // Step 1: Ban user (removes from channel)
+          // Conditional update: only proceed if status is still "active"
+          const { data: updated, error: updateError } = await supabaseAdmin
+            .from("subscribers")
+            .update({ 
+              status: "expired", 
+              is_in_channel: false 
+            })
+            .eq("id", subscriber.id)
+            .eq("status", "active")
+            .select("id");
+
+          if (updateError) {
+            console.error(`[check-expired] Failed to update status for ${subscriber.id}:`, updateError);
+            results.errors++;
+            continue;
+          }
+
+          if (!updated || updated.length === 0) {
+            console.log(`[check-expired] duplicate skipped (already moved) for ${subscriber.telegram_user_id}`);
+            continue;
+          }
+
+          console.log(`[check-expired] moved to expired: ${subscriber.telegram_user_id}`);
+
+          // Ban user (removes from channel) - NO UNBAN after this
           const banResult = await callTelegramApi(botToken, "banChatMember", {
             chat_id: channelId,
             user_id: subscriber.telegram_user_id,
@@ -167,29 +191,7 @@ serve(async (req) => {
           });
 
           if (banResult.ok) {
-            // Step 2: Small delay for reliability
-            await new Promise(resolve => setTimeout(resolve, 100));
-            
-            // Step 3: Unban user (removes from banned list so they can rejoin with new invite)
-            const unbanResult = await callTelegramApi(botToken, "unbanChatMember", {
-              chat_id: channelId,
-              user_id: subscriber.telegram_user_id,
-              only_if_banned: true,
-            });
-            
-            if (!unbanResult.ok) {
-              console.error(`Failed to unban user ${subscriber.telegram_user_id} (not critical):`, unbanResult.description);
-            } else {
-              console.log(`User ${subscriber.telegram_user_id} successfully removed and unbanned`);
-            }
-            
-            await supabaseAdmin
-              .from("subscribers")
-              .update({ 
-                status: "expired", 
-                is_in_channel: false 
-              })
-              .eq("id", subscriber.id);
+            console.log(`[check-expired] User ${subscriber.telegram_user_id} banned and remains banned`);
             
             // Send subscription expired notification
             const expiredMessage = replaceVariables(subscriptionExpiredTemplate, {
@@ -203,32 +205,33 @@ serve(async (req) => {
             });
             
             results.kicked++;
-            console.log(`User ${subscriber.telegram_user_id} kicked and status set to expired`);
           } else {
-            console.error(`Failed to kick user ${subscriber.telegram_user_id}:`, banResult.description);
-            // Still update status even if kick failed
-            await supabaseAdmin
-              .from("subscribers")
-              .update({ status: "expired" })
-              .eq("id", subscriber.id);
+            console.error(`[check-expired] Failed to ban user ${subscriber.telegram_user_id}:`, banResult.description);
             results.errors++;
           }
         } else {
-          // Move to grace period
-          console.log(`Moving user ${subscriber.telegram_user_id} to grace period`);
+          // Move to grace period - conditional update to prevent duplicates
+          console.log(`[check-expired] Attempting to move user ${subscriber.telegram_user_id} to grace period`);
           
-          const { error: updateError } = await supabaseAdmin
+          const { data: updated, error: updateError } = await supabaseAdmin
             .from("subscribers")
             .update({ status: "grace_period" })
-            .eq("id", subscriber.id);
+            .eq("id", subscriber.id)
+            .eq("status", "active")
+            .select("id");
           
           if (updateError) {
-            console.error(`Failed to update status for ${subscriber.id}:`, updateError);
+            console.error(`[check-expired] Failed to update status for ${subscriber.id}:`, updateError);
             results.errors++;
             continue;
           }
+
+          if (!updated || updated.length === 0) {
+            console.log(`[check-expired] duplicate skipped (already moved) for ${subscriber.telegram_user_id}`);
+            continue;
+          }
           
-          console.log(`Successfully updated status to grace_period for ${subscriber.id}`);
+          console.log(`[check-expired] moved to grace: ${subscriber.telegram_user_id}`);
           
           // Send grace period warning notification
           const daysLeft = Math.ceil((graceEndDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
@@ -246,7 +249,7 @@ serve(async (req) => {
           results.moved_to_grace_period++;
         }
       } catch (error) {
-        console.error(`Error processing subscriber ${subscriber.id}:`, error);
+        console.error(`[check-expired] Error processing subscriber ${subscriber.id}:`, error);
         results.errors++;
       }
     }
@@ -259,10 +262,34 @@ serve(async (req) => {
         graceEndDate.setDate(graceEndDate.getDate() + gracePeriodDays);
 
         if (now >= graceEndDate) {
-          // Grace period has ended - kick user using ban + unban
-          console.log(`Kicking grace period user ${subscriber.telegram_user_id}`);
+          // Grace period has ended - ban user permanently
+          console.log(`[check-expired] Grace period ended for user ${subscriber.telegram_user_id}`);
           
-          // Step 1: Ban user (removes from channel)
+          // Conditional update: only proceed if status is still "grace_period"
+          const { data: updated, error: updateError } = await supabaseAdmin
+            .from("subscribers")
+            .update({ 
+              status: "expired", 
+              is_in_channel: false 
+            })
+            .eq("id", subscriber.id)
+            .eq("status", "grace_period")
+            .select("id");
+
+          if (updateError) {
+            console.error(`[check-expired] Failed to update status for ${subscriber.id}:`, updateError);
+            results.errors++;
+            continue;
+          }
+
+          if (!updated || updated.length === 0) {
+            console.log(`[check-expired] duplicate skipped (already expired) for ${subscriber.telegram_user_id}`);
+            continue;
+          }
+
+          console.log(`[check-expired] moved to expired: ${subscriber.telegram_user_id}`);
+
+          // Ban user (removes from channel) - NO UNBAN after this
           const banResult = await callTelegramApi(botToken, "banChatMember", {
             chat_id: channelId,
             user_id: subscriber.telegram_user_id,
@@ -270,29 +297,7 @@ serve(async (req) => {
           });
 
           if (banResult.ok) {
-            // Step 2: Small delay for reliability
-            await new Promise(resolve => setTimeout(resolve, 100));
-            
-            // Step 3: Unban user (removes from banned list so they can rejoin with new invite)
-            const unbanResult = await callTelegramApi(botToken, "unbanChatMember", {
-              chat_id: channelId,
-              user_id: subscriber.telegram_user_id,
-              only_if_banned: true,
-            });
-            
-            if (!unbanResult.ok) {
-              console.error(`Failed to unban user ${subscriber.telegram_user_id} (not critical):`, unbanResult.description);
-            } else {
-              console.log(`User ${subscriber.telegram_user_id} successfully removed and unbanned`);
-            }
-            
-            await supabaseAdmin
-              .from("subscribers")
-              .update({ 
-                status: "expired", 
-                is_in_channel: false 
-              })
-              .eq("id", subscriber.id);
+            console.log(`[check-expired] User ${subscriber.telegram_user_id} banned and remains banned`);
             
             // Send subscription expired notification
             const expiredMessage = replaceVariables(subscriptionExpiredTemplate, {
@@ -307,16 +312,12 @@ serve(async (req) => {
             
             results.kicked++;
           } else {
-            console.error(`Failed to kick user ${subscriber.telegram_user_id}:`, banResult.description);
-            await supabaseAdmin
-              .from("subscribers")
-              .update({ status: "expired" })
-              .eq("id", subscriber.id);
+            console.error(`[check-expired] Failed to ban user ${subscriber.telegram_user_id}:`, banResult.description);
             results.errors++;
           }
         }
       } catch (error) {
-        console.error(`Error processing grace period subscriber ${subscriber.id}:`, error);
+        console.error(`[check-expired] Error processing grace period subscriber ${subscriber.id}:`, error);
         results.errors++;
       }
     }
