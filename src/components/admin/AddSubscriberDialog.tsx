@@ -24,6 +24,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Copy, ExternalLink } from 'lucide-react';
 import { computeNextEndISO, getTierInterval, formatDateInTimezone } from '@/lib/dateUtils';
+import { logEvent, generateRequestId } from '@/lib/logger';
 
 interface AddSubscriberDialogProps {
   open: boolean;
@@ -86,6 +87,7 @@ export function AddSubscriberDialog({ open, onOpenChange }: AddSubscriberDialogP
     // Manual payment - activate immediately using calendar intervals
     const nowISO = new Date().toISOString();
     const endDateISO = getNewEndDate();
+    const requestId = generateRequestId();
 
     createSubscriber.mutate({
       telegram_user_id: parseInt(formData.telegram_user_id),
@@ -99,8 +101,35 @@ export function AddSubscriberDialog({ open, onOpenChange }: AddSubscriberDialogP
       payment_note: formData.payment_note || undefined,
       amount: selectedTier?.price,
     }, {
-      onSuccess: () => {
+      onSuccess: (data) => {
+        logEvent({
+          event_type: 'subscription.started',
+          source: 'admin_ui',
+          subscriber_id: data.id,
+          telegram_user_id: parseInt(formData.telegram_user_id),
+          tier_id: formData.tier_id,
+          request_id: requestId,
+          message: 'Admin added subscriber manually',
+          payload: {
+            subscription_start: nowISO,
+            subscription_end: endDateISO,
+            tier_name: selectedTier?.name,
+            amount: selectedTier?.price,
+            payment_method: 'manual',
+          },
+        });
         handleClose();
+      },
+      onError: (error) => {
+        logEvent({
+          level: 'error',
+          event_type: 'admin.error',
+          source: 'admin_ui',
+          telegram_user_id: parseInt(formData.telegram_user_id),
+          request_id: requestId,
+          message: 'Failed to add subscriber',
+          payload: { error: error.message },
+        });
       },
     });
   };

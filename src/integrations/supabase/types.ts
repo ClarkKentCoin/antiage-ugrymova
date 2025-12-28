@@ -347,6 +347,63 @@ export type Database = {
         }
         Relationships: []
       }
+      system_logs: {
+        Row: {
+          created_at: string
+          event_type: string
+          id: string
+          level: string
+          message: string | null
+          payload: Json
+          request_id: string | null
+          source: string
+          subscriber_id: string | null
+          telegram_user_id: number | null
+          tier_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          event_type: string
+          id?: string
+          level?: string
+          message?: string | null
+          payload?: Json
+          request_id?: string | null
+          source: string
+          subscriber_id?: string | null
+          telegram_user_id?: number | null
+          tier_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          event_type?: string
+          id?: string
+          level?: string
+          message?: string | null
+          payload?: Json
+          request_id?: string | null
+          source?: string
+          subscriber_id?: string | null
+          telegram_user_id?: number | null
+          tier_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "system_logs_subscriber_id_fkey"
+            columns: ["subscriber_id"]
+            isOneToOne: false
+            referencedRelation: "subscribers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "system_logs_tier_id_fkey"
+            columns: ["tier_id"]
+            isOneToOne: false
+            referencedRelation: "subscription_tiers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           id: string

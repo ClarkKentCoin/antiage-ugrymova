@@ -24,6 +24,7 @@ import {
   deriveIntervalFromDays,
   computeDurationDays 
 } from '@/hooks/useSubscriptionTiers';
+import { logEvent, generateRequestId } from '@/lib/logger';
 
 interface EditTierDialogProps {
   tier: SubscriptionTier;
@@ -84,6 +85,15 @@ export function EditTierDialog({ tier, open, onOpenChange }: EditTierDialogProps
 
     const intervalCount = parseInt(formData.interval_count) || 1;
     const durationDays = computeDurationDays(formData.interval_unit, intervalCount);
+    const requestId = generateRequestId();
+
+    const oldValues = {
+      name: tier.name,
+      price: tier.price,
+      interval_unit: tier.interval_unit,
+      interval_count: tier.interval_count,
+      is_active: tier.is_active,
+    };
 
     updateTier.mutate({
       id: tier.id,
@@ -96,7 +106,37 @@ export function EditTierDialog({ tier, open, onOpenChange }: EditTierDialogProps
       interval_count: intervalCount,
       billing_timezone: formData.billing_timezone,
     }, {
-      onSuccess: () => onOpenChange(false),
+      onSuccess: () => {
+        logEvent({
+          event_type: 'tier.updated',
+          source: 'admin_ui',
+          tier_id: tier.id,
+          request_id: requestId,
+          message: `Updated tier: ${formData.name}`,
+          payload: {
+            old_values: oldValues,
+            new_values: {
+              name: formData.name,
+              price: parseFloat(formData.price),
+              interval_unit: formData.interval_unit,
+              interval_count: intervalCount,
+              is_active: formData.is_active,
+            },
+          },
+        });
+        onOpenChange(false);
+      },
+      onError: (error) => {
+        logEvent({
+          level: 'error',
+          event_type: 'admin.error',
+          source: 'admin_ui',
+          tier_id: tier.id,
+          request_id: requestId,
+          message: 'Failed to update tier',
+          payload: { error: error.message },
+        });
+      },
     });
   };
 
