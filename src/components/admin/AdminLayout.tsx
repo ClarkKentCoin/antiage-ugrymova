@@ -8,7 +8,8 @@ import {
   Settings, 
   Layers, 
   LogOut,
-  LayoutDashboard
+  LayoutDashboard,
+  ScrollText
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -21,6 +22,7 @@ const navItems = [
   { href: '/admin/subscribers', label: 'Subscribers', icon: Users },
   { href: '/admin/tiers', label: 'Tiers', icon: Layers },
   { href: '/admin/payments', label: 'Payments', icon: CreditCard },
+  { href: '/admin/logs', label: 'Logs', icon: ScrollText },
   { href: '/admin/settings', label: 'Settings', icon: Settings },
 ];
 

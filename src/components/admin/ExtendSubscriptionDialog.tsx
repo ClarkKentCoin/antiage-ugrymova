@@ -19,6 +19,7 @@ import { Subscriber, useUpdateSubscriber } from '@/hooks/useSubscribers';
 import { useSubscriptionTiers, formatDuration } from '@/hooks/useSubscriptionTiers';
 import { useCreatePayment } from '@/hooks/usePaymentHistory';
 import { computeNextEndISO, getTierInterval, formatDateInTimezone } from '@/lib/dateUtils';
+import { logEvent, generateRequestId } from '@/lib/logger';
 
 interface ExtendSubscriptionDialogProps {
   subscriber: Subscriber | null;
@@ -54,6 +55,8 @@ export function ExtendSubscriptionDialog({ subscriber, open, onOpenChange }: Ext
     if (!subscriber || !selectedTier) return;
 
     const newEndISO = getNewEndDate();
+    const oldEndISO = subscriber.subscription_end;
+    const requestId = generateRequestId();
     
     // Update subscriber - never overwrite subscription_start if already set
     updateSubscriber.mutate({
@@ -71,9 +74,37 @@ export function ExtendSubscriptionDialog({ subscriber, open, onOpenChange }: Ext
           payment_method: 'manual',
           payment_note: formData.payment_note || `Продление подписки: ${selectedTier.name}`,
         });
+
+        // Log success
+        logEvent({
+          event_type: 'subscription.extended',
+          source: 'admin_ui',
+          subscriber_id: subscriber.id,
+          telegram_user_id: subscriber.telegram_user_id,
+          tier_id: formData.tier_id,
+          request_id: requestId,
+          message: 'Admin extended subscription',
+          payload: {
+            old_end: oldEndISO,
+            new_end: newEndISO,
+            tier_name: selectedTier.name,
+            amount: selectedTier.price,
+          },
+        });
         
         onOpenChange(false);
         setFormData({ tier_id: '', payment_note: '' });
+      },
+      onError: (error) => {
+        logEvent({
+          level: 'error',
+          event_type: 'admin.error',
+          source: 'admin_ui',
+          subscriber_id: subscriber.id,
+          request_id: requestId,
+          message: 'Failed to extend subscription',
+          payload: { error: error.message },
+        });
       },
     });
   };

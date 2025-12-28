@@ -18,6 +18,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useCreateTier, IntervalUnit, computeDurationDays } from '@/hooks/useSubscriptionTiers';
+import { logEvent, generateRequestId } from '@/lib/logger';
 
 interface CreateTierDialogProps {
   open: boolean;
@@ -49,6 +50,7 @@ export function CreateTierDialog({ open, onOpenChange }: CreateTierDialogProps) 
 
     const intervalCount = parseInt(formData.interval_count) || 1;
     const durationDays = computeDurationDays(formData.interval_unit, intervalCount);
+    const requestId = generateRequestId();
 
     createTier.mutate({
       name: formData.name,
@@ -60,7 +62,21 @@ export function CreateTierDialog({ open, onOpenChange }: CreateTierDialogProps) 
       interval_count: intervalCount,
       billing_timezone: formData.billing_timezone,
     }, {
-      onSuccess: () => {
+      onSuccess: (data) => {
+        logEvent({
+          event_type: 'tier.created',
+          source: 'admin_ui',
+          tier_id: data.id,
+          request_id: requestId,
+          message: `Created tier: ${formData.name}`,
+          payload: {
+            name: formData.name,
+            price: parseFloat(formData.price),
+            interval_unit: formData.interval_unit,
+            interval_count: intervalCount,
+            is_active: formData.is_active,
+          },
+        });
         onOpenChange(false);
         setFormData({
           name: '',
@@ -70,6 +86,16 @@ export function CreateTierDialog({ open, onOpenChange }: CreateTierDialogProps) 
           billing_timezone: 'Europe/Moscow',
           price: '',
           is_active: true,
+        });
+      },
+      onError: (error) => {
+        logEvent({
+          level: 'error',
+          event_type: 'admin.error',
+          source: 'admin_ui',
+          request_id: requestId,
+          message: 'Failed to create tier',
+          payload: { error: error.message, tier_name: formData.name },
         });
       },
     });
