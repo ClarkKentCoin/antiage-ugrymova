@@ -289,19 +289,8 @@ serve(async (req) => {
           });
 
           if (banResult.ok) {
-            // Step 2: Small delay for reliability
-            await new Promise((resolve) => setTimeout(resolve, 100));
-
-            // Step 3: Unban user (removes from banned list so they can rejoin)
-            const unbanResult = await callTelegramApi(botToken, "unbanChatMember", {
-              chat_id: channelId,
-              user_id: telegram_user_id,
-              only_if_banned: true,
-            });
-
-            if (!unbanResult.ok) {
-              console.error(`Failed to unban user (not critical):`, unbanResult.description);
-            }
+            // User is now banned and will remain banned until reactivation
+            console.log(`[BAN] User ${telegram_user_id} banned from channel (status: ${new_status})`);
 
             // Update is_in_channel
             await supabaseAdmin
@@ -310,9 +299,9 @@ serve(async (req) => {
               .eq("id", subscriber_id);
 
             results.kicked = true;
-            console.log(`User ${telegram_user_id} kicked successfully`);
+            console.log(`[BAN] User ${telegram_user_id} kicked and remains banned`);
           } else {
-            console.error(`Failed to kick user:`, banResult.description);
+            console.error(`[BAN] Failed to ban user ${telegram_user_id}:`, banResult.description);
             results.error = banResult.description;
           }
         }
