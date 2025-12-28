@@ -396,33 +396,55 @@ serve(async (req) => {
           if (subscriberData.is_in_channel === true) {
             console.log(`[robokassa] User ${subscriberData.telegram_user_id} already in channel, skipping invite generation`);
           } else {
-            // Step 1: Unban the user if they were previously banned
-            console.log(`[robokassa] Unbanning user ${subscriberData.telegram_user_id} if banned`);
-            const unbanResponse = await fetch(
-              `https://api.telegram.org/bot${telegramSettings.telegram_bot_token}/unbanChatMember`,
-              {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  chat_id: channelId,
-                  user_id: subscriberData.telegram_user_id,
-                  only_if_banned: true,
-                }),
-              }
-            );
-            const unbanResult = await unbanResponse.json();
-            if (unbanResult.ok) {
-              console.log(`[robokassa] User ${subscriberData.telegram_user_id} unbanned successfully`);
-            } else {
-              console.log(`[robokassa] Unban result: ${unbanResult.description || 'user was not banned'}`);
+            // Check for existing valid (non-expired, non-revoked) invite before creating new one
+            const nowISO = new Date().toISOString();
+            const { data: existingInvite, error: existingError } = await supabaseAdmin
+              .from("invite_links")
+              .select("id, invite_link, expires_at")
+              .eq("subscriber_id", shpSubscriberId)
+              .eq("revoked", false)
+              .gt("expires_at", nowISO)
+              .order("created_at", { ascending: false })
+              .limit(1)
+              .maybeSingle();
+
+            if (existingError) {
+              console.error("[robokassa] Failed to check existing invite:", existingError);
             }
 
-            // Step 2: Revoke previous non-revoked invite links for this subscriber
-            const { data: previousLinks, error: linksError } = await supabaseAdmin
-              .from("invite_links")
-              .select("id, invite_link")
-              .eq("subscriber_id", shpSubscriberId)
-              .eq("revoked", false);
+            if (existingInvite) {
+              // Valid invite already exists - skip creating new one to prevent duplicates
+              console.log(`[robokassa] existing active invite found (expires: ${existingInvite.expires_at}), skip creating new one`);
+            } else {
+              // No valid invite - proceed with full flow
+              
+              // Step 1: Unban the user if they were previously banned
+              console.log(`[robokassa] Unbanning user ${subscriberData.telegram_user_id} if banned`);
+              const unbanResponse = await fetch(
+                `https://api.telegram.org/bot${telegramSettings.telegram_bot_token}/unbanChatMember`,
+                {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    chat_id: channelId,
+                    user_id: subscriberData.telegram_user_id,
+                    only_if_banned: true,
+                  }),
+                }
+              );
+              const unbanResult = await unbanResponse.json();
+              if (unbanResult.ok) {
+                console.log(`[robokassa] User ${subscriberData.telegram_user_id} unbanned successfully`);
+              } else {
+                console.log(`[robokassa] Unban result: ${unbanResult.description || 'user was not banned'}`);
+              }
+
+              // Step 2: Revoke previous non-revoked invite links for this subscriber
+              const { data: previousLinks, error: linksError } = await supabaseAdmin
+                .from("invite_links")
+                .select("id, invite_link")
+                .eq("subscriber_id", shpSubscriberId)
+                .eq("revoked", false);
 
             if (linksError) {
               console.error("[robokassa] Failed to fetch previous invite links:", linksError);
@@ -515,6 +537,7 @@ serve(async (req) => {
             } else {
               console.error("[robokassa] Failed to create invite link:", inviteResult.description);
             }
+            } // end of "else no valid invite" block
           }
         }
       }
