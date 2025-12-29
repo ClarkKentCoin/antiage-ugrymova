@@ -100,15 +100,77 @@ export default function TelegramApp() {
   const allowTestMode =
     import.meta.env.DEV || new URLSearchParams(window.location.search).has('test');
 
+  const [isCancelling, setIsCancelling] = useState(false);
+
   const handleUnsubscribe = async () => {
     const confirmed = isTelegramWebApp
-      ? await showConfirm('Are you sure you want to cancel your subscription?')
-      : window.confirm('Are you sure you want to cancel your subscription?');
+      ? await showConfirm('Вы уверены, что хотите отменить подписку? Вы будете удалены из канала.')
+      : window.confirm('Вы уверены, что хотите отменить подписку? Вы будете удалены из канала.');
 
-    if (confirmed) {
-      hapticFeedback('warning');
-      // In a real app, this would call an API to cancel
-      alert('Subscription cancellation request sent. An admin will process this shortly.');
+    if (!confirmed) return;
+
+    hapticFeedback('warning');
+    setIsCancelling(true);
+
+    try {
+      const telegramUserId = user?.id ?? testUserId;
+      if (!telegramUserId) {
+        toast({
+          title: 'Ошибка',
+          description: 'Не удалось определить пользователя',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      const { data, error } = await supabase.functions.invoke('cancel-subscription', {
+        body: {
+          telegram_user_id: telegramUserId,
+          init_data: initData ?? '',
+        },
+      });
+
+      if (error) {
+        console.error('Cancel subscription error:', error);
+        toast({
+          title: 'Ошибка',
+          description: error.message || 'Не удалось отменить подписку',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      if (data?.error) {
+        console.error('Cancel subscription API error:', data.error);
+        toast({
+          title: 'Ошибка',
+          description: data.error === 'subscriber_not_found' 
+            ? 'Подписчик не найден' 
+            : data.error === 'already_cancelled'
+            ? 'Подписка уже отменена'
+            : data.error,
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      hapticFeedback('success');
+      toast({
+        title: 'Подписка отменена',
+        description: 'Вы были удалены из канала',
+      });
+
+      // Refresh subscriber data
+      await refetch();
+    } catch (err) {
+      console.error('Cancel subscription exception:', err);
+      toast({
+        title: 'Ошибка',
+        description: 'Произошла ошибка при отмене подписки',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsCancelling(false);
     }
   };
 
@@ -174,6 +236,7 @@ export default function TelegramApp() {
           onExtend={handleExtendRequest}
           onRefetch={refetch}
           gracePeriodDays={gracePeriodDays}
+          isCancelling={isCancelling}
         />
       </main>
     );
@@ -228,6 +291,7 @@ export default function TelegramApp() {
         userName={user?.first_name}
         onRefetch={refetch}
         gracePeriodDays={gracePeriodDays}
+        isCancelling={isCancelling}
       />
     </div>
   );
@@ -731,8 +795,9 @@ function SubscriptionContent({
   onExtend,
   userName,
   onRefetch,
-  gracePeriodDays = 0
-}: { 
+  gracePeriodDays = 0,
+  isCancelling = false
+}: {
   subscriber: any; 
   isLoading: boolean;
   daysRemaining: number | null;
@@ -746,6 +811,7 @@ function SubscriptionContent({
   userName?: string;
   onRefetch?: () => void;
   gracePeriodDays?: number | null;
+  isCancelling?: boolean;
 }) {
   const [selectedTier, setSelectedTier] = useState<string | null>(null);
   const [autoRenewal, setAutoRenewal] = useState(false);
@@ -1174,8 +1240,20 @@ function SubscriptionContent({
           </Card>
 
           {subscriber.status === 'active' && (
-            <Button variant="destructive" className="w-full" onClick={onUnsubscribe}>
-              Отменить подписку
+            <Button 
+              variant="destructive" 
+              className="w-full" 
+              onClick={onUnsubscribe}
+              disabled={isCancelling}
+            >
+              {isCancelling ? (
+                <>
+                  <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                  Отмена подписки...
+                </>
+              ) : (
+                'Отменить подписку'
+              )}
             </Button>
           )}
         </TabsContent>
