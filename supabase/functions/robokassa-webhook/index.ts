@@ -166,6 +166,25 @@ serve(async (req) => {
 
     if (signatureValue !== calculatedSignature) {
       console.error("Signature mismatch!");
+      // Log signature failure
+      try {
+        await supabaseAdmin.from("system_logs").insert({
+          level: "error",
+          event_type: "payment.webhook_error",
+          source: "robokassa",
+          subscriber_id: shpSubscriberId || null,
+          telegram_user_id: shpTelegramUserId ? parseInt(shpTelegramUserId, 10) : null,
+          request_id: invId,
+          message: "Signature verification failed",
+          payload: {
+            inv_id: invId,
+            out_sum: outSum,
+            has_signature: !!signatureValue,
+          },
+        });
+      } catch (logError) {
+        console.warn("Failed to log webhook error:", logError);
+      }
       return new Response("bad sign", { status: 400 });
     }
 
@@ -309,6 +328,32 @@ serve(async (req) => {
         
         // Store newEndISO for use in Telegram notification
         computedNewEndISO = newEndISO;
+
+        // Log payment success
+        try {
+          await supabaseAdmin.from("system_logs").insert({
+            level: "info",
+            event_type: "payment.succeeded",
+            source: "robokassa",
+            subscriber_id: shpSubscriberId,
+            telegram_user_id: shpTelegramUserId ? parseInt(shpTelegramUserId, 10) : null,
+            tier_id: payment.tier_id,
+            request_id: invId,
+            message: "Payment completed successfully",
+            payload: {
+              inv_id: invId,
+              out_sum: outSum,
+              amount: parseFloat(outSum),
+              payment_method: payment.payment_method,
+              has_signature: !!signatureValue,
+              email: email || null,
+              subscription_end: newEndISO,
+              fee: fee || null,
+            },
+          });
+        } catch (logError) {
+          console.warn("Failed to log payment.succeeded event:", logError);
+        }
       }
     } else {
       // No pending payment found - create a completed one
@@ -552,6 +597,26 @@ serve(async (req) => {
 
   } catch (error) {
     console.error("Webhook error:", error);
+    
+    // Log webhook exception
+    try {
+      const supabaseAdmin = createClient(
+        Deno.env.get("SUPABASE_URL") ?? "",
+        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
+      );
+      await supabaseAdmin.from("system_logs").insert({
+        level: "error",
+        event_type: "payment.webhook_error",
+        source: "robokassa",
+        message: "Webhook processing exception",
+        payload: {
+          error: error instanceof Error ? error.message : String(error),
+        },
+      });
+    } catch (logError) {
+      console.warn("Failed to log webhook exception:", logError);
+    }
+    
     return new Response("error", { status: 500 });
   }
 });

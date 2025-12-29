@@ -46,6 +46,7 @@ export default function AdminLogs() {
   const [selectedLog, setSelectedLog] = useState<(SystemLog & { subscribers: any }) | null>(null);
   const [filters, setFilters] = useState<LogFilters>({
     search: '',
+    email: '',
     event_type: 'all',
     level: 'all',
     source: 'all',
@@ -82,7 +83,8 @@ export default function AdminLogs() {
 
   const getSubscriberDisplay = (log: SystemLog & { subscribers: any }) => {
     if (log.subscribers) {
-      const { telegram_username, first_name, last_name } = log.subscribers;
+      const { telegram_username, first_name, last_name, email } = log.subscribers;
+      if (email) return email;
       if (telegram_username) return `@${telegram_username}`;
       if (first_name || last_name) return `${first_name || ''} ${last_name || ''}`.trim();
     }
@@ -107,13 +109,24 @@ export default function AdminLogs() {
           <div className="relative flex-1 min-w-[200px]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Поиск по сообщению, событию, telegram ID..."
+              placeholder="Поиск по сообщению, событию, request_id..."
               value={filters.search}
               onChange={(e) => {
                 setFilters({ ...filters, search: e.target.value });
                 setPage(0);
               }}
               className="pl-9"
+            />
+          </div>
+
+          <div className="min-w-[180px]">
+            <Input
+              placeholder="Email подписчика..."
+              value={filters.email}
+              onChange={(e) => {
+                setFilters({ ...filters, email: e.target.value });
+                setPage(0);
+              }}
             />
           </div>
 
@@ -331,9 +344,14 @@ export default function AdminLogs() {
               )}
 
               {selectedLog.subscriber_id && (
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <p className="text-muted-foreground text-sm">Подписчик:</p>
                   <p>{getSubscriberDisplay(selectedLog)}</p>
+                  {selectedLog.subscribers?.email && (
+                    <code className="text-xs bg-muted px-1.5 py-0.5 rounded">
+                      {selectedLog.subscribers.email}
+                    </code>
+                  )}
                   <Button
                     variant="ghost"
                     size="sm"
