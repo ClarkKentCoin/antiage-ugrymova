@@ -460,6 +460,21 @@ serve(async (req) => {
             if (existingInvite) {
               // Valid invite already exists - skip creating new one to prevent duplicates
               console.log(`[robokassa] existing active invite found (expires: ${existingInvite.expires_at}), skip creating new one`);
+              // Log skip event
+              try {
+                await supabaseAdmin.from("system_logs").insert({
+                  level: "info",
+                  event_type: "telegram.invite_skipped_existing",
+                  source: "robokassa",
+                  subscriber_id: shpSubscriberId,
+                  telegram_user_id: subscriberData?.telegram_user_id ? Number(subscriberData.telegram_user_id) : null,
+                  request_id: invId,
+                  message: "Skipped invite creation - valid invite already exists",
+                  payload: { expires_at: existingInvite.expires_at, inv_id: invId },
+                });
+              } catch (logErr) {
+                console.warn("[robokassa] Failed to log invite skip:", logErr);
+              }
             } else {
               // No valid invite - proceed with full flow
               
@@ -564,6 +579,21 @@ serve(async (req) => {
                 console.error("[robokassa] Failed to store invite link:", insertError);
               } else {
                 console.log(`[robokassa] invite created (10 min, single-use) for subscriber ${shpSubscriberId}`);
+                // Log invite creation
+                try {
+                  await supabaseAdmin.from("system_logs").insert({
+                    level: "info",
+                    event_type: "telegram.invite_created",
+                    source: "robokassa",
+                    subscriber_id: shpSubscriberId,
+                    telegram_user_id: subscriberData?.telegram_user_id ? Number(subscriberData.telegram_user_id) : null,
+                    request_id: invId,
+                    message: "Invite link created after payment",
+                    payload: { invite_link: newInviteLink, expires_at: expiresAtISO, inv_id: invId, out_sum: outSum },
+                  });
+                } catch (logErr) {
+                  console.warn("[robokassa] Failed to log invite creation:", logErr);
+                }
               }
 
               await fetch(
