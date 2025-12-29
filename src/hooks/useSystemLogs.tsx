@@ -17,6 +17,7 @@ export interface SystemLog {
 
 export interface LogFilters {
   search?: string;
+  email?: string;
   event_type?: string;
   level?: string;
   source?: string;
@@ -29,7 +30,7 @@ export function useSystemLogs(filters: LogFilters = {}, page: number = 0, pageSi
     queryFn: async () => {
       let query = supabase
         .from('system_logs')
-        .select('*, subscribers(telegram_username, first_name, last_name)', { count: 'exact' })
+        .select('*, subscribers(telegram_username, first_name, last_name, email)', { count: 'exact' })
         .order('created_at', { ascending: false })
         .range(page * pageSize, (page + 1) * pageSize - 1);
 
@@ -68,26 +69,40 @@ export function useSystemLogs(filters: LogFilters = {}, page: number = 0, pageSi
         query = query.gte('created_at', startDate.toISOString());
       }
 
-      // Search filter (searches in message, event_type, and telegram_user_id)
+      // Search filter (searches in message, event_type, request_id, and telegram_user_id)
       if (filters.search) {
         const searchTerm = filters.search.trim();
         // Try to parse as number for telegram_user_id search
         const searchNum = parseInt(searchTerm, 10);
         
         if (!isNaN(searchNum)) {
-          query = query.or(`message.ilike.%${searchTerm}%,event_type.ilike.%${searchTerm}%,telegram_user_id.eq.${searchNum}`);
+          query = query.or(`message.ilike.%${searchTerm}%,event_type.ilike.%${searchTerm}%,request_id.ilike.%${searchTerm}%,telegram_user_id.eq.${searchNum}`);
         } else {
-          query = query.or(`message.ilike.%${searchTerm}%,event_type.ilike.%${searchTerm}%`);
+          query = query.or(`message.ilike.%${searchTerm}%,event_type.ilike.%${searchTerm}%,request_id.ilike.%${searchTerm}%`);
         }
       }
+
+      // Email filter - requires a subquery approach
+      // We'll filter on the client side after fetching if email filter is set
+      // This is a workaround since Supabase doesn't support filtering on joined fields directly in .or()
 
       const { data, error, count } = await query;
 
       if (error) throw error;
 
+      // Filter by email on client side if email filter is provided
+      let filteredData = data as (SystemLog & { subscribers: { telegram_username: string | null; first_name: string | null; last_name: string | null; email: string | null } | null })[];
+      
+      if (filters.email && filters.email.trim()) {
+        const emailSearch = filters.email.trim().toLowerCase();
+        filteredData = filteredData.filter(log => 
+          log.subscribers?.email?.toLowerCase().includes(emailSearch)
+        );
+      }
+
       return {
-        logs: data as (SystemLog & { subscribers: { telegram_username: string | null; first_name: string | null; last_name: string | null } | null })[],
-        totalCount: count || 0,
+        logs: filteredData,
+        totalCount: filters.email ? filteredData.length : (count || 0),
       };
     },
   });

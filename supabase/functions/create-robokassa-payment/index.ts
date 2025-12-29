@@ -272,6 +272,18 @@ serve(async (req) => {
 
     if (paymentError) {
       console.error("Payment creation error:", paymentError);
+      // Log payment creation error
+      await supabaseAdmin.from("system_logs").insert({
+        level: "error",
+        event_type: "payment.creation_error",
+        source: "robokassa",
+        subscriber_id: resolvedSubscriberId,
+        telegram_user_id: subscriber.telegram_user_id,
+        tier_id,
+        message: "Failed to create payment record",
+        payload: { error: paymentError.message },
+      });
+
       return new Response(
         JSON.stringify({ error: "Failed to create payment record", details: paymentError.message }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -279,6 +291,32 @@ serve(async (req) => {
     }
 
     console.log(`Created payment record: ${payment.id}, invoice: ${invoiceId}`);
+
+    // Log successful payment creation
+    try {
+      await supabaseAdmin.from("system_logs").insert({
+        level: "info",
+        event_type: "payment.created",
+        source: "robokassa",
+        subscriber_id: resolvedSubscriberId,
+        telegram_user_id: subscriber.telegram_user_id,
+        tier_id,
+        request_id: payment.id,
+        message: "Payment attempt created",
+        payload: {
+          payment_id: payment.id,
+          invoice_id: invoiceId,
+          amount: tier.price,
+          payment_method: is_recurring ? "robokassa_recurring" : "robokassa_single",
+          status: "pending",
+          tier_name: tier.name,
+          is_recurring: !!is_recurring,
+          is_test_mode: settings.robokassa_test_mode,
+        },
+      });
+    } catch (logError) {
+      console.warn("Failed to log payment.created event:", logError);
+    }
 
     // Build Receipt for fiscalization
     const receipt = {
