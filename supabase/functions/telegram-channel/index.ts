@@ -232,6 +232,21 @@ serve(async (req) => {
         );
       }
 
+      // Log invite link creation
+      try {
+        await supabaseAdmin.from("system_logs").insert({
+          level: "info",
+          event_type: "telegram.invite_created",
+          source: "edge_fn",
+          subscriber_id: subscriber_id,
+          telegram_user_id: telegram_user_id ? Number(telegram_user_id) : null,
+          message: "Invite link created",
+          payload: { channel_id: channelId, invite_link: result.invite_link },
+        });
+      } catch (logErr) {
+        console.warn("[telegram-channel] Failed to log:", logErr);
+      }
+
       return new Response(
         JSON.stringify({ success: true, invite_link: result.invite_link }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -266,6 +281,21 @@ serve(async (req) => {
           JSON.stringify({ error: result.error }),
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
+      }
+
+      // Log unban + invite
+      try {
+        await supabaseAdmin.from("system_logs").insert({
+          level: "info",
+          event_type: "telegram.user_unbanned",
+          source: "edge_fn",
+          subscriber_id: subscriber_id,
+          telegram_user_id: telegram_user_id ? Number(telegram_user_id) : null,
+          message: "User unbanned and invite link created",
+          payload: { channel_id: channelId, invite_link: result.invite_link },
+        });
+      } catch (logErr) {
+        console.warn("[telegram-channel] Failed to log:", logErr);
       }
 
       return new Response(
@@ -323,6 +353,21 @@ serve(async (req) => {
           .from("subscribers")
           .update({ is_in_channel: false })
           .eq("id", subscriber_id);
+      }
+
+      // Log kick action
+      try {
+        await supabaseAdmin.from("system_logs").insert({
+          level: "info",
+          event_type: "telegram.user_kicked",
+          source: "edge_fn",
+          subscriber_id: subscriber_id,
+          telegram_user_id: telegram_user_id ? Number(telegram_user_id) : null,
+          message: "User kicked from channel",
+          payload: { channel_id: channelId },
+        });
+      } catch (logErr) {
+        console.warn("[telegram-channel] Failed to log:", logErr);
       }
 
       return new Response(

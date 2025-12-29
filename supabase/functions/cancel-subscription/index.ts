@@ -345,6 +345,50 @@ serve(async (req) => {
 
     console.log("[cancel-subscription] Completed:", results);
 
+    // Log successful cancellation to system_logs
+    try {
+      await supabaseAdmin.from("system_logs").insert({
+        level: "info",
+        event_type: "subscription.cancelled",
+        source: "edge_fn",
+        subscriber_id: subscriber.id,
+        telegram_user_id: Number(telegram_user_id),
+        message: "Subscription cancelled by user via MiniApp",
+        payload: {
+          channel_id: channelId,
+          banned: results.banned || false,
+          invites_revoked: results.invites_revoked || 0,
+          notification_sent: results.notification_sent || false,
+        },
+      });
+
+      if (results.banned) {
+        await supabaseAdmin.from("system_logs").insert({
+          level: "info",
+          event_type: "telegram.user_banned",
+          source: "edge_fn",
+          subscriber_id: subscriber.id,
+          telegram_user_id: Number(telegram_user_id),
+          message: "User banned from channel after cancellation",
+          payload: { channel_id: channelId },
+        });
+      }
+
+      if (results.invites_revoked && results.invites_revoked > 0) {
+        await supabaseAdmin.from("system_logs").insert({
+          level: "info",
+          event_type: "telegram.invites_revoked",
+          source: "edge_fn",
+          subscriber_id: subscriber.id,
+          telegram_user_id: Number(telegram_user_id),
+          message: `Revoked ${results.invites_revoked} invite links`,
+          payload: { channel_id: channelId, count: results.invites_revoked },
+        });
+      }
+    } catch (logErr) {
+      console.warn("[cancel-subscription] Failed to log to system_logs:", logErr);
+    }
+
     return new Response(
       JSON.stringify({ success: true, results }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },

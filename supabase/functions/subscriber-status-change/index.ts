@@ -459,6 +459,36 @@ serve(async (req) => {
 
     console.log("Action completed:", results);
 
+    // Log to system_logs
+    try {
+      if (action === "status_change") {
+        if (results.kicked) {
+          await supabaseAdmin.from("system_logs").insert({
+            level: "info",
+            event_type: "telegram.user_banned",
+            source: "edge_fn",
+            subscriber_id: subscriber_id,
+            telegram_user_id: telegram_user_id ? Number(telegram_user_id) : null,
+            message: `User banned due to status change: ${old_status} -> ${new_status}`,
+            payload: { channel_id: channelId, old_status, new_status },
+          });
+        }
+        if (results.invite_sent && results.invite_link) {
+          await supabaseAdmin.from("system_logs").insert({
+            level: "info",
+            event_type: "telegram.invite_created",
+            source: "edge_fn",
+            subscriber_id: subscriber_id,
+            telegram_user_id: telegram_user_id ? Number(telegram_user_id) : null,
+            message: "Invite link sent after reactivation",
+            payload: { channel_id: channelId, invite_link: results.invite_link },
+          });
+        }
+      }
+    } catch (logErr) {
+      console.warn("[subscriber-status-change] Failed to log:", logErr);
+    }
+
     return new Response(
       JSON.stringify({ success: true, results }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }

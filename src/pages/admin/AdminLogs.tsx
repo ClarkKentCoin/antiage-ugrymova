@@ -31,7 +31,7 @@ import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import { useNavigate } from 'react-router-dom';
 
-const SOURCES = ['admin_ui', 'edge_fn', 'cron', 'robokassa', 'telegram_webhook'];
+const SOURCES = ['admin_ui', 'edge_fn', 'cron', 'robokassa', 'telegram_webhook', 'db_trigger'];
 const LEVELS = ['info', 'warn', 'error'];
 const DATE_RANGES = [
   { value: '24h', label: 'Последние 24ч' },
