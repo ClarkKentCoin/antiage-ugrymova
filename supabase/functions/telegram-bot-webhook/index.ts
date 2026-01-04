@@ -39,14 +39,28 @@ async function callTelegramApi(botToken: string, method: string, params: Record<
 }
 
 serve(async (req) => {
+  const method = req.method;
+  const url = new URL(req.url);
+  
   // Only accept POST requests from Telegram
-  if (req.method !== "POST") {
-    console.log(`Rejected ${req.method} request - only POST allowed`);
+  if (method !== "POST") {
+    console.log(`Rejected ${method} request - only POST allowed`);
     return new Response("Method not allowed", { status: 405 });
   }
 
   // Verify Telegram webhook secret token - REQUIRED for security
   const webhookSecret = Deno.env.get("TELEGRAM_WEBHOOK_SECRET");
+  const receivedToken = req.headers.get("X-Telegram-Bot-Api-Secret-Token");
+  
+  // Diagnostic logging (never log actual secret values)
+  console.log("Webhook request:", {
+    method,
+    path: url.pathname,
+    hasHeaderSecret: !!receivedToken,
+    receivedTokenLength: receivedToken?.length ?? 0,
+    expectedTokenLength: webhookSecret?.length ?? 0,
+  });
+
   if (!webhookSecret) {
     console.error("TELEGRAM_WEBHOOK_SECRET not configured - webhook disabled for security");
     return new Response(
@@ -55,18 +69,22 @@ serve(async (req) => {
     );
   }
 
-  const receivedToken = req.headers.get("X-Telegram-Bot-Api-Secret-Token");
-  if (!receivedToken || receivedToken !== webhookSecret) {
-    console.error("Invalid or missing webhook secret token");
+  if (!receivedToken) {
+    console.error("Unauthorized: missing X-Telegram-Bot-Api-Secret-Token header");
     return new Response("Unauthorized", { status: 401 });
   }
 
-  try {
-    const supabaseAdmin = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
-    );
+  if (receivedToken !== webhookSecret) {
+    console.error("Unauthorized: secret token mismatch");
+    return new Response("Unauthorized", { status: 401 });
+  }
 
+  const supabaseAdmin = createClient(
+    Deno.env.get("SUPABASE_URL") ?? "",
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
+  );
+
+  try {
     // Parse the update first to get user info for logging
     const update: TelegramUpdate = await req.json();
     const userId = update.message?.from?.id ?? null;
@@ -74,6 +92,20 @@ serve(async (req) => {
     const messageText = (update.message?.text ?? "").trim();
     
     console.log("Received update:", JSON.stringify(update));
+
+    // Log update received (best effort - errors here should not break processing)
+    try {
+      await supabaseAdmin.from("system_logs").insert({
+        level: "info",
+        event_type: "telegram.update_received",
+        source: "telegram_bot",
+        message: `Received update ${update.update_id}`,
+        telegram_user_id: userId,
+        payload: { update_id: update.update_id, has_message: !!update.message, text: messageText?.substring(0, 50) }
+      });
+    } catch (logErr) {
+      console.warn("Failed to log update_received:", logErr);
+    }
 
     // Get admin settings - use order + limit + single to handle multiple rows gracefully
     const { data: settings, error: settingsError } = await supabaseAdmin
