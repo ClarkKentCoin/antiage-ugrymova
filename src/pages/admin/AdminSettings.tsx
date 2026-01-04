@@ -11,6 +11,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Loader2, Copy, Check } from 'lucide-react';
 
 interface AdminSettingsData {
+  id?: string; // Track the settings row ID for updates
   telegram_bot_token: string | null;
   telegram_channel_id: string | null;
   robokassa_merchant_login: string | null;
@@ -71,16 +72,19 @@ export default function AdminSettings() {
 
   const loadSettings = async () => {
     try {
+      // Use order + limit + single to handle multiple rows gracefully
       const { data, error } = await supabase
         .from('admin_settings')
         .select('*')
+        .order('created_at', { ascending: false })
         .limit(1)
-        .maybeSingle();
+        .single();
 
-      if (error) throw error;
+      if (error && error.code !== 'PGRST116') throw error; // PGRST116 = no rows
 
       if (data) {
         setSettings({
+          id: data.id, // Store the ID for updates
           telegram_bot_token: data.telegram_bot_token || '',
           telegram_channel_id: data.telegram_channel_id || '',
           robokassa_merchant_login: data.robokassa_merchant_login || '',
@@ -112,13 +116,6 @@ export default function AdminSettings() {
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      // First check if a settings row exists
-      const { data: existingSettings } = await supabase
-        .from('admin_settings')
-        .select('id')
-        .limit(1)
-        .maybeSingle();
-
       const settingsData = {
         telegram_bot_token: settings.telegram_bot_token || null,
         telegram_channel_id: settings.telegram_channel_id || null,
@@ -142,19 +139,24 @@ export default function AdminSettings() {
       };
 
       let error;
-      if (existingSettings?.id) {
-        // Update existing row
+      if (settings.id) {
+        // Update existing row by its ID (no re-query needed)
         const result = await supabase
           .from('admin_settings')
           .update(settingsData as any)
-          .eq('id', existingSettings.id);
+          .eq('id', settings.id);
         error = result.error;
       } else {
-        // Insert new row
+        // Insert new row and store the ID
         const result = await supabase
           .from('admin_settings')
-          .insert(settingsData as any);
+          .insert(settingsData as any)
+          .select('id')
+          .single();
         error = result.error;
+        if (!error && result.data) {
+          setSettings(prev => ({ ...prev, id: result.data.id }));
+        }
       }
 
       if (error) throw error;
