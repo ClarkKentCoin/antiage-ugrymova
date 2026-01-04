@@ -39,28 +39,14 @@ async function callTelegramApi(botToken: string, method: string, params: Record<
 }
 
 serve(async (req) => {
-  const method = req.method;
-  const url = new URL(req.url);
-  
   // Only accept POST requests from Telegram
-  if (method !== "POST") {
-    console.log(`Rejected ${method} request - only POST allowed`);
+  if (req.method !== "POST") {
+    console.log(`Rejected ${req.method} request - only POST allowed`);
     return new Response("Method not allowed", { status: 405 });
   }
 
   // Verify Telegram webhook secret token - REQUIRED for security
   const webhookSecret = Deno.env.get("TELEGRAM_WEBHOOK_SECRET");
-  const receivedToken = req.headers.get("X-Telegram-Bot-Api-Secret-Token");
-  
-  // Diagnostic logging (never log actual secret values)
-  console.log("Webhook request:", {
-    method,
-    path: url.pathname,
-    hasHeaderSecret: !!receivedToken,
-    receivedTokenLength: receivedToken?.length ?? 0,
-    expectedTokenLength: webhookSecret?.length ?? 0,
-  });
-
   if (!webhookSecret) {
     console.error("TELEGRAM_WEBHOOK_SECRET not configured - webhook disabled for security");
     return new Response(
@@ -69,65 +55,27 @@ serve(async (req) => {
     );
   }
 
-  if (!receivedToken) {
-    console.error("Unauthorized: missing X-Telegram-Bot-Api-Secret-Token header");
+  const receivedToken = req.headers.get("X-Telegram-Bot-Api-Secret-Token");
+  if (!receivedToken || receivedToken !== webhookSecret) {
+    console.error("Invalid or missing webhook secret token");
     return new Response("Unauthorized", { status: 401 });
   }
-
-  if (receivedToken !== webhookSecret) {
-    console.error("Unauthorized: secret token mismatch");
-    return new Response("Unauthorized", { status: 401 });
-  }
-
-  const supabaseAdmin = createClient(
-    Deno.env.get("SUPABASE_URL") ?? "",
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
-  );
 
   try {
-    // Parse the update first to get user info for logging
-    const update: TelegramUpdate = await req.json();
-    const userId = update.message?.from?.id ?? null;
-    const chatId = update.message?.chat?.id ?? null;
-    const messageText = (update.message?.text ?? "").trim();
-    
-    console.log("Received update:", JSON.stringify(update));
+    const supabaseAdmin = createClient(
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
+    );
 
-    // Log update received (best effort - errors here should not break processing)
-    try {
-      await supabaseAdmin.from("system_logs").insert({
-        level: "info",
-        event_type: "telegram.update_received",
-        source: "telegram_bot",
-        message: `Received update ${update.update_id}`,
-        telegram_user_id: userId,
-        payload: { update_id: update.update_id, has_message: !!update.message, text: messageText?.substring(0, 50) }
-      });
-    } catch (logErr) {
-      console.warn("Failed to log update_received:", logErr);
-    }
-
-    // Get admin settings - use order + limit + single to handle multiple rows gracefully
+    // Get admin settings
     const { data: settings, error: settingsError } = await supabaseAdmin
       .from("admin_settings")
       .select("telegram_bot_token, welcome_message_text, welcome_message_image_url, welcome_message_button_text, welcome_message_button_url")
-      .order("created_at", { ascending: false })
       .limit(1)
-      .single();
+      .maybeSingle();
 
     if (settingsError || !settings?.telegram_bot_token) {
       console.error("Settings error:", settingsError);
-      
-      // Log the error for diagnostics
-      await supabaseAdmin.from("system_logs").insert({
-        level: "error",
-        event_type: "telegram.settings_error",
-        source: "telegram_bot",
-        message: "Failed to load bot settings",
-        telegram_user_id: userId,
-        payload: { error: settingsError?.message, code: settingsError?.code }
-      });
-      
       return new Response(
         JSON.stringify({ error: "Bot not configured" }),
         { status: 400, headers: { "Content-Type": "application/json" } }
@@ -135,19 +83,15 @@ serve(async (req) => {
     }
 
     const botToken = settings.telegram_bot_token;
+    const update: TelegramUpdate = await req.json();
+    
+    console.log("Received update:", JSON.stringify(update));
 
-    // Handle /start command (works with /start, /start@botname, /start payload)
-    if (messageText.startsWith("/start")) {
-      // Log start received
-      await supabaseAdmin.from("system_logs").insert({
-        level: "info",
-        event_type: "telegram.start_received",
-        source: "telegram_bot",
-        message: `Received /start from user ${userId}`,
-        telegram_user_id: userId,
-        payload: { chat_id: chatId, text: messageText }
-      });
-
+    // Handle /start command
+    if (update.message?.text?.startsWith("/start")) {
+      const chatId = update.message.chat.id;
+      const userId = update.message.from.id;
+      
       console.log(`Processing /start command from user ${userId}`);
 
       // Get button URL from settings or use default Mini App URL
@@ -205,27 +149,6 @@ serve(async (req) => {
       }
 
       console.log("Send result:", JSON.stringify(result));
-
-      // Log success or failure
-      if (result.ok) {
-        await supabaseAdmin.from("system_logs").insert({
-          level: "info",
-          event_type: "telegram.start_replied",
-          source: "telegram_bot",
-          message: `Successfully sent welcome message to user ${userId}`,
-          telegram_user_id: userId,
-          payload: { chat_id: chatId, result_ok: result.ok }
-        });
-      } else {
-        await supabaseAdmin.from("system_logs").insert({
-          level: "error",
-          event_type: "telegram.start_failed",
-          source: "telegram_bot",
-          message: `Failed to send welcome message to user ${userId}`,
-          telegram_user_id: userId,
-          payload: { chat_id: chatId, error: result.description }
-        });
-      }
 
       return new Response(
         JSON.stringify({ ok: true }),
