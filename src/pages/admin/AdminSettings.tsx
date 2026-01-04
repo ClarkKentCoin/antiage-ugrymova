@@ -6,9 +6,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Copy, Check } from 'lucide-react';
+import { Loader2, Copy, Check, AlertTriangle, CheckCircle, RefreshCw, Wifi } from 'lucide-react';
 
 interface AdminSettingsData {
   id?: string; // Track the settings row ID for updates
@@ -34,12 +35,37 @@ interface AdminSettingsData {
   notification_subscription_expired: string | null;
 }
 
+interface WebhookDiagnostics {
+  expected_url: string;
+  webhook_info: {
+    url: string | null;
+    pending_update_count: number;
+    last_error_date: number | null;
+    last_error_message: string | null;
+    max_connections: number | null;
+    ip_address: string | null;
+    allowed_updates: string[];
+  } | null;
+  url_match: boolean;
+  env: {
+    has_webhook_secret: boolean;
+    has_supabase_url: boolean;
+    has_service_role_key: boolean;
+  };
+  error?: string;
+  success?: boolean;
+  message?: string;
+}
+
 export default function AdminSettings() {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [copied, setCopied] = useState(false);
   const [copiedBotWebhook, setCopiedBotWebhook] = useState(false);
+  const [isCheckingWebhook, setIsCheckingWebhook] = useState(false);
+  const [isSettingWebhook, setIsSettingWebhook] = useState(false);
+  const [webhookDiagnostics, setWebhookDiagnostics] = useState<WebhookDiagnostics | null>(null);
   const [settings, setSettings] = useState<AdminSettingsData>({
     telegram_bot_token: '',
     telegram_channel_id: '',
@@ -185,6 +211,59 @@ export default function AdminSettings() {
     toast({ title: 'URL для Telegram webhook скопирован' });
   };
 
+  const checkWebhookStatus = async () => {
+    setIsCheckingWebhook(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        toast({ title: 'Требуется авторизация', variant: 'destructive' });
+        return;
+      }
+
+      const { data, error } = await supabase.functions.invoke('telegram-webhook-diagnostics', {
+        body: { action: 'check' },
+      });
+
+      if (error) throw error;
+      setWebhookDiagnostics(data);
+      toast({ title: 'Статус webhook получен' });
+    } catch (error) {
+      console.error('Error checking webhook:', error);
+      toast({ title: 'Ошибка проверки webhook', variant: 'destructive' });
+    } finally {
+      setIsCheckingWebhook(false);
+    }
+  };
+
+  const resetWebhook = async () => {
+    setIsSettingWebhook(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        toast({ title: 'Требуется авторизация', variant: 'destructive' });
+        return;
+      }
+
+      const { data, error } = await supabase.functions.invoke('telegram-webhook-diagnostics', {
+        body: { action: 'set-webhook' },
+      });
+
+      if (error) throw error;
+      setWebhookDiagnostics(data);
+      
+      if (data.success) {
+        toast({ title: 'Webhook успешно установлен' });
+      } else {
+        toast({ title: 'Ошибка установки webhook', description: data.error, variant: 'destructive' });
+      }
+    } catch (error) {
+      console.error('Error setting webhook:', error);
+      toast({ title: 'Ошибка установки webhook', variant: 'destructive' });
+    } finally {
+      setIsSettingWebhook(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <AdminLayout>
@@ -255,6 +334,129 @@ export default function AdminSettings() {
                 />
                 <p className="text-xs text-muted-foreground">ID вашего приватного канала/группы</p>
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Telegram Webhook Diagnostics */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Wifi className="h-5 w-5" />
+                Telegram Webhook Diagnostics
+              </CardTitle>
+              <CardDescription>Проверка и настройка webhook для бота</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex gap-2">
+                <Button 
+                  onClick={checkWebhookStatus} 
+                  disabled={isCheckingWebhook}
+                  variant="outline"
+                >
+                  {isCheckingWebhook && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Check Webhook Status
+                </Button>
+                <Button 
+                  onClick={resetWebhook} 
+                  disabled={isSettingWebhook}
+                  variant="default"
+                >
+                  {isSettingWebhook && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                  Re-set Webhook
+                </Button>
+              </div>
+
+              {webhookDiagnostics && (
+                <div className="space-y-3">
+                  {webhookDiagnostics.error && (
+                    <Alert variant="destructive">
+                      <AlertTriangle className="h-4 w-4" />
+                      <AlertTitle>Error</AlertTitle>
+                      <AlertDescription>{webhookDiagnostics.error}</AlertDescription>
+                    </Alert>
+                  )}
+
+                  {webhookDiagnostics.success && (
+                    <Alert className="border-green-500 bg-green-50 dark:bg-green-950">
+                      <CheckCircle className="h-4 w-4 text-green-600" />
+                      <AlertTitle className="text-green-600">Success</AlertTitle>
+                      <AlertDescription>{webhookDiagnostics.message}</AlertDescription>
+                    </Alert>
+                  )}
+
+                  {webhookDiagnostics.webhook_info && (
+                    <div className="space-y-2 rounded-lg border p-3 text-sm">
+                      <div className="grid grid-cols-[140px_1fr] gap-1">
+                        <span className="text-muted-foreground">Expected URL:</span>
+                        <span className="font-mono text-xs break-all">{webhookDiagnostics.expected_url}</span>
+                      </div>
+                      <div className="grid grid-cols-[140px_1fr] gap-1">
+                        <span className="text-muted-foreground">Actual URL:</span>
+                        <span className="font-mono text-xs break-all">{webhookDiagnostics.webhook_info.url || '(not set)'}</span>
+                      </div>
+                      
+                      {!webhookDiagnostics.url_match && webhookDiagnostics.webhook_info.url && (
+                        <Alert variant="destructive" className="mt-2">
+                          <AlertTriangle className="h-4 w-4" />
+                          <AlertDescription>Webhook points to a different URL!</AlertDescription>
+                        </Alert>
+                      )}
+
+                      <div className="grid grid-cols-[140px_1fr] gap-1">
+                        <span className="text-muted-foreground">Pending updates:</span>
+                        <span>{webhookDiagnostics.webhook_info.pending_update_count}</span>
+                      </div>
+
+                      {webhookDiagnostics.webhook_info.last_error_message && (
+                        <div className="grid grid-cols-[140px_1fr] gap-1 text-destructive">
+                          <span>Last error:</span>
+                          <span>{webhookDiagnostics.webhook_info.last_error_message}</span>
+                        </div>
+                      )}
+
+                      {webhookDiagnostics.webhook_info.last_error_date && (
+                        <div className="grid grid-cols-[140px_1fr] gap-1">
+                          <span className="text-muted-foreground">Error time:</span>
+                          <span>{new Date(webhookDiagnostics.webhook_info.last_error_date * 1000).toLocaleString()}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {webhookDiagnostics.env && (
+                    <div className="rounded-lg border p-3 text-sm">
+                      <p className="font-medium mb-2">Environment Check:</p>
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          {webhookDiagnostics.env.has_webhook_secret ? (
+                            <CheckCircle className="h-4 w-4 text-green-600" />
+                          ) : (
+                            <AlertTriangle className="h-4 w-4 text-destructive" />
+                          )}
+                          <span>TELEGRAM_WEBHOOK_SECRET</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {webhookDiagnostics.env.has_supabase_url ? (
+                            <CheckCircle className="h-4 w-4 text-green-600" />
+                          ) : (
+                            <AlertTriangle className="h-4 w-4 text-destructive" />
+                          )}
+                          <span>SUPABASE_URL</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {webhookDiagnostics.env.has_service_role_key ? (
+                            <CheckCircle className="h-4 w-4 text-green-600" />
+                          ) : (
+                            <AlertTriangle className="h-4 w-4 text-destructive" />
+                          )}
+                          <span>SUPABASE_SERVICE_ROLE_KEY</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </CardContent>
           </Card>
 
