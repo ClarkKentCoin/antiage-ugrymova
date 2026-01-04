@@ -199,16 +199,33 @@ export function useDeleteTier() {
 
   return useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase
+      // First try hard delete
+      const { error: deleteError } = await supabase
         .from('subscription_tiers')
         .delete()
         .eq('id', id);
 
-      if (error) throw error;
+      // If foreign key constraint error, soft delete instead
+      if (deleteError?.code === '23503') {
+        const { error: updateError } = await supabase
+          .from('subscription_tiers')
+          .update({ is_active: false })
+          .eq('id', id);
+
+        if (updateError) throw updateError;
+        return { softDeleted: true };
+      }
+
+      if (deleteError) throw deleteError;
+      return { softDeleted: false };
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['subscription_tiers'] });
-      toast({ title: 'Тариф удалён' });
+      if (result?.softDeleted) {
+        toast({ title: 'Тариф деактивирован', description: 'Тариф связан с платежами и был деактивирован вместо удаления' });
+      } else {
+        toast({ title: 'Тариф удалён' });
+      }
     },
     onError: (error: Error) => {
       toast({ title: 'Ошибка удаления тарифа', description: error.message, variant: 'destructive' });
