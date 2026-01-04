@@ -67,15 +67,35 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     );
 
-    // Get admin settings
+    // Parse the update first to get user info for logging
+    const update: TelegramUpdate = await req.json();
+    const userId = update.message?.from?.id ?? null;
+    const chatId = update.message?.chat?.id ?? null;
+    const messageText = (update.message?.text ?? "").trim();
+    
+    console.log("Received update:", JSON.stringify(update));
+
+    // Get admin settings - use order + limit + single to handle multiple rows gracefully
     const { data: settings, error: settingsError } = await supabaseAdmin
       .from("admin_settings")
       .select("telegram_bot_token, welcome_message_text, welcome_message_image_url, welcome_message_button_text, welcome_message_button_url")
+      .order("created_at", { ascending: false })
       .limit(1)
-      .maybeSingle();
+      .single();
 
     if (settingsError || !settings?.telegram_bot_token) {
       console.error("Settings error:", settingsError);
+      
+      // Log the error for diagnostics
+      await supabaseAdmin.from("system_logs").insert({
+        level: "error",
+        event_type: "telegram.settings_error",
+        source: "telegram_bot",
+        message: "Failed to load bot settings",
+        telegram_user_id: userId,
+        payload: { error: settingsError?.message, code: settingsError?.code }
+      });
+      
       return new Response(
         JSON.stringify({ error: "Bot not configured" }),
         { status: 400, headers: { "Content-Type": "application/json" } }
@@ -83,15 +103,19 @@ serve(async (req) => {
     }
 
     const botToken = settings.telegram_bot_token;
-    const update: TelegramUpdate = await req.json();
-    
-    console.log("Received update:", JSON.stringify(update));
 
-    // Handle /start command
-    if (update.message?.text?.startsWith("/start")) {
-      const chatId = update.message.chat.id;
-      const userId = update.message.from.id;
-      
+    // Handle /start command (works with /start, /start@botname, /start payload)
+    if (messageText.startsWith("/start")) {
+      // Log start received
+      await supabaseAdmin.from("system_logs").insert({
+        level: "info",
+        event_type: "telegram.start_received",
+        source: "telegram_bot",
+        message: `Received /start from user ${userId}`,
+        telegram_user_id: userId,
+        payload: { chat_id: chatId, text: messageText }
+      });
+
       console.log(`Processing /start command from user ${userId}`);
 
       // Get button URL from settings or use default Mini App URL
@@ -149,6 +173,27 @@ serve(async (req) => {
       }
 
       console.log("Send result:", JSON.stringify(result));
+
+      // Log success or failure
+      if (result.ok) {
+        await supabaseAdmin.from("system_logs").insert({
+          level: "info",
+          event_type: "telegram.start_replied",
+          source: "telegram_bot",
+          message: `Successfully sent welcome message to user ${userId}`,
+          telegram_user_id: userId,
+          payload: { chat_id: chatId, result_ok: result.ok }
+        });
+      } else {
+        await supabaseAdmin.from("system_logs").insert({
+          level: "error",
+          event_type: "telegram.start_failed",
+          source: "telegram_bot",
+          message: `Failed to send welcome message to user ${userId}`,
+          telegram_user_id: userId,
+          payload: { chat_id: chatId, error: result.description }
+        });
+      }
 
       return new Response(
         JSON.stringify({ ok: true }),
