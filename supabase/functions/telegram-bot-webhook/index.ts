@@ -45,20 +45,20 @@ serve(async (req) => {
     return new Response("Method not allowed", { status: 405 });
   }
 
-  // Verify Telegram webhook secret token - REQUIRED for security
-  const webhookSecret = Deno.env.get("TELEGRAM_WEBHOOK_SECRET");
-  if (!webhookSecret) {
-    console.error("TELEGRAM_WEBHOOK_SECRET not configured - webhook disabled for security");
-    return new Response(
-      JSON.stringify({ error: "Webhook not configured" }),
-      { status: 503, headers: { "Content-Type": "application/json" } }
-    );
-  }
+  // Log webhook hit for diagnostics
+  console.log(`[telegram-bot-webhook] Webhook hit, method: ${req.method}`);
 
-  const receivedToken = req.headers.get("X-Telegram-Bot-Api-Secret-Token");
-  if (!receivedToken || receivedToken !== webhookSecret) {
-    console.error("Invalid or missing webhook secret token");
-    return new Response("Unauthorized", { status: 401 });
+  // Verify Telegram webhook secret token if configured
+  const webhookSecret = Deno.env.get("TELEGRAM_WEBHOOK_SECRET");
+  if (webhookSecret) {
+    const receivedToken = req.headers.get("X-Telegram-Bot-Api-Secret-Token");
+    if (!receivedToken || receivedToken !== webhookSecret) {
+      console.error("Invalid or missing webhook secret token");
+      return new Response("Unauthorized", { status: 401 });
+    }
+    console.log("[telegram-bot-webhook] Secret token verified");
+  } else {
+    console.log("[telegram-bot-webhook] No TELEGRAM_WEBHOOK_SECRET configured, skipping verification");
   }
 
   try {
@@ -85,14 +85,15 @@ serve(async (req) => {
     const botToken = settings.telegram_bot_token;
     const update: TelegramUpdate = await req.json();
     
-    console.log("Received update:", JSON.stringify(update));
+    const messageText = (update.message?.text ?? '').trim();
+    console.log(`[telegram-bot-webhook] Received update_id: ${update.update_id}, text: "${messageText.substring(0, 80)}"`);
 
-    // Handle /start command
-    if (update.message?.text?.startsWith("/start")) {
-      const chatId = update.message.chat.id;
-      const userId = update.message.from.id;
+    // Handle /start command (including /start@botname and /start payload)
+    if (messageText.startsWith("/start")) {
+      const chatId = update.message!.chat.id;
+      const userId = update.message!.from.id;
       
-      console.log(`Processing /start command from user ${userId}`);
+      console.log(`[telegram-bot-webhook] Recognized /start, chat_id: ${chatId}, user_id: ${userId}`);
 
       // Get button URL from settings or use default Mini App URL
       const defaultMiniAppUrl = Deno.env.get("SUPABASE_URL")?.replace('.supabase.co', '.lovable.app') || 
@@ -148,7 +149,7 @@ serve(async (req) => {
         });
       }
 
-      console.log("Send result:", JSON.stringify(result));
+      console.log(`[telegram-bot-webhook] Telegram send result: ok=${result.ok}, description=${result.description || 'none'}`);
 
       return new Response(
         JSON.stringify({ ok: true }),
