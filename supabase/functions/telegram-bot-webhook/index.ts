@@ -58,7 +58,7 @@ serve(async (req) => {
     }
     console.log("[telegram-bot-webhook] Secret token verified");
   } else {
-    console.log("[telegram-bot-webhook] No TELEGRAM_WEBHOOK_SECRET configured, skipping verification");
+    console.warn("[telegram-bot-webhook] WARNING: No TELEGRAM_WEBHOOK_SECRET configured, accepting request without verification");
   }
 
   try {
@@ -67,10 +67,11 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     );
 
-    // Get admin settings
+    // Get admin settings (order by created_at desc to get the latest)
     const { data: settings, error: settingsError } = await supabaseAdmin
       .from("admin_settings")
       .select("telegram_bot_token, welcome_message_text, welcome_message_image_url, welcome_message_button_text, welcome_message_button_url")
+      .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
 
