@@ -105,8 +105,8 @@ export default function AdminLogs() {
         </div>
 
         {/* Filters */}
-        <div className="flex flex-wrap gap-3">
-          <div className="relative flex-1 min-w-[200px]">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:flex lg:flex-wrap">
+          <div className="relative sm:col-span-2 lg:flex-1 lg:min-w-[200px]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder="Поиск по сообщению, событию, request_id..."
@@ -119,7 +119,7 @@ export default function AdminLogs() {
             />
           </div>
 
-          <div className="min-w-[180px]">
+          <div className="w-full sm:w-auto">
             <Input
               placeholder="Email подписчика..."
               value={filters.email}
@@ -127,6 +127,7 @@ export default function AdminLogs() {
                 setFilters({ ...filters, email: e.target.value });
                 setPage(0);
               }}
+              className="w-full"
             />
           </div>
 
@@ -137,7 +138,7 @@ export default function AdminLogs() {
               setPage(0);
             }}
           >
-            <SelectTrigger className="w-[180px]">
+            <SelectTrigger className="w-full sm:w-[180px]">
               <SelectValue placeholder="Тип события" />
             </SelectTrigger>
             <SelectContent>
@@ -157,7 +158,7 @@ export default function AdminLogs() {
               setPage(0);
             }}
           >
-            <SelectTrigger className="w-[130px]">
+            <SelectTrigger className="w-full sm:w-[130px]">
               <SelectValue placeholder="Уровень" />
             </SelectTrigger>
             <SelectContent>
@@ -177,7 +178,7 @@ export default function AdminLogs() {
               setPage(0);
             }}
           >
-            <SelectTrigger className="w-[160px]">
+            <SelectTrigger className="w-full sm:w-[160px]">
               <SelectValue placeholder="Источник" />
             </SelectTrigger>
             <SelectContent>
@@ -197,7 +198,7 @@ export default function AdminLogs() {
               setPage(0);
             }}
           >
-            <SelectTrigger className="w-[180px]">
+            <SelectTrigger className="w-full sm:w-[180px]">
               <SelectValue placeholder="Период" />
             </SelectTrigger>
             <SelectContent>
@@ -211,8 +212,9 @@ export default function AdminLogs() {
         </div>
 
         {/* Table */}
-        <div className="rounded-lg border border-border bg-card">
-          <Table>
+        <div className="w-full overflow-x-auto rounded-lg border border-border bg-card">
+          <div className="min-w-[800px]">
+            <Table>
             <TableHeader>
               <TableRow>
                 <TableHead className="w-[180px]">Дата/Время</TableHead>
@@ -272,10 +274,11 @@ export default function AdminLogs() {
               )}
             </TableBody>
           </Table>
+          </div>
         </div>
 
         {/* Pagination */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm text-muted-foreground">
             Всего: {data?.totalCount || 0} записей
           </p>
@@ -288,7 +291,7 @@ export default function AdminLogs() {
             >
               <ChevronLeft className="h-4 w-4" />
             </Button>
-            <span className="text-sm">
+            <span className="text-sm whitespace-nowrap">
               {page + 1} / {Math.max(1, totalPages)}
             </span>
             <Button

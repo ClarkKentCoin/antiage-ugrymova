@@ -141,12 +141,12 @@ export default function AdminPayments() {
   return (
     <AdminLayout>
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-2xl font-semibold">Payment History</h1>
             <p className="text-muted-foreground">Все попытки оплаты</p>
           </div>
-          <Button onClick={exportToCSV} variant="outline" disabled={!payments?.length}>
+          <Button onClick={exportToCSV} variant="outline" disabled={!payments?.length} className="w-full sm:w-auto">
             <Download className="h-4 w-4 mr-2" />
             Экспорт CSV
           </Button>
@@ -159,8 +159,9 @@ export default function AdminPayments() {
               variant={statusFilter === tab.value ? 'default' : 'outline'}
               size="sm"
               onClick={() => handleStatusFilterChange(tab.value)}
+              className="flex-1 sm:flex-none"
             >
-              {tab.label}
+              <span className="truncate">{tab.label}</span>
               <Badge variant="secondary" className="ml-2 bg-background/20">
                 {getCountForStatus(tab.value)}
               </Badge>
@@ -168,7 +169,8 @@ export default function AdminPayments() {
           ))}
         </div>
 
-        <div className="rounded-lg border border-border bg-card">
+        <div className="w-full overflow-x-auto rounded-lg border border-border bg-card">
+          <div className="min-w-[700px]">
           <Table>
             <TableHeader>
               <TableRow>
@@ -217,7 +219,7 @@ export default function AdminPayments() {
                       <TableCell className="max-w-[200px] truncate text-muted-foreground">
                         {payment.payment_note || '-'}
                       </TableCell>
-                      <TableCell className="text-right font-medium">
+                      <TableCell className="text-right font-medium whitespace-nowrap">
                         {Number(payment.amount).toLocaleString()}₽
                       </TableCell>
                     </TableRow>
@@ -226,10 +228,11 @@ export default function AdminPayments() {
               )}
             </TableBody>
           </Table>
+          </div>
         </div>
 
         {payments && payments.length > 0 && (
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <span>Показывать по:</span>
               <Select value={pageSize.toString()} onValueChange={handlePageSizeChange}>
