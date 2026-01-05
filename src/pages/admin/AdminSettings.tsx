@@ -37,6 +37,7 @@ export default function AdminSettings() {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isSettingBotWebhook, setIsSettingBotWebhook] = useState(false);
   const [copied, setCopied] = useState(false);
   const [copiedBotWebhook, setCopiedBotWebhook] = useState(false);
   const [settings, setSettings] = useState<AdminSettingsData>({
@@ -74,6 +75,7 @@ export default function AdminSettings() {
       const { data, error } = await supabase
         .from('admin_settings')
         .select('*')
+        .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
 
@@ -183,6 +185,33 @@ export default function AdminSettings() {
     toast({ title: 'URL для Telegram webhook скопирован' });
   };
 
+  const setTelegramBotWebhook = async () => {
+    setIsSettingBotWebhook(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('set-telegram-webhook', {
+        body: {
+          allowed_updates: ['message'],
+        },
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: 'Webhook установлен',
+        description: (data as any)?.description || undefined,
+      });
+    } catch (error) {
+      console.error('Error setting Telegram webhook:', error);
+      toast({
+        title: 'Не удалось установить webhook',
+        description: 'Проверьте Bot Token (сохранён в настройках) и что TELEGRAM_WEBHOOK_SECRET задан.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSettingBotWebhook(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <AdminLayout>
@@ -231,16 +260,40 @@ export default function AdminSettings() {
                     readOnly
                     className="flex-1 text-xs"
                   />
-                  <Button 
-                    type="button" 
-                    variant="outline" 
+                  <Button
+                    type="button"
+                    variant="outline"
                     size="icon"
                     onClick={copyBotWebhookUrl}
                   >
                     {copiedBotWebhook ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
                   </Button>
                 </div>
-                <p className="text-xs text-muted-foreground">Установите этот URL как webhook для бота через @BotFather или API</p>
+                <p className="text-xs text-muted-foreground">
+                  Установите этот URL как webhook для бота через @BotFather или API.
+                </p>
+
+                <div className="pt-2">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={setTelegramBotWebhook}
+                    disabled={isSettingBotWebhook}
+                    className="w-full"
+                  >
+                    {isSettingBotWebhook ? (
+                      <span className="inline-flex items-center gap-2">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Устанавливаю webhook…
+                      </span>
+                    ) : (
+                      'Set Telegram Webhook (with secret_token)'
+                    )}
+                  </Button>
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Кнопка вызовет Telegram API setWebhook с secret_token из backend переменной TELEGRAM_WEBHOOK_SECRET.
+                  </p>
+                </div>
               </div>
 
               <div className="space-y-2">
