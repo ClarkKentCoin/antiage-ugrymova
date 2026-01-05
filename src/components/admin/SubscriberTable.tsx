@@ -109,17 +109,18 @@ export function SubscriberTable({ subscribers }: SubscriberTableProps) {
 
   return (
     <>
-      <div className="rounded-lg border border-border bg-card">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>User</TableHead>
-              <TableHead>Full Name</TableHead>
-              <TableHead>Email</TableHead>
-              <TableHead>Phone</TableHead>
+      <div className="w-full overflow-x-auto rounded-lg border border-border bg-card">
+        <div className="min-w-[900px]">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>User</TableHead>
+                <TableHead className="hidden lg:table-cell">Full Name</TableHead>
+              <TableHead className="hidden xl:table-cell">Email</TableHead>
+              <TableHead className="hidden xl:table-cell">Phone</TableHead>
               <TableHead>Plan</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead>Grace Period</TableHead>
+              <TableHead className="hidden lg:table-cell">Grace Period</TableHead>
               <TableHead>Expires</TableHead>
               <TableHead className="w-[80px]"></TableHead>
             </TableRow>
@@ -127,7 +128,7 @@ export function SubscriberTable({ subscribers }: SubscriberTableProps) {
           <TableBody>
             {subscribers.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={9} className="h-24 text-center text-muted-foreground">
+                <TableCell colSpan={9} className="h-24 text-center text-muted-foreground whitespace-nowrap">
                   No subscribers yet
                 </TableCell>
               </TableRow>
@@ -138,20 +139,20 @@ export function SubscriberTable({ subscribers }: SubscriberTableProps) {
                 return (
                   <TableRow key={subscriber.id}>
                     <TableCell>
-                      <div>
-                        <p className="font-medium">{getDisplayName(subscriber)}</p>
+                      <div className="min-w-[120px]">
+                        <p className="font-medium truncate max-w-[150px]">{getDisplayName(subscriber)}</p>
                         <p className="text-xs text-muted-foreground">
                           ID: {subscriber.telegram_user_id}
                         </p>
                       </div>
                     </TableCell>
-                    <TableCell className="text-muted-foreground">
+                    <TableCell className="text-muted-foreground hidden lg:table-cell">
                       {getFullName(subscriber)}
                     </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {subscriber.email || '-'}
+                    <TableCell className="text-muted-foreground hidden xl:table-cell">
+                      <span className="truncate block max-w-[150px]">{subscriber.email || '-'}</span>
                     </TableCell>
-                    <TableCell className="text-muted-foreground">
+                    <TableCell className="text-muted-foreground hidden xl:table-cell">
                       {subscriber.phone_number || '-'}
                     </TableCell>
                     <TableCell>
@@ -162,7 +163,7 @@ export function SubscriberTable({ subscribers }: SubscriberTableProps) {
                         {subscriber.status === 'grace_period' ? 'Grace Period' : subscriber.status}
                       </Badge>
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="hidden lg:table-cell">
                       {gracePeriodDays !== null ? (
                         <div className="flex items-center gap-1">
                           <span className="text-amber-600 font-medium">{gracePeriodDays}</span>
@@ -254,6 +255,7 @@ export function SubscriberTable({ subscribers }: SubscriberTableProps) {
             )}
           </TableBody>
         </Table>
+        </div>
       </div>
 
       <EditSubscriberDialog
