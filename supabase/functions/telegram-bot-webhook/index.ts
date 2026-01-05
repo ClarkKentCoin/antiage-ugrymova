@@ -46,12 +46,14 @@ serve(async (req) => {
   }
 
   // Log webhook hit for diagnostics
-  console.log(`[telegram-bot-webhook] Webhook hit, method: ${req.method}`);
+  const { pathname } = new URL(req.url);
+  console.log(`[telegram-bot-webhook] Webhook hit, method: ${req.method}, path: ${pathname}`);
 
   // Verify Telegram webhook secret token if configured
   const webhookSecret = Deno.env.get("TELEGRAM_WEBHOOK_SECRET");
   if (webhookSecret) {
     const receivedToken = req.headers.get("X-Telegram-Bot-Api-Secret-Token");
+    console.log(`[telegram-bot-webhook] Secret required, header present: ${Boolean(receivedToken)}`);
     if (!receivedToken || receivedToken !== webhookSecret) {
       console.error("Invalid or missing webhook secret token");
       return new Response("Unauthorized", { status: 401 });
