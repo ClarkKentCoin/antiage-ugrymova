@@ -16,7 +16,7 @@ interface TelegramResponse {
 function replaceVariables(template: string, variables: Record<string, string>): string {
   let result = template;
   for (const [key, value] of Object.entries(variables)) {
-    result = result.replace(new RegExp(`\\{${key}\\}`, 'g'), value);
+    result = result.replace(new RegExp(`\\{${key}\\}`, "g"), value);
   }
   return result;
 }
@@ -33,17 +33,21 @@ const DEFAULT_SUBSCRIPTION_EXPIRED = `❗ Подписка завершена
 
 Ваша подписка на канал "{channel_name}" завершена, и вы были удалены из канала.
 
-Чтобы вернуть доступ и историю сообщений, оформите новую подписку.`;
+Чтобы вернуть доступ, оформите новую подписку.`;
 
-async function callTelegramApi(botToken: string, method: string, params: Record<string, any> = {}): Promise<TelegramResponse> {
+async function callTelegramApi(
+  botToken: string,
+  method: string,
+  params: Record<string, any> = {},
+): Promise<TelegramResponse> {
   const url = `https://api.telegram.org/bot${botToken}/${method}`;
-  
+
   const response = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(params),
   });
-  
+
   return response.json();
 }
 
@@ -56,49 +60,51 @@ serve(async (req) => {
   const authHeader = req.headers.get("Authorization");
   const expectedSecret = Deno.env.get("SCHEDULED_TASK_SECRET");
   // Hardcode anon key for cron job compatibility
-  const anonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InptZXdmaG5heWNqdXZwanhraWluIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjY0MTcwNDUsImV4cCI6MjA4MTk5MzA0NX0.y4GssGSn_PIMg8CgoYU2fSyujoAA8VV07I8PKDfipRo";
-  
+  const anonKey =
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InptZXdmaG5heWNqdXZwanhraWluIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjY0MTcwNDUsImV4cCI6MjA4MTk5MzA0NX0.y4GssGSn_PIMg8CgoYU2fSyujoAA8VV07I8PKDfipRo";
+
   const bearerToken = authHeader?.replace("Bearer ", "");
   const isValidSecret = bearerToken === expectedSecret;
   const isValidAnonKey = bearerToken === anonKey;
-  
+
   if (!authHeader || (!isValidSecret && !isValidAnonKey)) {
     console.error("Unauthorized scheduled task execution attempt");
-    return new Response(
-      JSON.stringify({ error: "Unauthorized" }),
-      { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 
   try {
     console.log("Starting check-expired-subscriptions function");
-    
+
     const supabaseAdmin = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
     );
 
     // Get admin settings including notification templates
     const { data: settings, error: settingsError } = await supabaseAdmin
       .from("admin_settings")
-      .select("telegram_bot_token, telegram_channel_id, grace_period_days, channel_name, notification_grace_period_warning, notification_subscription_expired")
+      .select(
+        "telegram_bot_token, telegram_channel_id, grace_period_days, channel_name, notification_grace_period_warning, notification_subscription_expired",
+      )
       .limit(1)
       .maybeSingle();
 
     if (settingsError) {
       console.error("Settings error:", settingsError);
-      return new Response(
-        JSON.stringify({ error: "Failed to load settings" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ error: "Failed to load settings" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     if (!settings?.telegram_bot_token || !settings?.telegram_channel_id) {
       console.log("Telegram bot not configured, skipping");
-      return new Response(
-        JSON.stringify({ message: "Telegram bot not configured" }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ message: "Telegram bot not configured" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const gracePeriodDays = settings.grace_period_days || 0;
@@ -106,7 +112,7 @@ serve(async (req) => {
     const gracePeriodWarningTemplate = settings.notification_grace_period_warning || DEFAULT_GRACE_PERIOD_WARNING;
     const subscriptionExpiredTemplate = settings.notification_subscription_expired || DEFAULT_SUBSCRIPTION_EXPIRED;
     const now = new Date();
-    
+
     console.log(`Grace period: ${gracePeriodDays} days`);
 
     // Find all active subscriptions where subscription_end has passed
@@ -118,10 +124,10 @@ serve(async (req) => {
 
     if (subscribersError) {
       console.error("Error fetching expired subscribers:", subscribersError);
-      return new Response(
-        JSON.stringify({ error: "Failed to fetch subscribers" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ error: "Failed to fetch subscribers" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     console.log(`Found ${expiredSubscribers?.length || 0} expired active subscriptions`);
@@ -158,13 +164,13 @@ serve(async (req) => {
         if (now >= graceEndDate) {
           // Grace period has ended or no grace period - ban user permanently
           console.log(`[check-expired] Banning user ${subscriber.telegram_user_id} - grace period ended`);
-          
+
           // Conditional update: only proceed if status is still "active"
           const { data: updated, error: updateError } = await supabaseAdmin
             .from("subscribers")
-            .update({ 
-              status: "expired", 
-              is_in_channel: false 
+            .update({
+              status: "expired",
+              is_in_channel: false,
             })
             .eq("id", subscriber.id)
             .eq("status", "active")
@@ -192,18 +198,18 @@ serve(async (req) => {
 
           if (banResult.ok) {
             console.log(`[check-expired] User ${subscriber.telegram_user_id} banned and remains banned`);
-            
+
             // Send subscription expired notification
             const expiredMessage = replaceVariables(subscriptionExpiredTemplate, {
               channel_name: channelName,
             });
-            
+
             await callTelegramApi(botToken, "sendMessage", {
               chat_id: subscriber.telegram_user_id,
               text: expiredMessage,
               parse_mode: "HTML",
             });
-            
+
             results.kicked++;
           } else {
             console.error(`[check-expired] Failed to ban user ${subscriber.telegram_user_id}:`, banResult.description);
@@ -212,14 +218,14 @@ serve(async (req) => {
         } else {
           // Move to grace period - conditional update to prevent duplicates
           console.log(`[check-expired] Attempting to move user ${subscriber.telegram_user_id} to grace period`);
-          
+
           const { data: updated, error: updateError } = await supabaseAdmin
             .from("subscribers")
             .update({ status: "grace_period" })
             .eq("id", subscriber.id)
             .eq("status", "active")
             .select("id");
-          
+
           if (updateError) {
             console.error(`[check-expired] Failed to update status for ${subscriber.id}:`, updateError);
             results.errors++;
@@ -230,22 +236,22 @@ serve(async (req) => {
             console.log(`[check-expired] duplicate skipped (already moved) for ${subscriber.telegram_user_id}`);
             continue;
           }
-          
+
           console.log(`[check-expired] moved to grace: ${subscriber.telegram_user_id}`);
-          
+
           // Send grace period warning notification
           const daysLeft = Math.ceil((graceEndDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
           const warningMessage = replaceVariables(gracePeriodWarningTemplate, {
             channel_name: channelName,
             days: String(daysLeft),
           });
-          
+
           await callTelegramApi(botToken, "sendMessage", {
             chat_id: subscriber.telegram_user_id,
             text: warningMessage,
             parse_mode: "HTML",
           });
-          
+
           results.moved_to_grace_period++;
         }
       } catch (error) {
@@ -264,13 +270,13 @@ serve(async (req) => {
         if (now >= graceEndDate) {
           // Grace period has ended - ban user permanently
           console.log(`[check-expired] Grace period ended for user ${subscriber.telegram_user_id}`);
-          
+
           // Conditional update: only proceed if status is still "grace_period"
           const { data: updated, error: updateError } = await supabaseAdmin
             .from("subscribers")
-            .update({ 
-              status: "expired", 
-              is_in_channel: false 
+            .update({
+              status: "expired",
+              is_in_channel: false,
             })
             .eq("id", subscriber.id)
             .eq("status", "grace_period")
@@ -298,18 +304,18 @@ serve(async (req) => {
 
           if (banResult.ok) {
             console.log(`[check-expired] User ${subscriber.telegram_user_id} banned and remains banned`);
-            
+
             // Send subscription expired notification
             const expiredMessage = replaceVariables(subscriptionExpiredTemplate, {
               channel_name: channelName,
             });
-            
+
             await callTelegramApi(botToken, "sendMessage", {
               chat_id: subscriber.telegram_user_id,
               text: expiredMessage,
               parse_mode: "HTML",
             });
-            
+
             results.kicked++;
           } else {
             console.error(`[check-expired] Failed to ban user ${subscriber.telegram_user_id}:`, banResult.description);
@@ -325,20 +331,19 @@ serve(async (req) => {
     console.log("Check expired subscriptions completed:", results);
 
     return new Response(
-      JSON.stringify({ 
-        success: true, 
+      JSON.stringify({
+        success: true,
         results,
-        message: `Processed: ${results.moved_to_grace_period} moved to grace period, ${results.kicked} kicked, ${results.errors} errors`
+        message: `Processed: ${results.moved_to_grace_period} moved to grace period, ${results.kicked} kicked, ${results.errors} errors`,
       }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
-
   } catch (error) {
     console.error("Error:", error);
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
-    return new Response(
-      JSON.stringify({ error: errorMessage }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    return new Response(JSON.stringify({ error: errorMessage }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 });
