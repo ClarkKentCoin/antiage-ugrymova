@@ -212,9 +212,8 @@ export default function AdminLogs() {
         </div>
 
         {/* Table */}
-        <div className="w-full overflow-x-auto rounded-lg border border-border bg-card">
-          <div className="min-w-[800px]">
-            <Table>
+        <div className="overflow-x-auto rounded-lg border border-border bg-card">
+          <Table className="min-w-[800px]">
             <TableHeader>
               <TableRow>
                 <TableHead className="w-[180px]">Дата/Время</TableHead>
@@ -274,7 +273,6 @@ export default function AdminLogs() {
               )}
             </TableBody>
           </Table>
-          </div>
         </div>
 
         {/* Pagination */}

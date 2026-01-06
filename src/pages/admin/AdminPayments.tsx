@@ -169,9 +169,8 @@ export default function AdminPayments() {
           ))}
         </div>
 
-        <div className="w-full overflow-x-auto rounded-lg border border-border bg-card">
-          <div className="min-w-[700px]">
-          <Table>
+        <div className="overflow-x-auto rounded-lg border border-border bg-card">
+          <Table className="min-w-[700px]">
             <TableHeader>
               <TableRow>
                 <TableHead>Дата</TableHead>
@@ -228,7 +227,6 @@ export default function AdminPayments() {
               )}
             </TableBody>
           </Table>
-          </div>
         </div>
 
         {payments && payments.length > 0 && (
