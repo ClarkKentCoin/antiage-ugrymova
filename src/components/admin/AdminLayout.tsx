@@ -106,8 +106,8 @@ export function AdminLayout({ children }: AdminLayoutProps) {
       </aside>
 
       {/* Main content */}
-      <main className="min-h-screen pt-14 md:ml-64 md:pt-0">
-        <div className="container px-4 py-6 md:px-6 md:py-8">
+      <main className="min-h-screen pt-14 md:ml-64 md:pt-0 overflow-x-hidden">
+        <div className="w-full max-w-full px-4 py-6 md:px-6 md:py-8">
           {children}
         </div>
       </main>
