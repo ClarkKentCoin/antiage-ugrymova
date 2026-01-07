@@ -18,6 +18,7 @@ export interface PaymentRecord {
     telegram_username: string | null;
     first_name: string | null;
     last_name: string | null;
+    email: string | null;
   };
   subscription_tiers?: {
     name: string;
@@ -49,7 +50,8 @@ export function usePaymentHistory(options: UsePaymentHistoryOptions = {}) {
           subscribers (
             telegram_username,
             first_name,
-            last_name
+            last_name,
+            email
           ),
           subscription_tiers (
             name

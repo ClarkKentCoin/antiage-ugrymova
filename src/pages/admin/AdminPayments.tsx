@@ -95,12 +95,13 @@ export default function AdminPayments() {
   const exportToCSV = () => {
     if (!payments || payments.length === 0) return;
 
-    const headers = ['Дата', 'Подписчик', 'Тариф', 'Статус', 'Метод', 'Примечание', 'Сумма'];
+    const headers = ['Дата', 'Подписчик', 'Email', 'Тариф', 'Статус', 'Метод', 'Примечание', 'Сумма'];
     const rows = payments.map(payment => [
       format(new Date(payment.created_at), 'dd.MM.yyyy HH:mm'),
       payment.subscribers?.telegram_username 
         ? `@${payment.subscribers.telegram_username}`
         : payment.subscribers?.first_name || 'Неизвестно',
+      payment.subscribers?.email || '-',
       payment.subscription_tiers?.name || '-',
       statusConfig[payment.status]?.label || payment.status,
       paymentMethodLabels[payment.payment_method] || payment.payment_method,
@@ -170,11 +171,12 @@ export default function AdminPayments() {
         </div>
 
         <div className="overflow-x-auto rounded-lg border border-border bg-card">
-          <Table className="min-w-[700px]">
+          <Table className="min-w-[800px]">
             <TableHeader>
               <TableRow>
                 <TableHead>Дата</TableHead>
                 <TableHead>Подписчик</TableHead>
+                <TableHead className="hidden lg:table-cell">Email</TableHead>
                 <TableHead>Тариф</TableHead>
                 <TableHead>Статус</TableHead>
                 <TableHead>Метод</TableHead>
@@ -185,7 +187,7 @@ export default function AdminPayments() {
             <TableBody>
               {paginatedPayments.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
+                  <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
                     Платежей не найдено
                   </TableCell>
                 </TableRow>
@@ -198,9 +200,21 @@ export default function AdminPayments() {
                         {format(new Date(payment.created_at), 'dd.MM.yyyy HH:mm')}
                       </TableCell>
                       <TableCell>
-                        {payment.subscribers?.telegram_username 
-                          ? `@${payment.subscribers.telegram_username}`
-                          : payment.subscribers?.first_name || 'Неизвестно'}
+                        <div>
+                          <p>
+                            {payment.subscribers?.telegram_username 
+                              ? `@${payment.subscribers.telegram_username}`
+                              : payment.subscribers?.first_name || 'Неизвестно'}
+                          </p>
+                          <p className="text-xs text-muted-foreground truncate max-w-[150px] lg:hidden">
+                            {payment.subscribers?.email || '-'}
+                          </p>
+                        </div>
+                      </TableCell>
+                      <TableCell className="hidden lg:table-cell">
+                        <span className="truncate block max-w-[180px] text-muted-foreground">
+                          {payment.subscribers?.email || '-'}
+                        </span>
                       </TableCell>
                       <TableCell>
                         {payment.subscription_tiers?.name || '-'}

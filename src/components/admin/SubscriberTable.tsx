@@ -113,11 +113,11 @@ export function SubscriberTable({ subscribers }: SubscriberTableProps) {
         <div className="min-w-[900px]">
           <Table>
             <TableHeader>
-              <TableRow>
+            <TableRow>
                 <TableHead>User</TableHead>
                 <TableHead className="hidden lg:table-cell">Full Name</TableHead>
-              <TableHead className="hidden xl:table-cell">Email</TableHead>
-              <TableHead className="hidden xl:table-cell">Phone</TableHead>
+                <TableHead className="hidden lg:table-cell">Email</TableHead>
+                <TableHead className="hidden xl:table-cell">Phone</TableHead>
               <TableHead>Plan</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="hidden lg:table-cell">Grace Period</TableHead>
@@ -144,13 +144,16 @@ export function SubscriberTable({ subscribers }: SubscriberTableProps) {
                         <p className="text-xs text-muted-foreground">
                           ID: {subscriber.telegram_user_id}
                         </p>
+                        <p className="text-xs text-muted-foreground truncate max-w-[150px] lg:hidden">
+                          {subscriber.email || '-'}
+                        </p>
                       </div>
                     </TableCell>
                     <TableCell className="text-muted-foreground hidden lg:table-cell">
                       {getFullName(subscriber)}
                     </TableCell>
-                    <TableCell className="text-muted-foreground hidden xl:table-cell">
-                      <span className="truncate block max-w-[150px]">{subscriber.email || '-'}</span>
+                    <TableCell className="text-muted-foreground hidden lg:table-cell">
+                      <span className="truncate block max-w-[180px]">{subscriber.email || '-'}</span>
                     </TableCell>
                     <TableCell className="text-muted-foreground hidden xl:table-cell">
                       {subscriber.phone_number || '-'}
