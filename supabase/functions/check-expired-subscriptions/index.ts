@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { sendAdminNotification } from "../_shared/adminNotifications.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -118,7 +119,12 @@ serve(async (req) => {
     // Find all active subscriptions where subscription_end has passed
     const { data: expiredSubscribers, error: subscribersError } = await supabaseAdmin
       .from("subscribers")
-      .select("*")
+      .select(`
+        *,
+        subscription_tiers (
+          name
+        )
+      `)
       .eq("status", "active")
       .lt("subscription_end", now.toISOString());
 
@@ -135,7 +141,12 @@ serve(async (req) => {
     // Also find grace_period subscribers to check if grace period has ended
     const { data: gracePeriodSubscribers, error: graceError } = await supabaseAdmin
       .from("subscribers")
-      .select("*")
+      .select(`
+        *,
+        subscription_tiers (
+          name
+        )
+      `)
       .eq("status", "grace_period");
 
     if (graceError) {
@@ -210,6 +221,26 @@ serve(async (req) => {
               parse_mode: "HTML",
             });
 
+            // Send admin notification for subscription ended (no grace period case)
+            const tier = subscriber.subscription_tiers;
+            await sendAdminNotification({
+              supabaseAdmin,
+              eventType: "SUBSCRIPTION_ENDED",
+              subscriber: {
+                id: subscriber.id ?? null,
+                name: [subscriber.first_name, subscriber.last_name].filter(Boolean).join(" ") || null,
+                username: subscriber.telegram_username ?? null,
+                telegram_user_id: subscriber.telegram_user_id ?? null,
+                email: subscriber.email ?? null,
+              },
+              plan: tier?.name ?? null,
+              status: "expired",
+              subscriptionEndISO: subscriber.subscription_end ?? null,
+              graceEndISO: graceEndDate.toISOString(),
+              relatedAtISO: graceEndDate.toISOString(),
+              source: "check-expired-subscriptions",
+            });
+
             results.kicked++;
           } else {
             console.error(`[check-expired] Failed to ban user ${subscriber.telegram_user_id}:`, banResult.description);
@@ -250,6 +281,26 @@ serve(async (req) => {
             chat_id: subscriber.telegram_user_id,
             text: warningMessage,
             parse_mode: "HTML",
+          });
+
+          // Send admin notification for grace period started
+          const tier = subscriber.subscription_tiers;
+          await sendAdminNotification({
+            supabaseAdmin,
+            eventType: "GRACE_STARTED",
+            subscriber: {
+              id: subscriber.id ?? null,
+              name: [subscriber.first_name, subscriber.last_name].filter(Boolean).join(" ") || null,
+              username: subscriber.telegram_username ?? null,
+              telegram_user_id: subscriber.telegram_user_id ?? null,
+              email: subscriber.email ?? null,
+            },
+            plan: tier?.name ?? null,
+            status: "grace_period",
+            subscriptionEndISO: subscriber.subscription_end ?? null,
+            graceEndISO: graceEndDate.toISOString(),
+            relatedAtISO: graceEndDate.toISOString(),
+            source: "check-expired-subscriptions",
           });
 
           results.moved_to_grace_period++;
@@ -314,6 +365,26 @@ serve(async (req) => {
               chat_id: subscriber.telegram_user_id,
               text: expiredMessage,
               parse_mode: "HTML",
+            });
+
+            // Send admin notification for grace period ended
+            const tier = subscriber.subscription_tiers;
+            await sendAdminNotification({
+              supabaseAdmin,
+              eventType: "GRACE_ENDED",
+              subscriber: {
+                id: subscriber.id ?? null,
+                name: [subscriber.first_name, subscriber.last_name].filter(Boolean).join(" ") || null,
+                username: subscriber.telegram_username ?? null,
+                telegram_user_id: subscriber.telegram_user_id ?? null,
+                email: subscriber.email ?? null,
+              },
+              plan: tier?.name ?? null,
+              status: "expired",
+              subscriptionEndISO: subscriber.subscription_end ?? null,
+              graceEndISO: graceEndDate.toISOString(),
+              relatedAtISO: graceEndDate.toISOString(),
+              source: "check-expired-subscriptions",
             });
 
             results.kicked++;
