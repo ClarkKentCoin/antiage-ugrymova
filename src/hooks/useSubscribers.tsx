@@ -70,13 +70,18 @@ export function useSubscribers() {
 }
 
 export function useSubscriber(telegramUserId: number | null, initData?: string | null) {
+  // For Telegram MiniApp mode, we need valid initData before making the request
+  // initData must be a non-empty string for the edge function to validate
+  const hasValidInitData = typeof initData === 'string' && initData.length > 0;
+  const isTelegramMode = initData !== undefined; // initData was explicitly passed (even if null/empty)
+  
   return useQuery({
-    queryKey: ['subscriber', telegramUserId, initData ? 'telegram' : 'direct'],
+    queryKey: ['subscriber', telegramUserId, hasValidInitData ? 'telegram' : 'direct'],
     queryFn: async () => {
       if (telegramUserId == null) return null;
 
       // In Telegram Mini App we use a backend function that validates initData
-      if (initData) {
+      if (hasValidInitData) {
         const { data, error } = await supabase.functions.invoke('get-subscriber-status', {
           body: {
             telegram_user_id: telegramUserId,
@@ -124,12 +129,16 @@ export function useSubscriber(telegramUserId: number | null, initData?: string |
       if (error) throw error;
       return data as Subscriber | null;
     },
-    enabled: telegramUserId != null,
+    // Only enable when:
+    // 1. We have a telegramUserId AND
+    // 2. Either we're NOT in Telegram mode (test mode), OR we have valid initData
+    enabled: telegramUserId != null && (!isTelegramMode || hasValidInitData),
     staleTime: 0,
     gcTime: 0,
     refetchOnMount: true,
     refetchOnWindowFocus: false,
-    retry: false, // Don't retry on error - if initData is invalid, retrying won't help
+    retry: 1, // Allow one retry in case of transient errors
+    retryDelay: 500,
   });
 }
 

@@ -44,10 +44,13 @@ export function usePaymentHistoryForUser(
   telegramUserId: number | null | undefined,
   initData: string | null | undefined
 ) {
+  // Ensure initData is a non-empty string before making the request
+  const hasValidInitData = typeof initData === 'string' && initData.length > 0;
+  
   return useQuery({
-    queryKey: ['payment_history_user', telegramUserId],
+    queryKey: ['payment_history_user', telegramUserId, hasValidInitData],
     queryFn: async () => {
-      if (!telegramUserId || !initData) {
+      if (!telegramUserId || !hasValidInitData) {
         return [];
       }
 
@@ -62,7 +65,9 @@ export function usePaymentHistoryForUser(
 
       return (data?.payments ?? []) as PaymentRecord[];
     },
-    enabled: !!telegramUserId && !!initData,
+    enabled: !!telegramUserId && hasValidInitData,
+    retry: 1,
+    retryDelay: 500,
   });
 }
 
