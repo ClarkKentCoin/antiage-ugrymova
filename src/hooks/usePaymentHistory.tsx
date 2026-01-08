@@ -6,14 +6,15 @@ export type PaymentStatus = 'pending' | 'completed' | 'failed';
 
 export interface PaymentRecord {
   id: string;
-  subscriber_id: string;
-  tier_id: string | null;
+  subscriber_id?: string;
+  tier_id?: string | null;
   amount: number;
   payment_method: string;
   payment_note: string | null;
-  payment_date: string;
+  payment_date?: string;
   created_at: string;
   status: PaymentStatus;
+  invoice_id?: string | null;
   subscribers?: {
     telegram_username: string | null;
     first_name: string | null;
@@ -38,6 +39,34 @@ export interface UsePaymentHistoryOptions {
   status?: PaymentStatus | null;
 }
 
+// Hook for MiniApp - fetches via edge function with init_data validation
+export function usePaymentHistoryForUser(
+  telegramUserId: number | null | undefined,
+  initData: string | null | undefined
+) {
+  return useQuery({
+    queryKey: ['payment_history_user', telegramUserId],
+    queryFn: async () => {
+      if (!telegramUserId || !initData) {
+        return [];
+      }
+
+      const { data, error } = await supabase.functions.invoke('get-payment-history', {
+        body: { telegram_user_id: telegramUserId, init_data: initData },
+      });
+
+      if (error) {
+        console.error('get-payment-history error:', error);
+        return [];
+      }
+
+      return (data?.payments ?? []) as PaymentRecord[];
+    },
+    enabled: !!telegramUserId && !!initData,
+  });
+}
+
+// Hook for admin panel - direct DB query (requires admin RLS)
 export function usePaymentHistory(options: UsePaymentHistoryOptions = {}) {
   const { subscriberId, status } = options;
   return useQuery({
