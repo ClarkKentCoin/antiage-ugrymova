@@ -31,6 +31,9 @@ interface AdminSettingsData {
   notification_payment_failed: string | null;
   notification_grace_period_warning: string | null;
   notification_subscription_expired: string | null;
+  // Admin notifications
+  telegram_admin_notifications_enabled: boolean;
+  telegram_admin_notifications_channel_id: string;
 }
 
 export default function AdminSettings() {
@@ -60,6 +63,8 @@ export default function AdminSettings() {
     notification_payment_failed: '',
     notification_grace_period_warning: '',
     notification_subscription_expired: '',
+    telegram_admin_notifications_enabled: false,
+    telegram_admin_notifications_channel_id: '',
   });
 
   // Generate default webhook URLs
@@ -102,6 +107,8 @@ export default function AdminSettings() {
           notification_payment_failed: (data as any).notification_payment_failed || '',
           notification_grace_period_warning: (data as any).notification_grace_period_warning || '',
           notification_subscription_expired: (data as any).notification_subscription_expired || '',
+          telegram_admin_notifications_enabled: (data as any).telegram_admin_notifications_enabled ?? false,
+          telegram_admin_notifications_channel_id: (data as any).telegram_admin_notifications_channel_id || '',
         });
       }
     } catch (error) {
@@ -141,6 +148,8 @@ export default function AdminSettings() {
         notification_payment_failed: settings.notification_payment_failed || null,
         notification_grace_period_warning: settings.notification_grace_period_warning || null,
         notification_subscription_expired: settings.notification_subscription_expired || null,
+        telegram_admin_notifications_enabled: settings.telegram_admin_notifications_enabled,
+        telegram_admin_notifications_channel_id: settings.telegram_admin_notifications_channel_id || null,
       };
 
       let error;
@@ -305,6 +314,41 @@ export default function AdminSettings() {
                   onChange={(e) => setSettings({ ...settings, telegram_channel_id: e.target.value })}
                 />
                 <p className="text-xs text-muted-foreground">ID вашего приватного канала/группы</p>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Admin Notifications */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Уведомления администратора в Telegram</CardTitle>
+              <CardDescription>Уведомления о платежах и изменениях подписок для администратора</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between rounded-lg border p-3">
+                <div className="space-y-0.5">
+                  <Label>Включить уведомления администратору</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Получать уведомления о платежах, окончании подписок и т.д.
+                  </p>
+                </div>
+                <Switch
+                  checked={settings.telegram_admin_notifications_enabled}
+                  onCheckedChange={(checked) => setSettings({ ...settings, telegram_admin_notifications_enabled: checked })}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="admin_channel_id">Telegram канал для уведомлений</Label>
+                <Input
+                  id="admin_channel_id"
+                  placeholder="-1001234567890"
+                  value={settings.telegram_admin_notifications_channel_id}
+                  onChange={(e) => setSettings({ ...settings, telegram_admin_notifications_channel_id: e.target.value })}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Бот должен быть администратором в этом канале
+                </p>
               </div>
             </CardContent>
           </Card>
