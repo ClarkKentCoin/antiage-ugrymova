@@ -1003,8 +1003,10 @@ function SubscriptionContent({
               <Clock className="h-5 w-5 text-muted-foreground" />
               <div>
                 <p className="text-sm font-medium">
-                  {daysRemaining !== null && daysRemaining > 0 
-                    ? `Осталось ${daysRemaining} дней`
+                  {new Date(subscriber.subscription_end).getTime() > Date.now()
+                    ? (daysRemaining !== null && daysRemaining > 0 
+                        ? `Осталось ${daysRemaining} дней`
+                        : 'Осталось меньше дня')
                     : 'Подписка истекла'
                   }
                 </p>

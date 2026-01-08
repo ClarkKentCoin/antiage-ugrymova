@@ -17,6 +17,7 @@ export interface Subscriber {
   is_in_channel: boolean;
   auto_renewal?: boolean;
   auto_renewal_consent_date?: string | null;
+  subscriber_payment_method?: string | null;
   created_at: string;
   updated_at: string;
   subscription_tiers?: {
