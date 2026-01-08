@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { DateTime } from "https://esm.sh/luxon@3.4.4";
+import { sendAdminNotification } from "../_shared/adminNotifications.ts";
 
 // SHA256 hash function (Robokassa signatures)
 async function sha256(message: string): Promise<string> {
@@ -350,10 +351,39 @@ serve(async (req) => {
               subscription_end: newEndISO,
               fee: fee || null,
             },
-          });
+            });
         } catch (logError) {
           console.warn("Failed to log payment.succeeded event:", logError);
         }
+
+        // Send admin notification (safe, never throws)
+        // Fetch full subscriber data for notification
+        const { data: fullSubscriber } = await supabaseAdmin
+          .from("subscribers")
+          .select("id, first_name, last_name, telegram_username, telegram_user_id, email, status")
+          .eq("id", shpSubscriberId)
+          .maybeSingle();
+
+        await sendAdminNotification({
+          supabaseAdmin,
+          eventType: "PAYMENT_SUCCESS",
+          subscriber: {
+            id: fullSubscriber?.id ?? shpSubscriberId,
+            name: [fullSubscriber?.first_name, fullSubscriber?.last_name].filter(Boolean).join(" ") || null,
+            username: fullSubscriber?.telegram_username ?? null,
+            telegram_user_id: fullSubscriber?.telegram_user_id ?? shpTelegramUserId ?? null,
+            email: fullSubscriber?.email ?? email ?? null,
+          },
+          plan: tier.name ?? null,
+          status: fullSubscriber?.status ?? "active",
+          method: payment.payment_method ?? "robokassa",
+          amount: outSum ?? null,
+          subscriptionEndISO: newEndISO ?? null,
+          note: payment.payment_note ?? null,
+          paymentId: payment.id ?? null,
+          relatedAtISO: newEndISO ?? null,
+          source: "robokassa-webhook",
+        });
       }
     } else {
       // No pending payment found - create a completed one
