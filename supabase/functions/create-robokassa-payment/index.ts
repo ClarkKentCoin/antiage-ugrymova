@@ -217,9 +217,9 @@ serve(async (req) => {
       );
     }
 
-    // If recurring, save consent
+    // Update auto_renewal based on payment type
     if (is_recurring) {
-      // Log consent
+      // Log consent for recurring payments
       const { error: consentError } = await supabaseAdmin
         .from("subscription_consent_log")
         .insert({
@@ -247,6 +247,20 @@ serve(async (req) => {
 
       if (updateError) {
         console.error("Failed to update subscriber consent date:", updateError);
+      }
+    } else {
+      // For single payments, explicitly disable auto_renewal
+      const { error: updateError } = await supabaseAdmin
+        .from("subscribers")
+        .update({
+          auto_renewal: false,
+        })
+        .eq("id", resolvedSubscriberId);
+
+      if (updateError) {
+        console.error("Failed to disable auto_renewal for single payment:", updateError);
+      } else {
+        console.log(`Disabled auto_renewal for single payment: subscriber ${resolvedSubscriberId}`);
       }
     }
 

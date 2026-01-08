@@ -304,17 +304,23 @@ serve(async (req) => {
         );
 
         // Activate subscription - only set subscription_start if it's currently null
+        // Also set auto_renewal based on payment method
+        const isRecurringPayment = payment.payment_method === "robokassa_recurring";
+        
         const updateData: Record<string, any> = {
           status: "active",
           tier_id: payment.tier_id,
           subscription_end: newEndISO,
           subscriber_payment_method: payment.payment_method,
+          auto_renewal: isRecurringPayment,
         };
         
         // Only set subscription_start on first activation, not on renewals
         if (!currentStartISO) {
           updateData.subscription_start = nowISO;
         }
+        
+        console.log(`[robokassa-webhook] Setting auto_renewal=${isRecurringPayment} for payment_method=${payment.payment_method}`);
 
         const { error: activateError } = await supabaseAdmin
           .from("subscribers")

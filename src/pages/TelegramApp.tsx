@@ -1227,9 +1227,10 @@ function SubscriptionContent({
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Способ оплаты</span>
                 <span>{
-                  subscriber.subscriber_payment_method === 'robokassa_recurring' ? 'Robokassa (рекурр.)' :
+                  subscriber.subscriber_payment_method === 'robokassa_recurring' ? 'Robokassa (авто)' :
                   subscriber.subscriber_payment_method === 'robokassa_single' ? 'Robokassa' :
-                  'Вручную'
+                  subscriber.subscriber_payment_method === 'manual' ? 'Вручную' :
+                  '—'
                 }</span>
               </div>
               <div className="flex justify-between">
