@@ -126,9 +126,14 @@ export function useSubscriptionTiers() {
   });
 }
 
-export function useActiveTiers() {
+// Admin-only tier name (hidden from MiniApp by default)
+const ADMIN_ONLY_TIER_NAME = 'добавлен админом';
+
+export function useActiveTiers(options?: { includeAdminOnly?: boolean }) {
+  const includeAdminOnly = options?.includeAdminOnly ?? false;
+  
   return useQuery({
-    queryKey: ['subscription_tiers', 'active'],
+    queryKey: ['subscription_tiers', 'active', { includeAdminOnly }],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('subscription_tiers')
@@ -137,7 +142,15 @@ export function useActiveTiers() {
         .order('price', { ascending: true });
       
       if (error) throw error;
-      return data as SubscriptionTier[];
+      
+      let tiers = data as SubscriptionTier[];
+      
+      // Filter out admin-only tiers for MiniApp
+      if (!includeAdminOnly) {
+        tiers = tiers.filter(t => t.name.toLowerCase() !== ADMIN_ONLY_TIER_NAME);
+      }
+      
+      return tiers;
     },
   });
 }
