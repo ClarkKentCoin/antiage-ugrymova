@@ -161,7 +161,7 @@ serve(async (req) => {
     // Fetch payment history
     const { data: payments, error: payError } = await supabaseAdmin
       .from("payment_history")
-      .select("id, created_at, amount, status, payment_method, invoice_id, payment_note")
+      .select("id, created_at, payment_date, amount, status, payment_method, invoice_id, payment_note")
       .eq("subscriber_id", subscriber.id)
       .order("created_at", { ascending: false })
       .limit(50);
