@@ -50,6 +50,12 @@ export default function TelegramApp() {
     initData,
   );
   const { data: tiers } = useActiveTiers();
+  const publicTiers = (tiers ?? []).filter((t) => {
+    const name = (t?.name ?? '').trim().toLowerCase();
+    const isAdminByName = name === 'добавлен админом';
+    const isAdminByShape = t?.price === 0 && (t?.duration_days ?? 0) >= 3650;
+    return !(isAdminByName || isAdminByShape);
+  });
   const [paymentLink, setPaymentLink] = useState<string | null>(null);
   const { toast } = useToast();
 
@@ -176,7 +182,7 @@ export default function TelegramApp() {
 
   const handleExtendRequest = (tierId: string) => {
     hapticFeedback('success');
-    const tier = tiers?.find((t) => t.id === tierId);
+    const tier = publicTiers.find((t) => t.id === tierId);
     alert(`Request to extend with ${tier?.name} plan sent! Contact admin to complete payment.`);
   };
 
@@ -227,7 +233,7 @@ export default function TelegramApp() {
           subscriber={testUserId ? testSubscriber : null}
           isLoading={testUserId ? loadingTestSubscriber : false}
           daysRemaining={daysRemaining}
-          tiers={tiers || []}
+          tiers={publicTiers}
           payments={payments || []}
           paymentLink={paymentLink}
           channelInfo={channelInfo}
@@ -281,7 +287,7 @@ export default function TelegramApp() {
         subscriber={activeSubscriber}
         isLoading={isLoading}
         daysRemaining={daysRemaining}
-        tiers={tiers || []}
+        tiers={publicTiers}
         payments={payments || []}
         paymentLink={paymentLink}
         channelInfo={channelInfo}
@@ -415,7 +421,7 @@ function NewUserView({
         </h2>
 
         <div className="grid gap-3">
-          {tiers.filter(t => (t.name || '').trim().toLowerCase() !== 'добавлен админом').map(tier => (
+          {tiers.map(tier => (
             <Card 
               key={tier.id} 
               className={`cursor-pointer transition-all ${
