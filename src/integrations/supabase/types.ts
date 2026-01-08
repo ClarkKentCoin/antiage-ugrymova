@@ -14,6 +14,36 @@ export type Database = {
   }
   public: {
     Tables: {
+      admin_notification_log: {
+        Row: {
+          created_at: string
+          event_type: string
+          id: number
+          payload: Json | null
+          payment_id: string | null
+          related_at: string | null
+          subscriber_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          event_type: string
+          id?: number
+          payload?: Json | null
+          payment_id?: string | null
+          related_at?: string | null
+          subscriber_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          event_type?: string
+          id?: number
+          payload?: Json | null
+          payment_id?: string | null
+          related_at?: string | null
+          subscriber_id?: string | null
+        }
+        Relationships: []
+      }
       admin_settings: {
         Row: {
           channel_description: string | null
@@ -33,6 +63,8 @@ export type Database = {
           robokassa_password2: string | null
           robokassa_result_url: string | null
           robokassa_test_mode: boolean | null
+          telegram_admin_notifications_channel_id: string | null
+          telegram_admin_notifications_enabled: boolean
           telegram_bot_token: string | null
           telegram_channel_id: string | null
           updated_at: string
@@ -59,6 +91,8 @@ export type Database = {
           robokassa_password2?: string | null
           robokassa_result_url?: string | null
           robokassa_test_mode?: boolean | null
+          telegram_admin_notifications_channel_id?: string | null
+          telegram_admin_notifications_enabled?: boolean
           telegram_bot_token?: string | null
           telegram_channel_id?: string | null
           updated_at?: string
@@ -85,6 +119,8 @@ export type Database = {
           robokassa_password2?: string | null
           robokassa_result_url?: string | null
           robokassa_test_mode?: boolean | null
+          telegram_admin_notifications_channel_id?: string | null
+          telegram_admin_notifications_enabled?: boolean
           telegram_bot_token?: string | null
           telegram_channel_id?: string | null
           updated_at?: string
