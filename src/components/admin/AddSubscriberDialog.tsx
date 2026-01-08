@@ -52,6 +52,12 @@ export function AddSubscriberDialog({ open, onOpenChange }: AddSubscriberDialogP
 
   const selectedTier = tiers?.find((t) => t.id === formData.tier_id);
 
+  // Check if selected tier is admin-only (must use manual payment only)
+  const isAdminOnlyTier = selectedTier && (
+    (selectedTier.name || '').trim().toLowerCase() === 'добавлен админом' ||
+    (selectedTier.price === 0 && (selectedTier.duration_days ?? 0) >= 3650)
+  );
+
   // Compute new end date using calendar intervals
   const getNewEndDate = (): string | null => {
     if (!selectedTier) return null;
@@ -287,7 +293,22 @@ export function AddSubscriberDialog({ open, onOpenChange }: AddSubscriberDialogP
             <Label htmlFor="tier">Тариф *</Label>
             <Select
               value={formData.tier_id}
-              onValueChange={(value) => setFormData({ ...formData, tier_id: value })}
+              onValueChange={(value) => {
+                const newTier = tiers?.find(t => t.id === value);
+                const isNewTierAdminOnly = newTier && (
+                  (newTier.name || '').trim().toLowerCase() === 'добавлен админом' ||
+                  (newTier.price === 0 && (newTier.duration_days ?? 0) >= 3650)
+                );
+                // Force manual payment for admin-only tier
+                setFormData({ 
+                  ...formData, 
+                  tier_id: value,
+                  payment_method: isNewTierAdminOnly ? 'manual' : formData.payment_method,
+                });
+                if (isNewTierAdminOnly) {
+                  setPaymentUrl(null);
+                }
+              }}
               required
             >
               <SelectTrigger>
@@ -318,27 +339,37 @@ export function AddSubscriberDialog({ open, onOpenChange }: AddSubscriberDialogP
             );
           })()}
 
-          {/* Payment Method Selection */}
-          <div className="space-y-3">
-            <Label>Способ оплаты</Label>
-            <RadioGroup
-              value={formData.payment_method}
-              onValueChange={(value: 'manual' | 'robokassa') => {
-                setFormData({ ...formData, payment_method: value });
-                setPaymentUrl(null);
-              }}
-              className="grid grid-cols-2 gap-4"
-            >
-              <div className="flex items-center space-x-2 rounded-lg border p-3 cursor-pointer hover:bg-muted/50">
-                <RadioGroupItem value="manual" id="manual" />
-                <Label htmlFor="manual" className="cursor-pointer">Вручную</Label>
-              </div>
-              <div className="flex items-center space-x-2 rounded-lg border p-3 cursor-pointer hover:bg-muted/50">
-                <RadioGroupItem value="robokassa" id="robokassa" />
-                <Label htmlFor="robokassa" className="cursor-pointer">Robokassa</Label>
-              </div>
-            </RadioGroup>
-          </div>
+          {/* Payment Method Selection - hidden for admin-only tiers */}
+          {!isAdminOnlyTier && (
+            <div className="space-y-3">
+              <Label>Способ оплаты</Label>
+              <RadioGroup
+                value={formData.payment_method}
+                onValueChange={(value: 'manual' | 'robokassa') => {
+                  setFormData({ ...formData, payment_method: value });
+                  setPaymentUrl(null);
+                }}
+                className="grid grid-cols-2 gap-4"
+              >
+                <div className="flex items-center space-x-2 rounded-lg border p-3 cursor-pointer hover:bg-muted/50">
+                  <RadioGroupItem value="manual" id="manual" />
+                  <Label htmlFor="manual" className="cursor-pointer">Вручную</Label>
+                </div>
+                <div className="flex items-center space-x-2 rounded-lg border p-3 cursor-pointer hover:bg-muted/50">
+                  <RadioGroupItem value="robokassa" id="robokassa" />
+                  <Label htmlFor="robokassa" className="cursor-pointer">Robokassa</Label>
+                </div>
+              </RadioGroup>
+            </div>
+          )}
+
+          {isAdminOnlyTier && (
+            <div className="rounded-lg bg-amber-500/10 border border-amber-500/30 p-3 text-sm">
+              <p className="text-amber-700 dark:text-amber-400">
+                ⚠️ Тариф «Добавлен админом» — только ручное добавление
+              </p>
+            </div>
+          )}
 
           {formData.payment_method === 'robokassa' && (
             <div className="space-y-4 rounded-lg border p-4 bg-muted/30">
