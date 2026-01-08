@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { sendAdminNotification } from "../_shared/adminNotifications.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -78,6 +79,11 @@ serve(async (req) => {
       .select(`
         id,
         telegram_user_id,
+        telegram_username,
+        first_name,
+        last_name,
+        email,
+        status,
         subscription_end,
         next_payment_notification_sent,
         subscription_tiers (
@@ -162,6 +168,24 @@ serve(async (req) => {
 
           console.log(`Notification sent to ${subscription.telegram_user_id}`);
           results.push({ subscriber_id: subscription.id, success: true, message: "Notification sent" });
+
+          // Send admin notification
+          await sendAdminNotification({
+            supabaseAdmin,
+            eventType: "EXPIRING_IN_3_DAYS",
+            subscriber: {
+              id: subscription.id ?? null,
+              name: [subscription.first_name, subscription.last_name].filter(Boolean).join(" ") || null,
+              username: subscription.telegram_username ?? null,
+              telegram_user_id: subscription.telegram_user_id ?? null,
+              email: subscription.email ?? null,
+            },
+            plan: tier.name ?? null,
+            status: subscription.status ?? "active",
+            subscriptionEndISO: subscription.subscription_end ?? null,
+            relatedAtISO: subscription.subscription_end ?? null,
+            source: "notify-upcoming-payments",
+          });
         } else {
           console.error(`Failed to send notification to ${subscription.telegram_user_id}:`, result);
           results.push({ subscriber_id: subscription.id, success: false, message: result.description || "Failed to send" });
