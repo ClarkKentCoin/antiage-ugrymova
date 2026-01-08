@@ -146,7 +146,7 @@ serve(async (req) => {
       .select(
         `id, telegram_user_id, telegram_username, first_name, last_name, phone_number,
          status, subscription_start, subscription_end, auto_renewal, tier_id, is_in_channel,
-         created_at, updated_at,
+         created_at, updated_at, subscriber_payment_method,
          subscription_tiers ( id, name, price, duration_days )`,
       )
       .eq("telegram_user_id", Number(telegram_user_id))
