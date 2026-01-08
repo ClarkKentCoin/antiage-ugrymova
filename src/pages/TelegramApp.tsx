@@ -415,7 +415,7 @@ function NewUserView({
         </h2>
 
         <div className="grid gap-3">
-          {tiers.map(tier => (
+          {tiers.filter(t => (t.name || '').trim().toLowerCase() !== 'добавлен админом').map(tier => (
             <Card 
               key={tier.id} 
               className={`cursor-pointer transition-all ${
