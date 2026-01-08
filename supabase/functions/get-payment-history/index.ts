@@ -158,11 +158,12 @@ serve(async (req) => {
       );
     }
 
-    // Fetch payment history
+    // Fetch payment history - only completed payments for MiniApp users
     const { data: payments, error: payError } = await supabaseAdmin
       .from("payment_history")
       .select("id, created_at, payment_date, amount, status, payment_method, invoice_id, payment_note")
       .eq("subscriber_id", subscriber.id)
+      .eq("status", "completed")
       .order("created_at", { ascending: false })
       .limit(50);
 
