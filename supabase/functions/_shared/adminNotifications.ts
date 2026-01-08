@@ -53,9 +53,10 @@ function normalizeChatId(channelId: string): string {
   }
   return channelId;
 }
+const TIMEZONE = "Europe/Moscow";
 
 /**
- * Format date from ISO string to readable format
+ * Format date from ISO string to readable format: DD.MM.YYYY HH:mm
  */
 function formatDate(isoDate: string | null | undefined): string {
   if (!isoDate) return "—";
@@ -67,11 +68,21 @@ function formatDate(isoDate: string | null | undefined): string {
       year: "numeric",
       hour: "2-digit",
       minute: "2-digit",
-      timeZone: "Europe/Moscow",
+      timeZone: TIMEZONE,
     });
   } catch {
     return isoDate;
   }
+}
+
+/**
+ * Format amount to 2 decimal places
+ */
+function formatAmount(value: string | number | null | undefined): string {
+  if (value === null || value === undefined || value === "") return "—";
+  const num = typeof value === "number" ? value : parseFloat(String(value));
+  if (isNaN(num)) return String(value);
+  return num.toFixed(2);
 }
 
 /**
@@ -102,7 +113,7 @@ function buildMessageText(opts: SendAdminNotificationOptions): string {
   const plan = safe(opts.plan);
   const status = safe(opts.status);
   const method = safe(opts.method);
-  const amount = safe(opts.amount);
+  const amount = formatAmount(opts.amount);
   const subscriptionEnd = formatDate(opts.subscriptionEndISO);
   const graceEnd = formatDate(opts.graceEndISO);
   const note = safe(opts.note);
