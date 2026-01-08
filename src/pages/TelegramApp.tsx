@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useTelegramWebApp } from '@/hooks/useTelegramWebApp';
 import { useSubscriber } from '@/hooks/useSubscribers';
 import { useActiveTiers } from '@/hooks/useSubscriptionTiers';
-import { usePaymentHistory } from '@/hooks/usePaymentHistory';
+import { usePaymentHistoryForUser } from '@/hooks/usePaymentHistory';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -95,9 +95,9 @@ export default function TelegramApp() {
   const isLoading = user ? loadingSubscriber : loadingTestSubscriber;
   const refetch = user ? refetchSubscriber : refetchTestSubscriber;
 
-  // Prevent fetching *all* payments when we don't know the subscriber yet
-  const paymentSubscriberId = activeSubscriber?.id ?? '00000000-0000-0000-0000-000000000000';
-  const { data: payments } = usePaymentHistory({ subscriberId: paymentSubscriberId, status: 'completed' });
+  // Fetch payments via edge function with init_data validation
+  const telegramUserIdForPayments = user?.id ?? testUserId;
+  const { data: payments } = usePaymentHistoryForUser(telegramUserIdForPayments, initData);
 
   const daysRemaining = activeSubscriber?.subscription_end
     ? differenceInDays(new Date(activeSubscriber.subscription_end), new Date())
