@@ -11,7 +11,9 @@ import {
   LogOut,
   LayoutDashboard,
   ScrollText,
-  Menu
+  Menu,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -28,17 +30,25 @@ const navItems = [
   { href: '/admin/settings', label: 'Settings', icon: Settings },
 ];
 
-function NavContent({ onNavigate }: { onNavigate?: () => void }) {
+function NavContent({ onNavigate, collapsed }: { onNavigate?: () => void; collapsed?: boolean }) {
   const location = useLocation();
   const { signOut } = useAuth();
 
   return (
     <div className="flex h-full flex-col">
       {/* Logo */}
-      <div className="flex h-16 items-center border-b border-border px-6">
-        <h1 className="text-lg font-semibold text-foreground">
-          Subscription Manager
-        </h1>
+      <div className={cn(
+        "flex h-16 items-center border-b border-border",
+        collapsed ? "justify-center px-2" : "px-6"
+      )}>
+        {!collapsed && (
+          <h1 className="text-lg font-semibold text-foreground">
+            Subscription Manager
+          </h1>
+        )}
+        {collapsed && (
+          <LayoutDashboard className="h-6 w-6 text-foreground" />
+        )}
       </div>
 
       {/* Navigation */}
@@ -50,15 +60,17 @@ function NavContent({ onNavigate }: { onNavigate?: () => void }) {
               key={item.href}
               to={item.href}
               onClick={onNavigate}
+              title={collapsed ? item.label : undefined}
               className={cn(
                 'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
+                collapsed && 'justify-center px-2',
                 isActive
                   ? 'bg-primary text-primary-foreground'
                   : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
               )}
             >
-              <item.icon className="h-5 w-5" />
-              {item.label}
+              <item.icon className="h-5 w-5 shrink-0" />
+              {!collapsed && item.label}
             </Link>
           );
         })}
@@ -68,11 +80,15 @@ function NavContent({ onNavigate }: { onNavigate?: () => void }) {
       <div className="border-t border-border p-4">
         <Button
           variant="ghost"
-          className="w-full justify-start gap-3 text-muted-foreground"
+          className={cn(
+            "w-full gap-3 text-muted-foreground",
+            collapsed ? "justify-center px-2" : "justify-start"
+          )}
           onClick={signOut}
+          title={collapsed ? "Sign Out" : undefined}
         >
-          <LogOut className="h-5 w-5" />
-          Sign Out
+          <LogOut className="h-5 w-5 shrink-0" />
+          {!collapsed && "Sign Out"}
         </Button>
       </div>
     </div>
@@ -81,6 +97,7 @@ function NavContent({ onNavigate }: { onNavigate?: () => void }) {
 
 export function AdminLayout({ children }: AdminLayoutProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   return (
     <div className="min-h-screen bg-background">
@@ -101,12 +118,36 @@ export function AdminLayout({ children }: AdminLayoutProps) {
       </header>
 
       {/* Desktop Sidebar */}
-      <aside className="fixed left-0 top-0 z-40 hidden h-screen w-64 border-r border-border bg-card md:block">
-        <NavContent />
+      <aside 
+        className={cn(
+          "fixed left-0 top-0 z-40 hidden h-screen border-r border-border bg-card transition-all duration-300 md:block",
+          sidebarCollapsed ? "w-16" : "w-64"
+        )}
+      >
+        <NavContent collapsed={sidebarCollapsed} />
+        
+        {/* Collapse toggle button */}
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+          className="absolute -right-3 top-20 z-50 h-6 w-6 rounded-full border border-border bg-card shadow-sm hover:bg-accent"
+        >
+          {sidebarCollapsed ? (
+            <ChevronRight className="h-3 w-3" />
+          ) : (
+            <ChevronLeft className="h-3 w-3" />
+          )}
+        </Button>
       </aside>
 
       {/* Main content */}
-      <main className="min-h-screen pt-14 md:ml-64 md:pt-0 overflow-x-hidden">
+      <main 
+        className={cn(
+          "min-h-screen pt-14 md:pt-0 overflow-x-hidden transition-all duration-300",
+          sidebarCollapsed ? "md:ml-16" : "md:ml-64"
+        )}
+      >
         <div className="w-full max-w-full px-4 py-6 md:px-6 md:py-8">
           {children}
         </div>
