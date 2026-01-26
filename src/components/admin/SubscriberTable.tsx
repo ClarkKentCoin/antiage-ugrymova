@@ -23,7 +23,7 @@ import { useSendInvite, useKickUser, useCheckMembership } from '@/hooks/useTeleg
 import { EditSubscriberDialog } from './EditSubscriberDialog';
 import { ExtendSubscriptionDialog } from './ExtendSubscriptionDialog';
 
-type SortField = 'user' | 'created_at' | 'plan' | 'status' | 'subscription_end';
+type SortField = 'user' | 'created_at' | 'plan' | 'status' | 'subscription_end' | 'subscription_start';
 type SortDirection = 'asc' | 'desc';
 
 interface SubscriberTableProps {
@@ -41,7 +41,7 @@ const statusVariants: Record<string, string> = {
 export function SubscriberTable({ subscribers }: SubscriberTableProps) {
   const [editingSubscriber, setEditingSubscriber] = useState<Subscriber | null>(null);
   const [extendingSubscriber, setExtendingSubscriber] = useState<Subscriber | null>(null);
-  const [sortField, setSortField] = useState<SortField>('created_at');
+  const [sortField, setSortField] = useState<SortField>('subscription_start');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const deleteSubscriber = useDeleteSubscriber();
   const sendInvite = useSendInvite();
@@ -53,7 +53,7 @@ export function SubscriberTable({ subscribers }: SubscriberTableProps) {
       setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
     } else {
       setSortField(field);
-      setSortDirection(field === 'created_at' ? 'desc' : 'asc');
+      setSortDirection((field === 'created_at' || field === 'subscription_start') ? 'desc' : 'asc');
     }
   };
 
@@ -101,6 +101,12 @@ export function SubscriberTable({ subscribers }: SubscriberTableProps) {
           const aEnd = a.subscription_end ? new Date(a.subscription_end).getTime() : 0;
           const bEnd = b.subscription_end ? new Date(b.subscription_end).getTime() : 0;
           comparison = aEnd - bEnd;
+          break;
+        }
+        case 'subscription_start': {
+          const aStart = a.subscription_start ? new Date(a.subscription_start).getTime() : 0;
+          const bStart = b.subscription_start ? new Date(b.subscription_start).getTime() : 0;
+          comparison = aStart - bStart;
           break;
         }
       }
