@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { format } from 'date-fns';
 import { 
   Table, 
@@ -17,11 +17,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger 
 } from '@/components/ui/dropdown-menu';
-import { MoreHorizontal, Pencil, Trash2, Calendar, Send, UserMinus, CheckCircle, Loader2 } from 'lucide-react';
+import { MoreHorizontal, Pencil, Trash2, Calendar, Send, UserMinus, CheckCircle, Loader2, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { Subscriber, useDeleteSubscriber } from '@/hooks/useSubscribers';
 import { useSendInvite, useKickUser, useCheckMembership } from '@/hooks/useTelegramChannel';
 import { EditSubscriberDialog } from './EditSubscriberDialog';
 import { ExtendSubscriptionDialog } from './ExtendSubscriptionDialog';
+
+type SortField = 'user' | 'created_at' | 'plan' | 'status' | 'subscription_end';
+type SortDirection = 'asc' | 'desc';
 
 interface SubscriberTableProps {
   subscribers: Subscriber[];
@@ -38,10 +41,73 @@ const statusVariants: Record<string, string> = {
 export function SubscriberTable({ subscribers }: SubscriberTableProps) {
   const [editingSubscriber, setEditingSubscriber] = useState<Subscriber | null>(null);
   const [extendingSubscriber, setExtendingSubscriber] = useState<Subscriber | null>(null);
+  const [sortField, setSortField] = useState<SortField>('created_at');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const deleteSubscriber = useDeleteSubscriber();
   const sendInvite = useSendInvite();
   const kickUser = useKickUser();
   const checkMembership = useCheckMembership();
+
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection(field === 'created_at' ? 'desc' : 'asc');
+    }
+  };
+
+  const getSortIcon = (field: SortField) => {
+    if (sortField !== field) {
+      return <ArrowUpDown className="ml-1 h-3 w-3 opacity-50" />;
+    }
+    return sortDirection === 'asc' 
+      ? <ArrowUp className="ml-1 h-3 w-3" />
+      : <ArrowDown className="ml-1 h-3 w-3" />;
+  };
+
+  const sortedSubscribers = useMemo(() => {
+    if (!subscribers) return [];
+    
+    return [...subscribers].sort((a, b) => {
+      let comparison = 0;
+      
+      switch (sortField) {
+        case 'user': {
+          const aName = a.telegram_username || a.first_name || '';
+          const bName = b.telegram_username || b.first_name || '';
+          comparison = aName.localeCompare(bName);
+          break;
+        }
+        case 'created_at': {
+          const aDate = new Date(a.created_at).getTime();
+          const bDate = new Date(b.created_at).getTime();
+          comparison = aDate - bDate;
+          break;
+        }
+        case 'plan': {
+          const aPlan = a.subscription_tiers?.name || '';
+          const bPlan = b.subscription_tiers?.name || '';
+          comparison = aPlan.localeCompare(bPlan);
+          break;
+        }
+        case 'status': {
+          const aStatus = a.status || '';
+          const bStatus = b.status || '';
+          comparison = aStatus.localeCompare(bStatus);
+          break;
+        }
+        case 'subscription_end': {
+          const aEnd = a.subscription_end ? new Date(a.subscription_end).getTime() : 0;
+          const bEnd = b.subscription_end ? new Date(b.subscription_end).getTime() : 0;
+          comparison = aEnd - bEnd;
+          break;
+        }
+      }
+      
+      return sortDirection === 'asc' ? comparison : -comparison;
+    });
+  }, [subscribers, sortField, sortDirection]);
 
   const handleDelete = (id: string) => {
     if (confirm('Are you sure you want to remove this subscriber?')) {
@@ -112,28 +178,79 @@ export function SubscriberTable({ subscribers }: SubscriberTableProps) {
       <div className="w-full overflow-x-auto rounded-lg border border-border bg-card">
         <div className="min-w-[900px]">
           <Table>
-            <TableHeader>
+          <TableHeader>
             <TableRow>
-                <TableHead>User</TableHead>
-                <TableHead className="hidden lg:table-cell">Full Name</TableHead>
-                <TableHead className="hidden lg:table-cell">Email</TableHead>
-                <TableHead className="hidden xl:table-cell">Phone</TableHead>
-              <TableHead>Plan</TableHead>
-              <TableHead>Status</TableHead>
+              <TableHead>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="h-8 px-2 -ml-2 font-medium hover:bg-transparent"
+                  onClick={() => handleSort('user')}
+                >
+                  User
+                  {getSortIcon('user')}
+                </Button>
+              </TableHead>
+              <TableHead className="hidden lg:table-cell">Full Name</TableHead>
+              <TableHead className="hidden lg:table-cell">Email</TableHead>
+              <TableHead className="hidden xl:table-cell">Phone</TableHead>
+              <TableHead>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="h-8 px-2 -ml-2 font-medium hover:bg-transparent"
+                  onClick={() => handleSort('plan')}
+                >
+                  Plan
+                  {getSortIcon('plan')}
+                </Button>
+              </TableHead>
+              <TableHead>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="h-8 px-2 -ml-2 font-medium hover:bg-transparent"
+                  onClick={() => handleSort('status')}
+                >
+                  Status
+                  {getSortIcon('status')}
+                </Button>
+              </TableHead>
               <TableHead className="hidden lg:table-cell">Grace Period</TableHead>
-              <TableHead>Expires</TableHead>
+              <TableHead>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="h-8 px-2 -ml-2 font-medium hover:bg-transparent"
+                  onClick={() => handleSort('subscription_end')}
+                >
+                  Expires
+                  {getSortIcon('subscription_end')}
+                </Button>
+              </TableHead>
+              <TableHead>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="h-8 px-2 -ml-2 font-medium hover:bg-transparent"
+                  onClick={() => handleSort('created_at')}
+                >
+                  Added
+                  {getSortIcon('created_at')}
+                </Button>
+              </TableHead>
               <TableHead className="w-[80px]"></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {subscribers.length === 0 ? (
+            {sortedSubscribers.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={9} className="h-24 text-center text-muted-foreground whitespace-nowrap">
+                <TableCell colSpan={10} className="h-24 text-center text-muted-foreground whitespace-nowrap">
                   No subscribers yet
                 </TableCell>
               </TableRow>
             ) : (
-              subscribers.map((subscriber) => {
+              sortedSubscribers.map((subscriber) => {
                 const daysRemaining = getDaysRemaining(subscriber.subscription_end);
                 const gracePeriodDays = getGracePeriodDays(subscriber);
                 return (
@@ -191,6 +308,14 @@ export function SubscriberTable({ subscribers }: SubscriberTableProps) {
                       ) : (
                         '-'
                       )}
+                    </TableCell>
+                    <TableCell>
+                      <p className="text-sm">
+                        {format(new Date(subscriber.created_at), 'MMM d, yyyy')}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {format(new Date(subscriber.created_at), 'HH:mm')}
+                      </p>
                     </TableCell>
                     <TableCell>
                       <DropdownMenu>
