@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { addDays, addMonths, addYears, isPast } from 'date-fns';
 import {
   Dialog,
   DialogContent,
@@ -19,7 +18,7 @@ import {
 import { Subscriber, useUpdateSubscriber } from '@/hooks/useSubscribers';
 import { useSubscriptionTiers, formatDuration } from '@/hooks/useSubscriptionTiers';
 import { useCreatePayment } from '@/hooks/usePaymentHistory';
-import { formatDateInTimezone } from '@/lib/dateUtils';
+import { computeNextEndISO, getTierInterval, formatDateInTimezone } from '@/lib/dateUtils';
 import { logEvent, generateRequestId } from '@/lib/logger';
 
 interface ExtendSubscriptionDialogProps {
@@ -40,67 +39,31 @@ export function ExtendSubscriptionDialog({ subscriber, open, onOpenChange }: Ext
 
   const selectedTier = tiers?.find((t) => t.id === formData.tier_id);
   
-  // Compute new end date using explicit date-fns calculation
-  const calculateNewEndDate = (): { startDate: Date; newEndDate: Date; isExpired: boolean } | null => {
+  // Compute new end date using calendar intervals with stacking
+  const getNewEndDate = (): string | null => {
     if (!selectedTier) return null;
     
-    // 1. Determine Start Date (Now if expired/null, else current end date)
-    const currentEnd = subscriber?.subscription_end ? new Date(subscriber.subscription_end) : null;
-    const isExpired = !currentEnd || isPast(currentEnd);
-    const startDate = isExpired ? new Date() : currentEnd;
+    const nowISO = new Date().toISOString();
+    const currentEndISO = subscriber?.subscription_end || null;
+    const { unit, count, timezone } = getTierInterval(selectedTier);
     
-    // 2. Calculate Duration based on Tier
-    let newEndDate = new Date(startDate);
-    const { interval_unit, interval_count, duration_days } = selectedTier;
-    
-    // Prefer interval fields, fallback to duration_days
-    if (interval_unit && interval_count) {
-      if (interval_unit === 'year') newEndDate = addYears(startDate, interval_count);
-      else if (interval_unit === 'month') newEndDate = addMonths(startDate, interval_count);
-      else if (interval_unit === 'week') newEndDate = addDays(startDate, interval_count * 7);
-      else if (interval_unit === 'day') newEndDate = addDays(startDate, interval_count);
-      else newEndDate = addDays(startDate, duration_days || 30);
-    } else {
-      newEndDate = addDays(startDate, duration_days || 30);
-    }
-    
-    return { startDate, newEndDate, isExpired };
+    return computeNextEndISO(nowISO, currentEndISO, unit, count, timezone);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!subscriber || !selectedTier) return;
 
-    // CRITICAL: Calculate new end date explicitly using date-fns
-    const calcResult = calculateNewEndDate();
-    if (!calcResult) {
-      console.error('[ExtendSubscriptionDialog] Failed to calculate new end date');
-      return;
-    }
-    
-    const { startDate, newEndDate, isExpired } = calcResult;
-    const newEndISO = newEndDate.toISOString();
+    const newEndISO = getNewEndDate();
     const oldEndISO = subscriber.subscription_end;
     const requestId = generateRequestId();
     
-    // Debug logging
-    console.log('[ExtendSubscriptionDialog] Manual Calc:', { 
-      isExpired, 
-      startDate: startDate.toISOString(), 
-      oldEndISO,
-      newEndISO,
-      tier: selectedTier.name,
-      interval_unit: selectedTier.interval_unit,
-      interval_count: selectedTier.interval_count,
-    });
-    
-    // Update subscriber with explicit subscription_end - never pass undefined!
+    // Update subscriber - never overwrite subscription_start if already set
     updateSubscriber.mutate({
       id: subscriber.id,
       tier_id: formData.tier_id,
-      subscription_end: newEndISO, // Always a valid ISO string from explicit calculation
+      subscription_end: newEndISO || undefined,
       status: 'active',
-      _oldStatus: subscriber.status, // Pass old status for status change detection
     }, {
       onSuccess: () => {
         // Record payment
@@ -126,7 +89,6 @@ export function ExtendSubscriptionDialog({ subscriber, open, onOpenChange }: Ext
             new_end: newEndISO,
             tier_name: selectedTier.name,
             amount: selectedTier.price,
-            was_expired: isExpired,
           },
         });
         
@@ -189,13 +151,14 @@ export function ExtendSubscriptionDialog({ subscriber, open, onOpenChange }: Ext
           </div>
 
           {selectedTier && (() => {
-            const calcResult = calculateNewEndDate();
+            const interval = getTierInterval(selectedTier);
+            const newEnd = getNewEndDate();
             return (
               <div className="rounded-lg bg-primary/10 p-3 text-sm">
                 <p className="text-foreground">
                   Новый срок:{' '}
                   <span className="font-medium">
-                    {calcResult ? formatDateInTimezone(calcResult.newEndDate.toISOString()) : '—'}
+                    {newEnd ? formatDateInTimezone(newEnd, interval.timezone) : '—'}
                   </span>
                 </p>
               </div>
