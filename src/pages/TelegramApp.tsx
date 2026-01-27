@@ -106,8 +106,9 @@ export default function TelegramApp() {
     const subscriptionEnd = new Date(activeSubscriber.subscription_end);
     const now = new Date();
     
-    // For grace_period status, calculate days until end of grace period
-    if (activeSubscriber.status === 'grace_period' && gracePeriodDays != null && gracePeriodDays > 0) {
+    // For grace_period or past_due status, calculate days until end of grace period
+    const isInGracePeriod = activeSubscriber.status === 'grace_period' || activeSubscriber.status === 'past_due';
+    if (isInGracePeriod && gracePeriodDays != null && gracePeriodDays > 0) {
       const graceEndDate = addDays(subscriptionEnd, gracePeriodDays);
       return Math.max(0, differenceInDays(graceEndDate, now));
     }
