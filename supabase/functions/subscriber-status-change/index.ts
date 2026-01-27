@@ -349,10 +349,26 @@ serve(async (req) => {
       if (new_status === "active" && old_status !== "active") {
         console.log(`Sending renewal notification and invite to ${telegram_user_id}`);
 
+        // IMPORTANT: Read fresh subscription_end from DB to ensure we have the correct date
+        // (the passed subscription_end might be stale if caller computed it before DB was updated)
+        let freshSubscriptionEnd = subscription_end;
+        if (subscriber_id) {
+          const { data: freshSubscriber } = await supabaseAdmin
+            .from("subscribers")
+            .select("subscription_end")
+            .eq("id", subscriber_id)
+            .maybeSingle();
+          
+          if (freshSubscriber?.subscription_end) {
+            freshSubscriptionEnd = freshSubscriber.subscription_end;
+            console.log(`Using fresh subscription_end from DB: ${freshSubscriptionEnd}`);
+          }
+        }
+
         // Format expiry date
         let expiresDate = "—";
-        if (subscription_end) {
-          const endDate = new Date(subscription_end);
+        if (freshSubscriptionEnd) {
+          const endDate = new Date(freshSubscriptionEnd);
           expiresDate = endDate.toLocaleDateString("ru-RU", {
             day: "numeric",
             month: "long",
