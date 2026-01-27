@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { addDays, addMonths, addYears, isPast } from 'date-fns';
 
 export interface Subscriber {
   id: string;
@@ -280,7 +281,7 @@ export function useUpdateSubscriber() {
       // First get current subscriber to compare status
       const { data: currentSubscriber, error: fetchError } = await supabase
         .from('subscribers')
-        .select('telegram_user_id, status, subscription_end')
+        .select('telegram_user_id, status, subscription_end, tier_id')
         .eq('id', id)
         .single();
 
@@ -289,10 +290,65 @@ export function useUpdateSubscriber() {
       const oldStatus = _oldStatus || currentSubscriber?.status;
       const newStatus = updates.status;
 
+      // If admin sets status to active but doesn't provide subscription_end,
+      // and the current end date is missing/expired, compute a new end date from the tier.
+      // This prevents Telegram notification + MiniApp from using a past date.
+      let computedSubscriptionEnd: string | null = null;
+      const currentEnd = currentSubscriber?.subscription_end ? new Date(currentSubscriber.subscription_end) : null;
+      const currentEndIsExpired = !currentEnd || isPast(currentEnd);
+      const effectiveTierId = (updates.tier_id ?? currentSubscriber?.tier_id) as string | null | undefined;
+
+      if (
+        newStatus === 'active' &&
+        (updates.subscription_end == null) &&
+        currentEndIsExpired &&
+        effectiveTierId
+      ) {
+        const { data: tier, error: tierError } = await supabase
+          .from('subscription_tiers')
+          .select('interval_unit, interval_count, duration_days')
+          .eq('id', effectiveTierId)
+          .single();
+
+        if (tierError) throw tierError;
+
+        const startDate = new Date();
+        const intervalUnit = (tier?.interval_unit ?? null) as string | null;
+        const intervalCount = typeof tier?.interval_count === 'number' ? tier.interval_count : null;
+        const durationDays = typeof tier?.duration_days === 'number' ? tier.duration_days : 30;
+
+        let newEndDate = new Date(startDate);
+        if (intervalUnit && intervalCount) {
+          if (intervalUnit === 'year') newEndDate = addYears(startDate, intervalCount);
+          else if (intervalUnit === 'month') newEndDate = addMonths(startDate, intervalCount);
+          else if (intervalUnit === 'week') newEndDate = addDays(startDate, intervalCount * 7);
+          else if (intervalUnit === 'day') newEndDate = addDays(startDate, intervalCount);
+          else newEndDate = addDays(startDate, durationDays || 30);
+        } else {
+          newEndDate = addDays(startDate, durationDays || 30);
+        }
+
+        computedSubscriptionEnd = newEndDate.toISOString();
+        console.log('[useUpdateSubscriber] Auto computed subscription_end for activation', {
+          subscriber_id: id,
+          effectiveTierId,
+          current_end: currentSubscriber?.subscription_end,
+          computed_end: computedSubscriptionEnd,
+          interval_unit: intervalUnit,
+          interval_count: intervalCount,
+          duration_days: durationDays,
+        });
+      }
+
+      const finalUpdates: Record<string, unknown> = {
+        ...updates,
+        ...(computedSubscriptionEnd ? { subscription_end: computedSubscriptionEnd } : null),
+      };
+
       // Update the subscriber
       const { data, error } = await supabase
         .from('subscribers')
-        .update(updates)
+        .update(finalUpdates)
         .eq('id', id)
         .select()
         .single();
@@ -311,7 +367,9 @@ export function useUpdateSubscriber() {
               telegram_user_id: currentSubscriber.telegram_user_id,
               old_status: oldStatus,
               new_status: newStatus,
-              subscription_end: updates.subscription_end || currentSubscriber.subscription_end,
+              subscription_end:
+                (finalUpdates.subscription_end as string | undefined) ||
+                currentSubscriber.subscription_end,
             },
           });
 
