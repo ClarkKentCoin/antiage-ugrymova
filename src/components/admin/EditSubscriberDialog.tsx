@@ -28,9 +28,10 @@ import {
 import { Subscriber, useUpdateSubscriber } from '@/hooks/useSubscribers';
 import { useSubscriptionTiers } from '@/hooks/useSubscriptionTiers';
 import { useConsentLogs } from '@/hooks/useConsentLogs';
+import { computeNextEndISO, getTierInterval } from '@/lib/dateUtils';
 import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
-import { CheckCircle, XCircle, ScrollText } from 'lucide-react';
+import { CheckCircle, XCircle, ScrollText, AlertTriangle } from 'lucide-react';
 
 interface EditSubscriberDialogProps {
   subscriber: Subscriber | null;
@@ -65,11 +66,25 @@ export function EditSubscriberDialog({ subscriber, open, onOpenChange }: EditSub
     }
   }, [subscriber]);
 
+  // Check if we need to compute a new subscription_end
+  const selectedTier = tiers?.find(t => t.id === formData.tier_id);
+  const isActivating = formData.status === 'active' && subscriber?.status !== 'active';
+  const isTierChanged = formData.tier_id && formData.tier_id !== subscriber?.tier_id;
+  const needsNewEndDate = isActivating || (formData.status === 'active' && isTierChanged);
+  
+  // Check if current subscription_end is in the past
+  const currentEndInPast = subscriber?.subscription_end 
+    ? new Date(subscriber.subscription_end).getTime() < Date.now()
+    : true;
+  
+  // Show warning if activating with past end date and no tier change
+  const showEndDateWarning = isActivating && currentEndInPast && !isTierChanged && !formData.tier_id;
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!subscriber) return;
 
-    updateSubscriber.mutate({
+    const updates: Record<string, unknown> = {
       id: subscriber.id,
       telegram_username: formData.telegram_username || null,
       first_name: formData.first_name || null,
@@ -77,7 +92,28 @@ export function EditSubscriberDialog({ subscriber, open, onOpenChange }: EditSub
       email: formData.email || null,
       tier_id: formData.tier_id || null,
       status: formData.status,
-    }, {
+    };
+
+    // Auto-compute subscription_end when activating or changing tier while active
+    if (needsNewEndDate && selectedTier) {
+      const nowISO = new Date().toISOString();
+      // If activating from expired/inactive, start from now; otherwise stack on existing end
+      const currentEndISO = (isActivating && currentEndInPast) ? null : (subscriber.subscription_end || null);
+      const { unit, count, timezone } = getTierInterval(selectedTier);
+      const newEndISO = computeNextEndISO(nowISO, currentEndISO, unit, count, timezone);
+      
+      updates.subscription_end = newEndISO;
+      console.log('[EditSubscriberDialog] Auto-computed subscription_end:', {
+        isActivating,
+        isTierChanged,
+        currentEndInPast,
+        oldEnd: subscriber.subscription_end,
+        newEnd: newEndISO,
+        tier: selectedTier.name,
+      });
+    }
+
+    updateSubscriber.mutate(updates as any, {
       onSuccess: () => onOpenChange(false),
     });
   };
@@ -174,6 +210,28 @@ export function EditSubscriberDialog({ subscriber, open, onOpenChange }: EditSub
                   </SelectContent>
                 </Select>
               </div>
+
+              {/* Warning when activating without tier and past end date */}
+              {showEndDateWarning && (
+                <div className="flex items-start gap-2 p-3 rounded-lg bg-warning/10 border border-warning/30 text-warning">
+                  <AlertTriangle className="h-5 w-5 flex-shrink-0 mt-0.5" />
+                  <div className="text-sm">
+                    <p className="font-medium">Внимание</p>
+                    <p className="text-muted-foreground">
+                      Дата окончания подписки в прошлом. Выберите тариф, чтобы автоматически установить новую дату окончания.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Show computed new end date when activating with tier */}
+              {needsNewEndDate && selectedTier && (
+                <div className="p-3 rounded-lg bg-primary/10 border border-primary/30 text-sm">
+                  <p className="text-muted-foreground">
+                    Новый срок подписки будет автоматически рассчитан на основе выбранного тарифа ({selectedTier.name}).
+                  </p>
+                </div>
+              )}
 
               <div className="flex justify-end gap-3 pt-4">
                 <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
