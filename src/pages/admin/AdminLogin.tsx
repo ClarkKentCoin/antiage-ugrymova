@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Loader2 } from 'lucide-react';
 
 export default function AdminLogin() {
-  const { user, isAdmin, isLoading, signIn, signUp } = useAuth();
+  const { user, isAdmin, isLoading, signIn, signOut } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -27,6 +27,11 @@ export default function AdminLogin() {
   }
 
   if (user && !isAdmin) {
+    const handleLogout = async () => {
+      await signOut();
+      window.location.href = '/admin/login';
+    };
+
     return (
       <div className="flex min-h-screen items-center justify-center bg-background p-4">
         <Card className="w-full max-w-md">
@@ -36,6 +41,11 @@ export default function AdminLogin() {
               You don't have admin privileges. Please contact the administrator.
             </CardDescription>
           </CardHeader>
+          <CardContent className="flex justify-center">
+            <Button variant="destructive" onClick={handleLogout}>
+              Log out
+            </Button>
+          </CardContent>
         </Card>
       </div>
     );

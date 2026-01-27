@@ -353,6 +353,7 @@ export type Database = {
           is_active: boolean | null
           name: string
           price: number
+          tenant_id: string | null
           updated_at: string
         }
         Insert: {
@@ -366,6 +367,7 @@ export type Database = {
           is_active?: boolean | null
           name: string
           price: number
+          tenant_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -379,9 +381,18 @@ export type Database = {
           is_active?: boolean | null
           name?: string
           price?: number
+          tenant_id?: string | null
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "subscription_tiers_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       system_logs: {
         Row: {
@@ -440,6 +451,27 @@ export type Database = {
           },
         ]
       }
+      tenants: {
+        Row: {
+          created_at: string
+          id: string
+          owner_id: string
+          slug: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          owner_id: string
+          slug: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          owner_id?: string
+          slug?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           id: string
@@ -463,6 +495,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      current_tenant_id: { Args: never; Returns: string }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
