@@ -54,16 +54,25 @@ export function ExtendSubscriptionDialog({ subscriber, open, onOpenChange }: Ext
     e.preventDefault();
     if (!subscriber || !selectedTier) return;
 
+    // CRITICAL: Calculate new end date FIRST and ensure it's valid
     const newEndISO = getNewEndDate();
+    if (!newEndISO) {
+      console.error('[ExtendSubscriptionDialog] Failed to calculate new end date');
+      return;
+    }
+    
     const oldEndISO = subscriber.subscription_end;
     const requestId = generateRequestId();
     
-    // Update subscriber - never overwrite subscription_start if already set
+    console.log(`[ExtendSubscriptionDialog] Extending subscription: old_end=${oldEndISO}, new_end=${newEndISO}`);
+    
+    // Update subscriber with explicit subscription_end - never pass undefined!
     updateSubscriber.mutate({
       id: subscriber.id,
       tier_id: formData.tier_id,
-      subscription_end: newEndISO || undefined,
+      subscription_end: newEndISO, // Always a valid ISO string
       status: 'active',
+      _oldStatus: subscriber.status, // Pass old status for status change detection
     }, {
       onSuccess: () => {
         // Record payment
