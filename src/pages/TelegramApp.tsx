@@ -99,9 +99,22 @@ export default function TelegramApp() {
   const telegramUserIdForPayments = user?.id ?? testUserId;
   const { data: payments } = usePaymentHistoryForUser(telegramUserIdForPayments, initData);
 
-  const daysRemaining = activeSubscriber?.subscription_end
-    ? differenceInDays(new Date(activeSubscriber.subscription_end), new Date())
-    : null;
+  // Calculate days remaining, accounting for grace period
+  const daysRemaining = (() => {
+    if (!activeSubscriber?.subscription_end) return null;
+    
+    const subscriptionEnd = new Date(activeSubscriber.subscription_end);
+    const now = new Date();
+    
+    // For grace_period status, calculate days until end of grace period
+    if (activeSubscriber.status === 'grace_period' && gracePeriodDays != null && gracePeriodDays > 0) {
+      const graceEndDate = addDays(subscriptionEnd, gracePeriodDays);
+      return Math.max(0, differenceInDays(graceEndDate, now));
+    }
+    
+    // For active or other statuses, use subscription end date
+    return differenceInDays(subscriptionEnd, now);
+  })();
 
   const allowTestMode =
     import.meta.env.DEV || new URLSearchParams(window.location.search).has('test');
