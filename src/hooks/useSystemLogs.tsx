@@ -28,6 +28,7 @@ export function useSystemLogs(filters: LogFilters = {}, page: number = 0, pageSi
   return useQuery({
     queryKey: ['system-logs', filters, page, pageSize],
     queryFn: async () => {
+      // Fetch logs with subscriber join
       let query = supabase
         .from('system_logs')
         .select('*, subscribers(telegram_username, first_name, last_name, email)', { count: 'exact' })
@@ -82,27 +83,60 @@ export function useSystemLogs(filters: LogFilters = {}, page: number = 0, pageSi
         }
       }
 
-      // Email filter - requires a subquery approach
-      // We'll filter on the client side after fetching if email filter is set
-      // This is a workaround since Supabase doesn't support filtering on joined fields directly in .or()
-
       const { data, error, count } = await query;
 
       if (error) throw error;
 
-      // Filter by email on client side if email filter is provided
-      let filteredData = data as (SystemLog & { subscribers: { telegram_username: string | null; first_name: string | null; last_name: string | null; email: string | null } | null })[];
+      type LogWithSubscriber = SystemLog & { subscribers: { telegram_username: string | null; first_name: string | null; last_name: string | null; email: string | null } | null };
+      let logs = data as LogWithSubscriber[];
+
+      // For logs without subscriber_id but with telegram_user_id, try to find subscriber by telegram_user_id
+      const logsNeedingLookup = logs.filter(log => !log.subscriber_id && log.telegram_user_id);
       
+      if (logsNeedingLookup.length > 0) {
+        const telegramUserIds = [...new Set(logsNeedingLookup.map(log => log.telegram_user_id!))];
+        
+        const { data: subscribersByTelegramId } = await supabase
+          .from('subscribers')
+          .select('telegram_user_id, telegram_username, first_name, last_name, email')
+          .in('telegram_user_id', telegramUserIds);
+        
+        if (subscribersByTelegramId) {
+          const subscriberMap = new Map(
+            subscribersByTelegramId.map(s => [s.telegram_user_id, s])
+          );
+          
+          logs = logs.map(log => {
+            if (!log.subscribers && log.telegram_user_id) {
+              const sub = subscriberMap.get(log.telegram_user_id);
+              if (sub) {
+                return {
+                  ...log,
+                  subscribers: {
+                    telegram_username: sub.telegram_username,
+                    first_name: sub.first_name,
+                    last_name: sub.last_name,
+                    email: sub.email,
+                  }
+                };
+              }
+            }
+            return log;
+          });
+        }
+      }
+
+      // Filter by email on client side if email filter is provided
       if (filters.email && filters.email.trim()) {
         const emailSearch = filters.email.trim().toLowerCase();
-        filteredData = filteredData.filter(log => 
+        logs = logs.filter(log => 
           log.subscribers?.email?.toLowerCase().includes(emailSearch)
         );
       }
 
       return {
-        logs: filteredData,
-        totalCount: filters.email ? filteredData.length : (count || 0),
+        logs,
+        totalCount: filters.email ? logs.length : (count || 0),
       };
     },
   });
