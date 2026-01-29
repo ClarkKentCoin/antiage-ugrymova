@@ -67,6 +67,7 @@ export type Database = {
           telegram_admin_notifications_enabled: boolean
           telegram_bot_token: string | null
           telegram_channel_id: string | null
+          tenant_id: string | null
           updated_at: string
           welcome_message_button_text: string | null
           welcome_message_button_url: string | null
@@ -95,6 +96,7 @@ export type Database = {
           telegram_admin_notifications_enabled?: boolean
           telegram_bot_token?: string | null
           telegram_channel_id?: string | null
+          tenant_id?: string | null
           updated_at?: string
           welcome_message_button_text?: string | null
           welcome_message_button_url?: string | null
@@ -123,13 +125,22 @@ export type Database = {
           telegram_admin_notifications_enabled?: boolean
           telegram_bot_token?: string | null
           telegram_channel_id?: string | null
+          tenant_id?: string | null
           updated_at?: string
           welcome_message_button_text?: string | null
           welcome_message_button_url?: string | null
           welcome_message_image_url?: string | null
           welcome_message_text?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "admin_settings_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       invite_links: {
         Row: {
@@ -140,6 +151,7 @@ export type Database = {
           revoked: boolean
           revoked_at: string | null
           subscriber_id: string
+          tenant_id: string | null
         }
         Insert: {
           created_at?: string
@@ -149,6 +161,7 @@ export type Database = {
           revoked?: boolean
           revoked_at?: string | null
           subscriber_id: string
+          tenant_id?: string | null
         }
         Update: {
           created_at?: string
@@ -158,6 +171,7 @@ export type Database = {
           revoked?: boolean
           revoked_at?: string | null
           subscriber_id?: string
+          tenant_id?: string | null
         }
         Relationships: [
           {
@@ -165,6 +179,13 @@ export type Database = {
             columns: ["subscriber_id"]
             isOneToOne: false
             referencedRelation: "subscribers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invite_links_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
         ]
@@ -181,6 +202,7 @@ export type Database = {
           robokassa_data: Json | null
           status: string | null
           subscriber_id: string
+          tenant_id: string | null
           tier_id: string | null
           transaction_type: string | null
         }
@@ -195,6 +217,7 @@ export type Database = {
           robokassa_data?: Json | null
           status?: string | null
           subscriber_id: string
+          tenant_id?: string | null
           tier_id?: string | null
           transaction_type?: string | null
         }
@@ -209,6 +232,7 @@ export type Database = {
           robokassa_data?: Json | null
           status?: string | null
           subscriber_id?: string
+          tenant_id?: string | null
           tier_id?: string | null
           transaction_type?: string | null
         }
@@ -218,6 +242,13 @@ export type Database = {
             columns: ["subscriber_id"]
             isOneToOne: false
             referencedRelation: "subscribers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_history_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
           {
@@ -248,6 +279,7 @@ export type Database = {
           subscription_start: string | null
           telegram_user_id: number
           telegram_username: string | null
+          tenant_id: string | null
           tier_id: string | null
           updated_at: string
         }
@@ -269,6 +301,7 @@ export type Database = {
           subscription_start?: string | null
           telegram_user_id: number
           telegram_username?: string | null
+          tenant_id?: string | null
           tier_id?: string | null
           updated_at?: string
         }
@@ -290,10 +323,18 @@ export type Database = {
           subscription_start?: string | null
           telegram_user_id?: number
           telegram_username?: string | null
+          tenant_id?: string | null
           tier_id?: string | null
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "subscribers_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "subscribers_tier_id_fkey"
             columns: ["tier_id"]
@@ -384,15 +425,7 @@ export type Database = {
           tenant_id?: string | null
           updated_at?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "subscription_tiers_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       system_logs: {
         Row: {
@@ -406,6 +439,7 @@ export type Database = {
           source: string
           subscriber_id: string | null
           telegram_user_id: number | null
+          tenant_id: string | null
           tier_id: string | null
         }
         Insert: {
@@ -419,6 +453,7 @@ export type Database = {
           source: string
           subscriber_id?: string | null
           telegram_user_id?: number | null
+          tenant_id?: string | null
           tier_id?: string | null
         }
         Update: {
@@ -432,6 +467,7 @@ export type Database = {
           source?: string
           subscriber_id?: string | null
           telegram_user_id?: number | null
+          tenant_id?: string | null
           tier_id?: string | null
         }
         Relationships: [
@@ -496,6 +532,8 @@ export type Database = {
     }
     Functions: {
       current_tenant_id: { Args: never; Returns: string }
+      default_admin_id: { Args: never; Returns: string }
+      generate_tenant_slug: { Args: never; Returns: string }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
