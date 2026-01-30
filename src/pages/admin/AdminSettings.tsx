@@ -31,6 +31,7 @@ interface AdminSettingsData {
   notification_payment_failed: string | null;
   notification_grace_period_warning: string | null;
   notification_subscription_expired: string | null;
+  notification_subscription_expiring_single: string | null;
   // Admin notifications
   telegram_admin_notifications_enabled: boolean;
   telegram_admin_notifications_channel_id: string;
@@ -63,6 +64,7 @@ export default function AdminSettings() {
     notification_payment_failed: '',
     notification_grace_period_warning: '',
     notification_subscription_expired: '',
+    notification_subscription_expiring_single: '',
     telegram_admin_notifications_enabled: false,
     telegram_admin_notifications_channel_id: '',
   });
@@ -107,6 +109,7 @@ export default function AdminSettings() {
           notification_payment_failed: (data as any).notification_payment_failed || '',
           notification_grace_period_warning: (data as any).notification_grace_period_warning || '',
           notification_subscription_expired: (data as any).notification_subscription_expired || '',
+          notification_subscription_expiring_single: (data as any).notification_subscription_expiring_single || '',
           telegram_admin_notifications_enabled: (data as any).telegram_admin_notifications_enabled ?? false,
           telegram_admin_notifications_channel_id: (data as any).telegram_admin_notifications_channel_id || '',
         });
@@ -148,6 +151,7 @@ export default function AdminSettings() {
         notification_payment_failed: settings.notification_payment_failed || null,
         notification_grace_period_warning: settings.notification_grace_period_warning || null,
         notification_subscription_expired: settings.notification_subscription_expired || null,
+        notification_subscription_expiring_single: settings.notification_subscription_expiring_single || null,
         telegram_admin_notifications_enabled: settings.telegram_admin_notifications_enabled,
         telegram_admin_notifications_channel_id: settings.telegram_admin_notifications_channel_id || null,
       };
@@ -552,6 +556,18 @@ export default function AdminSettings() {
                   rows={6}
                 />
                 <p className="text-xs text-muted-foreground">Переменные: {'{channel_name}'}</p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="notification_subscription_expiring_single">Напоминание об окончании подписки (Single/manual)</Label>
+                <Textarea
+                  id="notification_subscription_expiring_single"
+                  placeholder="⏳ Подписка скоро закончится..."
+                  value={settings.notification_subscription_expiring_single || ''}
+                  onChange={(e) => setSettings({ ...settings, notification_subscription_expiring_single: e.target.value })}
+                  rows={6}
+                />
+                <p className="text-xs text-muted-foreground">Переменные: {'{channel_name}'}, {'{days}'}, {'{expires_date}'}</p>
               </div>
             </CardContent>
           </Card>

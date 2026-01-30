@@ -9,15 +9,22 @@ import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 export type AdminNotificationEventType =
   | "PAYMENT_SUCCESS"
+  | "PAYMENT_FAILED"
   | "EXPIRING_IN_3_DAYS"
   | "GRACE_STARTED"
   | "GRACE_ENDED"
-  | "SUBSCRIPTION_ENDED";
+  | "SUBSCRIPTION_ENDED"
+  | "SUBSCRIPTION_CANCELLED"
+  | "SUBSCRIPTION_RENEWED";
 
 export type AdminNotificationSource =
   | "robokassa-webhook"
   | "notify-upcoming-payments"
-  | "check-expired-subscriptions";
+  | "check-expired-subscriptions"
+  | "process-recurring-payments"
+  | "subscriber-status-change"
+  | "cancel-subscription"
+  | "notify-expiring-single-subscriptions";
 
 export interface AdminNotificationSubscriber {
   id?: string | null;
@@ -122,8 +129,11 @@ function buildMessageText(opts: SendAdminNotificationOptions): string {
     case "PAYMENT_SUCCESS":
       return `✅ Успешная покупка\nПлан: ${plan}\nСтатус: ${status}\nМетод: ${method}\nСумма: ${amount}\nПодписка до: ${subscriptionEnd}\nПримечание: ${note}\n${subscriberBlock}`;
 
+    case "PAYMENT_FAILED":
+      return `❌ Ошибка оплаты\nПлан: ${plan}\nМетод: ${method}\nСумма: ${amount}\nПримечание: ${note}\n${subscriberBlock}`;
+
     case "EXPIRING_IN_3_DAYS":
-      return `⏳ Заканчивается подписка (3 дня)\nПлан: ${plan}\nПодписка до: ${subscriptionEnd}\nСтатус: ${status}\n${subscriberBlock}`;
+      return `⏳ Заканчивается подписка (3 дня)\nПлан: ${plan}\nМетод: ${method}\nПодписка до: ${subscriptionEnd}\nСтатус: ${status}\n${subscriberBlock}`;
 
     case "GRACE_STARTED":
       return `🟠 Начался grace-период\nПлан: ${plan}\nПодписка закончилась: ${subscriptionEnd}\nGrace до: ${graceEnd}\nСтатус: ${status}\n${subscriberBlock}`;
@@ -133,6 +143,12 @@ function buildMessageText(opts: SendAdminNotificationOptions): string {
 
     case "SUBSCRIPTION_ENDED":
       return `⛔ Подписка завершена\nПлан: ${plan}\nСтатус: ${status}\n${subscriberBlock}`;
+
+    case "SUBSCRIPTION_CANCELLED":
+      return `🚫 Подписка отменена пользователем\nПлан: ${plan}\nСтатус: ${status}\n${subscriberBlock}`;
+
+    case "SUBSCRIPTION_RENEWED":
+      return `🔄 Подписка продлена\nПлан: ${plan}\nПодписка до: ${subscriptionEnd}\nСтатус: ${status}\n${subscriberBlock}`;
 
     default:
       return `📢 Уведомление: ${opts.eventType}\n${subscriberBlock}`;

@@ -1,5 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { sendAdminNotification } from "../_shared/adminNotifications.ts";
+import { logUserNotification } from "../_shared/userNotificationLogger.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -319,6 +321,33 @@ serve(async (req) => {
           parse_mode: "HTML",
         });
 
+        // Log user notification
+        await logUserNotification({
+          supabaseAdmin,
+          source: "subscriber-status-change",
+          notificationKey: "subscription_expired",
+          subscriberId: subscriber_id,
+          telegramUserId: telegram_user_id,
+          telegramOk: msgResult.ok,
+          telegramError: msgResult.ok ? null : msgResult.description,
+          textPreview: message,
+        });
+
+        // Send admin notification
+        await sendAdminNotification({
+          supabaseAdmin,
+          eventType: "SUBSCRIPTION_ENDED",
+          subscriber: {
+            id: subscriber_id,
+            name: null,
+            username: null,
+            telegram_user_id: telegram_user_id,
+            email: null,
+          },
+          status: new_status,
+          source: "subscriber-status-change",
+        });
+
         results.notification_sent = msgResult.ok;
         if (!msgResult.ok) {
           console.error(`Failed to send notification:`, msgResult.description);
@@ -340,6 +369,35 @@ serve(async (req) => {
           chat_id: telegram_user_id,
           text: message,
           parse_mode: "HTML",
+        });
+
+        // Log user notification
+        await logUserNotification({
+          supabaseAdmin,
+          source: "subscriber-status-change",
+          notificationKey: "grace_warning",
+          subscriberId: subscriber_id,
+          telegramUserId: telegram_user_id,
+          days: gracePeriodDays,
+          telegramOk: msgResult.ok,
+          telegramError: msgResult.ok ? null : msgResult.description,
+          textPreview: message,
+        });
+
+        // Send admin notification
+        await sendAdminNotification({
+          supabaseAdmin,
+          eventType: "GRACE_STARTED",
+          subscriber: {
+            id: subscriber_id,
+            name: null,
+            username: null,
+            telegram_user_id: telegram_user_id,
+            email: null,
+          },
+          status: new_status,
+          subscriptionEndISO: subscription_end,
+          source: "subscriber-status-change",
         });
 
         results.notification_sent = msgResult.ok;
@@ -387,6 +445,36 @@ serve(async (req) => {
           chat_id: telegram_user_id,
           text: message,
           parse_mode: "HTML",
+        });
+
+        // Log user notification
+        await logUserNotification({
+          supabaseAdmin,
+          source: "subscriber-status-change",
+          notificationKey: "subscription_renewed",
+          subscriberId: subscriber_id,
+          telegramUserId: telegram_user_id,
+          subscriptionEnd: freshSubscriptionEnd,
+          telegramOk: msgResult.ok,
+          telegramError: msgResult.ok ? null : msgResult.description,
+          textPreview: message,
+        });
+
+        // Send admin notification
+        await sendAdminNotification({
+          supabaseAdmin,
+          eventType: "SUBSCRIPTION_RENEWED",
+          subscriber: {
+            id: subscriber_id,
+            name: null,
+            username: null,
+            telegram_user_id: telegram_user_id,
+            email: null,
+          },
+          status: new_status,
+          subscriptionEndISO: freshSubscriptionEnd,
+          relatedAtISO: freshSubscriptionEnd,
+          source: "subscriber-status-change",
         });
 
         results.notification_sent = msgResult.ok;
@@ -465,6 +553,39 @@ serve(async (req) => {
         chat_id: telegram_user_id,
         text: message,
         parse_mode: "HTML",
+      });
+
+      // Log user notification
+      await logUserNotification({
+        supabaseAdmin,
+        source: "subscriber-status-change",
+        notificationKey: "new_subscriber",
+        subscriberId: subscriber_id,
+        telegramUserId: telegram_user_id,
+        subscriptionEnd: subscription_end,
+        telegramOk: msgResult.ok,
+        telegramError: msgResult.ok ? null : msgResult.description,
+        textPreview: message,
+      });
+
+      // Send admin notification for new subscriber
+      await sendAdminNotification({
+        supabaseAdmin,
+        eventType: "PAYMENT_SUCCESS",
+        subscriber: {
+          id: subscriber_id,
+          name: null,
+          username: null,
+          telegram_user_id: telegram_user_id,
+          email: null,
+        },
+        plan: tier_name ?? null,
+        status: "active",
+        method: "manual",
+        amount: amount ?? null,
+        subscriptionEndISO: subscription_end,
+        relatedAtISO: subscription_end,
+        source: "subscriber-status-change",
       });
 
       results.notification_sent = msgResult.ok;

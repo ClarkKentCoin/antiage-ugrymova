@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { DateTime } from "https://esm.sh/luxon@3.4.4";
 import { sendAdminNotification } from "../_shared/adminNotifications.ts";
+import { logUserNotification } from "../_shared/userNotificationLogger.ts";
 
 // SHA256 hash function (Robokassa signatures)
 async function sha256(message: string): Promise<string> {
@@ -254,6 +255,7 @@ serve(async (req) => {
           .update({
             robokassa_invoice_id: invId,
             next_payment_notification_sent: false, // Reset for next cycle
+            single_expiry_notification_sent: false, // Reset for single expiry cycle
           })
           .eq("id", shpSubscriberId);
 
@@ -264,15 +266,27 @@ serve(async (req) => {
         }
       }
 
-      // For recurring payments (transaction_type = 'recurring'), reset notification flag
+      // For recurring payments (transaction_type = 'recurring'), reset notification flags
       if (payment.transaction_type === "recurring") {
         await supabaseAdmin
           .from("subscribers")
           .update({
             next_payment_notification_sent: false,
+            single_expiry_notification_sent: false,
           })
           .eq("id", shpSubscriberId);
-        console.log(`Reset next_payment_notification_sent for ${shpSubscriberId}`);
+        console.log(`Reset notification flags for ${shpSubscriberId}`);
+      }
+
+      // For single payments, also reset the single_expiry_notification_sent flag
+      if (payment.payment_method === "robokassa_single") {
+        await supabaseAdmin
+          .from("subscribers")
+          .update({
+            single_expiry_notification_sent: false,
+          })
+          .eq("id", shpSubscriberId);
+        console.log(`Reset single_expiry_notification_sent for ${shpSubscriberId}`);
       }
 
       // Calculate subscription end date using calendar intervals
@@ -458,7 +472,7 @@ serve(async (req) => {
               .replace(/{amount}/g, formattedAmount)
               .replace(/{expires_date}/g, expiresDate);
 
-            await fetch(
+            const msgResult = await fetch(
               `https://api.telegram.org/bot${telegramSettings.telegram_bot_token}/sendMessage`,
               {
                 method: "POST",
@@ -470,7 +484,21 @@ serve(async (req) => {
                 }),
               }
             );
+            const msgResponse = await msgResult.json();
             console.log(`[robokassa] Sent success payment message to user ${subscriberData.telegram_user_id}`);
+
+            // Log user notification
+            await logUserNotification({
+              supabaseAdmin,
+              source: "robokassa-webhook",
+              notificationKey: "payment_success",
+              subscriberId: shpSubscriberId,
+              telegramUserId: subscriberData.telegram_user_id,
+              subscriptionEnd: computedNewEndISO,
+              telegramOk: msgResponse.ok,
+              telegramError: msgResponse.ok ? null : msgResponse.description,
+              textPreview: successMessage,
+            });
           }
 
           // Check if user is already in channel - skip invite generation

@@ -17,14 +17,13 @@ function replaceVariables(template: string, variables: Record<string, string>): 
   return result;
 }
 
-const DEFAULT_PAYMENT_REMINDER = `⏰ Напоминание о списании
+const DEFAULT_SINGLE_EXPIRY_REMINDER = `⏳ Подписка скоро закончится
 
-Через {days} дней будет списана оплата за продление подписки на канал "{channel_name}".
+Через {days} дней закончится ваша подписка на канал "{channel_name}".
 
-💰 Сумма: {amount}₽
-📅 Дата списания: {payment_date}
+📅 Действует до: {expires_date}
 
-Если хотите отключить автопродление, сделайте это в настройках подписки.`;
+Чтобы продлить доступ — откройте Mini App и выберите срок подписки.`;
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -43,7 +42,7 @@ serve(async (req) => {
     );
   }
 
-  console.log("Processing upcoming payment notifications");
+  console.log("Processing single expiry notifications");
 
   try {
     const supabaseAdmin = createClient(
@@ -54,7 +53,7 @@ serve(async (req) => {
     // Get settings including notification template
     const { data: settings, error: settingsError } = await supabaseAdmin
       .from("admin_settings")
-      .select("telegram_bot_token, channel_name, notification_payment_reminder, reminder_days_before")
+      .select("telegram_bot_token, channel_name, notification_subscription_expiring_single, reminder_days_before")
       .limit(1)
       .maybeSingle();
 
@@ -68,9 +67,9 @@ serve(async (req) => {
 
     const reminderDays = settings.reminder_days_before || 3;
     const channelName = settings.channel_name || "Канал";
-    const messageTemplate = settings.notification_payment_reminder || DEFAULT_PAYMENT_REMINDER;
+    const messageTemplate = settings.notification_subscription_expiring_single || DEFAULT_SINGLE_EXPIRY_REMINDER;
 
-    // Find subscriptions expiring in exactly reminderDays days with auto_renewal enabled
+    // Find subscriptions expiring in exactly reminderDays days with auto_renewal=false
     const now = new Date();
     const targetDate = new Date(now.getTime() + reminderDays * 24 * 60 * 60 * 1000);
     const nextDay = new Date(now.getTime() + (reminderDays + 1) * 24 * 60 * 60 * 1000);
@@ -86,15 +85,15 @@ serve(async (req) => {
         email,
         status,
         subscription_end,
-        next_payment_notification_sent,
+        single_expiry_notification_sent,
         subscription_tiers (
           name,
           price
         )
       `)
-      .eq("auto_renewal", true)
+      .eq("auto_renewal", false)
       .eq("status", "active")
-      .eq("next_payment_notification_sent", false)
+      .eq("single_expiry_notification_sent", false)
       .gte("subscription_end", targetDate.toISOString())
       .lt("subscription_end", nextDay.toISOString());
 
@@ -106,11 +105,11 @@ serve(async (req) => {
       );
     }
 
-    console.log(`Found ${subscriptions?.length || 0} subscriptions to notify`);
+    console.log(`Found ${subscriptions?.length || 0} single subscriptions to notify`);
 
     if (!subscriptions || subscriptions.length === 0) {
       return new Response(
-        JSON.stringify({ success: true, notified: 0, message: "No notifications to send" }),
+        JSON.stringify({ success: true, notified: 0, message: "No single expiry notifications to send" }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -122,15 +121,8 @@ serve(async (req) => {
         const tierData = subscription.subscription_tiers;
         const tier = Array.isArray(tierData) ? tierData[0] : tierData;
         
-        if (!tier) {
-          console.error(`No tier found for subscription ${subscription.id}`);
-          results.push({ subscriber_id: subscription.id, success: false, message: "No tier found" });
-          continue;
-        }
-
-        const amount = Number(tier.price).toLocaleString('ru-RU');
-        const paymentDate = new Date(subscription.subscription_end);
-        const formattedDate = paymentDate.toLocaleDateString('ru-RU', {
+        const expiresDate = new Date(subscription.subscription_end);
+        const formattedDate = expiresDate.toLocaleDateString('ru-RU', {
           day: 'numeric',
           month: 'long',
           year: 'numeric'
@@ -140,8 +132,7 @@ serve(async (req) => {
         const message = replaceVariables(messageTemplate, {
           channel_name: channelName,
           days: String(reminderDays),
-          amount: amount,
-          payment_date: formattedDate,
+          expires_date: formattedDate,
         });
 
         // Send notification via Telegram
@@ -163,8 +154,8 @@ serve(async (req) => {
         // Log user notification
         await logUserNotification({
           supabaseAdmin,
-          source: "notify-upcoming-payments",
-          notificationKey: "auto_payment_reminder",
+          source: "notify-expiring-single-subscriptions",
+          notificationKey: "single_expiry_reminder",
           subscriberId: subscription.id,
           telegramUserId: subscription.telegram_user_id,
           subscriptionEnd: subscription.subscription_end,
@@ -178,10 +169,10 @@ serve(async (req) => {
           // Update notification sent flag
           await supabaseAdmin
             .from("subscribers")
-            .update({ next_payment_notification_sent: true })
+            .update({ single_expiry_notification_sent: true })
             .eq("id", subscription.id);
 
-          console.log(`Notification sent to ${subscription.telegram_user_id}`);
+          console.log(`Single expiry notification sent to ${subscription.telegram_user_id}`);
           results.push({ subscriber_id: subscription.id, success: true, message: "Notification sent" });
 
           // Send admin notification
@@ -195,12 +186,12 @@ serve(async (req) => {
               telegram_user_id: subscription.telegram_user_id ?? null,
               email: subscription.email ?? null,
             },
-            plan: tier.name ?? null,
+            plan: tier?.name ?? null,
             status: subscription.status ?? "active",
-            method: "recurring",
+            method: "single",
             subscriptionEndISO: subscription.subscription_end ?? null,
             relatedAtISO: subscription.subscription_end ?? null,
-            source: "notify-upcoming-payments",
+            source: "notify-expiring-single-subscriptions",
           });
         } else {
           console.error(`Failed to send notification to ${subscription.telegram_user_id}:`, result);
@@ -218,7 +209,7 @@ serve(async (req) => {
     }
 
     const successCount = results.filter(r => r.success).length;
-    console.log(`Notified ${successCount} of ${results.length} subscriptions`);
+    console.log(`Notified ${successCount} of ${results.length} single subscriptions`);
 
     return new Response(
       JSON.stringify({
