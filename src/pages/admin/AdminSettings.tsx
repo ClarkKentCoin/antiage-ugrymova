@@ -20,6 +20,7 @@ interface AdminSettingsData {
   robokassa_result_url: string | null;
   grace_period_days: number;
   reminder_days_before: number;
+  single_reminder_days_before: number | null;
   payment_link: string | null;
   welcome_message_text: string | null;
   welcome_message_image_url: string | null;
@@ -54,6 +55,7 @@ export default function AdminSettings() {
     robokassa_result_url: '',
     grace_period_days: 0,
     reminder_days_before: 3,
+    single_reminder_days_before: null,
     payment_link: '',
     welcome_message_text: '',
     welcome_message_image_url: '',
@@ -99,6 +101,7 @@ export default function AdminSettings() {
           robokassa_result_url: (data as any).robokassa_result_url || defaultWebhookUrl,
           grace_period_days: data.grace_period_days || 0,
           reminder_days_before: data.reminder_days_before || 3,
+          single_reminder_days_before: (data as any).single_reminder_days_before ?? null,
           payment_link: (data as any).payment_link || '',
           welcome_message_text: (data as any).welcome_message_text || '',
           welcome_message_image_url: (data as any).welcome_message_image_url || '',
@@ -141,6 +144,7 @@ export default function AdminSettings() {
         robokassa_result_url: settings.robokassa_result_url || defaultWebhookUrl,
         grace_period_days: settings.grace_period_days,
         reminder_days_before: settings.reminder_days_before,
+        single_reminder_days_before: settings.single_reminder_days_before,
         payment_link: settings.payment_link || null,
         welcome_message_text: settings.welcome_message_text || null,
         welcome_message_image_url: settings.welcome_message_image_url || null,
@@ -600,7 +604,7 @@ export default function AdminSettings() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="reminder_days">Напоминание за (дней)</Label>
+                <Label htmlFor="reminder_days">Напоминание за (дней) — рекуррентные</Label>
                 <Input
                   id="reminder_days"
                   type="number"
@@ -608,7 +612,27 @@ export default function AdminSettings() {
                   value={settings.reminder_days_before}
                   onChange={(e) => setSettings({ ...settings, reminder_days_before: parseInt(e.target.value) || 0 })}
                 />
-                <p className="text-xs text-muted-foreground">За сколько дней до окончания подписки отправить напоминание</p>
+                <p className="text-xs text-muted-foreground">За сколько дней до окончания рекуррентной подписки отправить напоминание о списании</p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="single_reminder_days">Напоминание Single/manual (дней)</Label>
+                <Input
+                  id="single_reminder_days"
+                  type="number"
+                  min="0"
+                  max="90"
+                  value={settings.single_reminder_days_before ?? ''}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setSettings({ 
+                      ...settings, 
+                      single_reminder_days_before: val === '' ? null : parseInt(val) || 0 
+                    });
+                  }}
+                  placeholder="По умолчанию как рекуррентные"
+                />
+                <p className="text-xs text-muted-foreground">За сколько дней до окончания single/manual подписки отправить напоминание. Если пусто — используется значение для рекуррентных.</p>
               </div>
 
               <div className="space-y-2">

@@ -64,6 +64,7 @@ export type Database = {
           robokassa_password2: string | null
           robokassa_result_url: string | null
           robokassa_test_mode: boolean | null
+          single_reminder_days_before: number | null
           telegram_admin_notifications_channel_id: string | null
           telegram_admin_notifications_enabled: boolean
           telegram_bot_token: string | null
@@ -94,6 +95,7 @@ export type Database = {
           robokassa_password2?: string | null
           robokassa_result_url?: string | null
           robokassa_test_mode?: boolean | null
+          single_reminder_days_before?: number | null
           telegram_admin_notifications_channel_id?: string | null
           telegram_admin_notifications_enabled?: boolean
           telegram_bot_token?: string | null
@@ -124,6 +126,7 @@ export type Database = {
           robokassa_password2?: string | null
           robokassa_result_url?: string | null
           robokassa_test_mode?: boolean | null
+          single_reminder_days_before?: number | null
           telegram_admin_notifications_channel_id?: string | null
           telegram_admin_notifications_enabled?: boolean
           telegram_bot_token?: string | null

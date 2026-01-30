@@ -53,7 +53,7 @@ serve(async (req) => {
     // Get settings including notification template
     const { data: settings, error: settingsError } = await supabaseAdmin
       .from("admin_settings")
-      .select("telegram_bot_token, channel_name, notification_subscription_expiring_single, reminder_days_before")
+      .select("telegram_bot_token, channel_name, notification_subscription_expiring_single, reminder_days_before, single_reminder_days_before")
       .limit(1)
       .maybeSingle();
 
@@ -65,7 +65,7 @@ serve(async (req) => {
       );
     }
 
-    const reminderDays = settings.reminder_days_before || 3;
+    const reminderDays = settings.single_reminder_days_before ?? settings.reminder_days_before ?? 3;
     const channelName = settings.channel_name || "Канал";
     const messageTemplate = settings.notification_subscription_expiring_single || DEFAULT_SINGLE_EXPIRY_REMINDER;
 
