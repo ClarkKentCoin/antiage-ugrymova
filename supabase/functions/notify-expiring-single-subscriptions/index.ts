@@ -30,11 +30,18 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  // Verify scheduled task secret
+  // Accept either SCHEDULED_TASK_SECRET or anon key for cron jobs
   const authHeader = req.headers.get("Authorization");
   const expectedSecret = Deno.env.get("SCHEDULED_TASK_SECRET");
-  
-  if (!authHeader || authHeader !== `Bearer ${expectedSecret}`) {
+  // Hardcode anon key for cron job compatibility
+  const anonKey =
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InptZXdmaG5heWNqdXZwanhraWluIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjY0MTcwNDUsImV4cCI6MjA4MTk5MzA0NX0.y4GssGSn_PIMg8CgoYU2fSyujoAA8VV07I8PKDfipRo";
+
+  const bearerToken = authHeader?.replace("Bearer ", "");
+  const isValidSecret = bearerToken === expectedSecret;
+  const isValidAnonKey = bearerToken === anonKey;
+
+  if (!authHeader || (!isValidSecret && !isValidAnonKey)) {
     console.error("Unauthorized scheduled task execution attempt");
     return new Response(
       JSON.stringify({ error: "Unauthorized" }),
