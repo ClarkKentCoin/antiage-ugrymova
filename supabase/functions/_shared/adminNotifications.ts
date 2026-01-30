@@ -47,6 +47,7 @@ export interface SendAdminNotificationOptions {
   note?: string | null;
   paymentId?: string | null;
   relatedAtISO?: string | null;
+  days?: number | null;
   source: AdminNotificationSource;
 }
 
@@ -132,8 +133,10 @@ function buildMessageText(opts: SendAdminNotificationOptions): string {
     case "PAYMENT_FAILED":
       return `❌ Ошибка оплаты\nПлан: ${plan}\nМетод: ${method}\nСумма: ${amount}\nПримечание: ${note}\n${subscriberBlock}`;
 
-    case "EXPIRING_IN_3_DAYS":
-      return `⏳ Заканчивается подписка (3 дня)\nПлан: ${plan}\nМетод: ${method}\nПодписка до: ${subscriptionEnd}\nСтатус: ${status}\n${subscriberBlock}`;
+    case "EXPIRING_IN_3_DAYS": {
+      const daysLabel = opts.days != null ? ` (${opts.days} дней)` : "";
+      return `⏳ Заканчивается подписка${daysLabel}\nПлан: ${plan}\nМетод: ${method}\nПодписка до: ${subscriptionEnd}\nСтатус: ${status}\n${subscriberBlock}`;
+    }
 
     case "GRACE_STARTED":
       return `🟠 Начался grace-период\nПлан: ${plan}\nПодписка закончилась: ${subscriptionEnd}\nGrace до: ${graceEnd}\nСтатус: ${status}\n${subscriberBlock}`;

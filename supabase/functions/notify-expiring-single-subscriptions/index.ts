@@ -198,6 +198,7 @@ serve(async (req) => {
             method: "single",
             subscriptionEndISO: subscription.subscription_end ?? null,
             relatedAtISO: subscription.subscription_end ?? null,
+            days: reminderDays,
             source: "notify-expiring-single-subscriptions",
           });
         } else {
