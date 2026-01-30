@@ -443,7 +443,7 @@ function NewUserView({
                   </div>
                   <div>
                     <p className="font-semibold text-lg">{tier.name}</p>
-                    <p className="text-sm text-muted-foreground">{tier.duration_days} дней</p>
+                    <p className="text-sm text-muted-foreground">{formatDaysRu(tier.duration_days)}</p>
                   </div>
                 </div>
                 <p className="text-xl font-bold">{Number(tier.price).toLocaleString('ru-RU')}₽</p>
@@ -673,7 +673,7 @@ function GracePeriodView({
                   </div>
                   <div>
                     <p className="font-semibold text-lg">{tier.name}</p>
-                    <p className="text-sm text-muted-foreground">{tier.duration_days} дней</p>
+                    <p className="text-sm text-muted-foreground">{formatDaysRu(tier.duration_days)}</p>
                   </div>
                 </div>
                 <p className="text-xl font-bold">{Number(tier.price).toLocaleString('ru-RU')}₽</p>
@@ -1101,7 +1101,7 @@ function SubscriptionContent({
               <CardContent className="flex items-center justify-between p-4">
                 <div>
                   <p className="font-medium">{tier.name}</p>
-                  <p className="text-sm text-muted-foreground">{tier.duration_days} дней</p>
+                  <p className="text-sm text-muted-foreground">{formatDaysRu(tier.duration_days)}</p>
                 </div>
                 <p className="text-lg font-bold">{tier.price}₽</p>
               </CardContent>
