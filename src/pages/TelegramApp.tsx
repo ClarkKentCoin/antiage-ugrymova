@@ -15,6 +15,7 @@ import logoUgrymova from '@/assets/logo-ugrymova.png';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
+import { formatDaysRu } from '@/lib/textFormatters';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -634,7 +635,7 @@ function GracePeriodView({
             <div className="space-y-2">
               <h2 className="text-lg font-semibold">⚠️ Ваша подписка истекла</h2>
               <p className="text-muted-foreground">
-                У вас есть <span className="font-bold text-warning">{graceDaysRemaining} {graceDaysRemaining === 1 ? 'день' : graceDaysRemaining < 5 ? 'дня' : 'дней'}</span> для продления без потери доступа к архиву канала.
+                У вас есть <span className="font-bold text-warning">{formatDaysRu(graceDaysRemaining)}</span> для продления без потери доступа к архиву канала.
               </p>
               <p className="text-sm text-muted-foreground">
                 Продлите сейчас, чтобы не потерять историю сообщений.
@@ -1005,7 +1006,7 @@ function SubscriptionContent({
                 <p className="text-sm font-medium">
                   {new Date(subscriber.subscription_end).getTime() > Date.now()
                     ? (daysRemaining !== null && daysRemaining > 0 
-                        ? `Осталось ${daysRemaining} дней`
+                        ? `Осталось ${formatDaysRu(daysRemaining)}`
                         : 'Осталось меньше дня')
                     : 'Подписка истекла'
                   }
