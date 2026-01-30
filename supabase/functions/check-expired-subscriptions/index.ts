@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sendAdminNotification } from "../_shared/adminNotifications.ts";
 import { logUserNotification } from "../_shared/userNotificationLogger.ts";
+import { getDayWordRu, formatDaysRu } from "../_shared/textFormatters.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -15,8 +16,13 @@ interface TelegramResponse {
 }
 
 // Replace template variables with actual values
+// Handles backward compatibility: "{days} дней" → "{days} {days_word}"
 function replaceVariables(template: string, variables: Record<string, string>): string {
   let result = template;
+  
+  // Backward compatibility: replace "{days} дней" patterns with proper pluralization
+  result = result.replace(/\{days\}\s*дней/g, `{days} {days_word}`);
+  
   for (const [key, value] of Object.entries(variables)) {
     result = result.replace(new RegExp(`\\{${key}\\}`, "g"), value);
   }
@@ -27,7 +33,7 @@ const DEFAULT_GRACE_PERIOD_WARNING = `⚠️ Последнее предупре
 
 Ваша подписка на канал "{channel_name}" истекла.
 
-У вас осталось {days} дней для продления. После этого вы будете удалены из канала и потеряете доступ к архиву сообщений.
+У вас осталось {days} {days_word} для продления. После этого вы будете удалены из канала и потеряете доступ к архиву сообщений.
 
 💎 Продлите сейчас, чтобы сохранить доступ.`;
 
@@ -61,14 +67,11 @@ serve(async (req) => {
   // Accept either SCHEDULED_TASK_SECRET or anon key for cron jobs
   const authHeader = req.headers.get("Authorization");
   const expectedSecret = Deno.env.get("SCHEDULED_TASK_SECRET");
-  // Hardcode anon key for cron job compatibility
-  const anonKey =
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InptZXdmaG5heWNqdXZwanhraWluIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjY0MTcwNDUsImV4cCI6MjA4MTk5MzA0NX0.y4GssGSn_PIMg8CgoYU2fSyujoAA8VV07I8PKDfipRo";
+  const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
 
   const bearerToken = authHeader?.replace("Bearer ", "");
-  const isValidSecret = bearerToken === expectedSecret;
-  const isValidAnonKey = bearerToken === anonKey;
-
+  const isValidSecret = expectedSecret && bearerToken === expectedSecret;
+  const isValidAnonKey = anonKey && bearerToken === anonKey;
   if (!authHeader || (!isValidSecret && !isValidAnonKey)) {
     console.error("Unauthorized scheduled task execution attempt");
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
@@ -289,6 +292,8 @@ serve(async (req) => {
           const warningMessage = replaceVariables(gracePeriodWarningTemplate, {
             channel_name: channelName,
             days: String(daysLeft),
+            days_word: getDayWordRu(daysLeft),
+            days_label: formatDaysRu(daysLeft),
           });
 
           const warningMsgResult = await callTelegramApi(botToken, "sendMessage", {
