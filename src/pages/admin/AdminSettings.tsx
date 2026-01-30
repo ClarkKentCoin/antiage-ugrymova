@@ -511,7 +511,12 @@ export default function AdminSettings() {
                   onChange={(e) => setSettings({ ...settings, notification_payment_reminder: e.target.value })}
                   rows={6}
                 />
-                <p className="text-xs text-muted-foreground">Переменные: {'{channel_name}'}, {'{days}'}, {'{amount}'}, {'{payment_date}'}</p>
+                <p className="text-xs text-muted-foreground">
+                  Переменные: {'{channel_name}'}, {'{days}'}, {'{days_word}'} (день/дня/дней), {'{days_label}'} (N день/дня/дней), {'{amount}'}, {'{payment_date}'}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  💡 Для правильного склонения используйте {'{days} {days_word}'} вместо {'{days} дней'}
+                </p>
               </div>
 
               <div className="space-y-2">

@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sendAdminNotification } from "../_shared/adminNotifications.ts";
 import { logUserNotification } from "../_shared/userNotificationLogger.ts";
+import { getDayWordRu, formatDaysRu } from "../_shared/textFormatters.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -9,8 +10,13 @@ const corsHeaders = {
 };
 
 // Replace template variables with actual values
+// Handles backward compatibility: "{days} дней" → "{days} {days_word}"
 function replaceVariables(template: string, variables: Record<string, string>): string {
   let result = template;
+  
+  // Backward compatibility: replace "{days} дней" patterns with proper pluralization
+  result = result.replace(/\{days\}\s*дней/g, `{days} {days_word}`);
+  
   for (const [key, value] of Object.entries(variables)) {
     result = result.replace(new RegExp(`\\{${key}\\}`, 'g'), value);
   }
@@ -19,7 +25,7 @@ function replaceVariables(template: string, variables: Record<string, string>): 
 
 const DEFAULT_PAYMENT_REMINDER = `⏰ Напоминание о списании
 
-Через {days} дней будет списана оплата за продление подписки на канал "{channel_name}".
+Через {days} {days_word} будет списана оплата за продление подписки на канал "{channel_name}".
 
 💰 Сумма: {amount}₽
 📅 Дата списания: {payment_date}
@@ -137,9 +143,12 @@ serve(async (req) => {
         });
 
         // Replace variables in template
+        // Includes days_word and days_label for proper Russian pluralization
         const message = replaceVariables(messageTemplate, {
           channel_name: channelName,
           days: String(reminderDays),
+          days_word: getDayWordRu(reminderDays),
+          days_label: formatDaysRu(reminderDays),
           amount: amount,
           payment_date: formattedDate,
         });
