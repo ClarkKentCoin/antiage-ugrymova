@@ -64,6 +64,29 @@ function normalizeChatId(channelId: string): string {
 const TIMEZONE = "Europe/Moscow";
 
 /**
+ * Format number with correct Russian pluralization for "день"
+ * Examples: 1 день, 2 дня, 5 дней, 11 дней, 21 день, 22 дня
+ */
+function formatDaysRu(n: number): string {
+  const mod100 = n % 100;
+  const mod10 = n % 10;
+  
+  if (mod100 >= 11 && mod100 <= 14) {
+    return `${n} дней`;
+  }
+  
+  if (mod10 === 1) {
+    return `${n} день`;
+  }
+  
+  if (mod10 >= 2 && mod10 <= 4) {
+    return `${n} дня`;
+  }
+  
+  return `${n} дней`;
+}
+
+/**
  * Format date from ISO string to readable format: DD.MM.YYYY HH:mm
  */
 function formatDate(isoDate: string | null | undefined): string {
@@ -134,7 +157,7 @@ function buildMessageText(opts: SendAdminNotificationOptions): string {
       return `❌ Ошибка оплаты\nПлан: ${plan}\nМетод: ${method}\nСумма: ${amount}\nПримечание: ${note}\n${subscriberBlock}`;
 
     case "EXPIRING_IN_3_DAYS": {
-      const daysLabel = opts.days != null ? ` (${opts.days} дней)` : "";
+      const daysLabel = opts.days != null ? ` (${formatDaysRu(opts.days)})` : "";
       return `⏳ Заканчивается подписка${daysLabel}\nПлан: ${plan}\nМетод: ${method}\nПодписка до: ${subscriptionEnd}\nСтатус: ${status}\n${subscriberBlock}`;
     }
 
