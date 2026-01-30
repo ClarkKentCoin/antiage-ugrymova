@@ -1,6 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { DateTime } from "https://esm.sh/luxon@3.4.4";
+import { sendAdminNotification } from "../_shared/adminNotifications.ts";
+import { logUserNotification } from "../_shared/userNotificationLogger.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -303,6 +305,7 @@ serve(async (req) => {
               subscription_end: newEndISO,
               robokassa_invoice_id: newInvoiceId,
               next_payment_notification_sent: false,
+              single_expiry_notification_sent: false,
             })
             .eq("id", subscription.id);
 
@@ -314,7 +317,7 @@ serve(async (req) => {
               expires_date: expiresDate,
             });
 
-            await fetch(
+            const msgResult = await fetch(
               `https://api.telegram.org/bot${botToken}/sendMessage`,
               {
                 method: "POST",
@@ -326,7 +329,41 @@ serve(async (req) => {
                 }),
               }
             );
+            const msgResponse = await msgResult.json();
+
+            // Log user notification
+            await logUserNotification({
+              supabaseAdmin,
+              source: "process-recurring-payments",
+              notificationKey: "payment_success",
+              subscriberId: subscription.id,
+              telegramUserId: subscription.telegram_user_id,
+              subscriptionEnd: newEndISO,
+              telegramOk: msgResponse.ok,
+              telegramError: msgResponse.ok ? null : msgResponse.description,
+              textPreview: successMessage,
+            });
           }
+
+          // Send admin notification for successful payment
+          await sendAdminNotification({
+            supabaseAdmin,
+            eventType: "PAYMENT_SUCCESS",
+            subscriber: {
+              id: subscription.id,
+              name: null,
+              username: null,
+              telegram_user_id: subscription.telegram_user_id,
+              email: null,
+            },
+            plan: tier.name ?? null,
+            status: "active",
+            method: "robokassa_recurring",
+            amount: tier.price,
+            subscriptionEndISO: newEndISO,
+            relatedAtISO: newEndISO,
+            source: "process-recurring-payments",
+          });
 
           results.push({ 
             subscriber_id: subscription.id, 
@@ -352,7 +389,7 @@ serve(async (req) => {
               grace_days: String(graceDays),
             });
 
-            await fetch(
+            const msgResult = await fetch(
               `https://api.telegram.org/bot${botToken}/sendMessage`,
               {
                 method: "POST",
@@ -364,7 +401,39 @@ serve(async (req) => {
                 }),
               }
             );
+            const msgResponse = await msgResult.json();
+
+            // Log user notification
+            await logUserNotification({
+              supabaseAdmin,
+              source: "process-recurring-payments",
+              notificationKey: "payment_failed",
+              subscriberId: subscription.id,
+              telegramUserId: subscription.telegram_user_id,
+              telegramOk: msgResponse.ok,
+              telegramError: msgResponse.ok ? null : msgResponse.description,
+              textPreview: failedMessage,
+            });
           }
+
+          // Send admin notification for failed payment
+          await sendAdminNotification({
+            supabaseAdmin,
+            eventType: "PAYMENT_FAILED",
+            subscriber: {
+              id: subscription.id,
+              name: null,
+              username: null,
+              telegram_user_id: subscription.telegram_user_id,
+              email: null,
+            },
+            plan: tier.name ?? null,
+            status: "active",
+            method: "robokassa_recurring",
+            amount: tier.price,
+            note: responseText || "Unknown error",
+            source: "process-recurring-payments",
+          });
 
           results.push({ 
             subscriber_id: subscription.id, 

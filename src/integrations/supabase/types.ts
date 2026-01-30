@@ -56,6 +56,7 @@ export type Database = {
           notification_payment_reminder: string | null
           notification_payment_success: string | null
           notification_subscription_expired: string | null
+          notification_subscription_expiring_single: string | null
           payment_link: string | null
           reminder_days_before: number | null
           robokassa_merchant_login: string | null
@@ -85,6 +86,7 @@ export type Database = {
           notification_payment_reminder?: string | null
           notification_payment_success?: string | null
           notification_subscription_expired?: string | null
+          notification_subscription_expiring_single?: string | null
           payment_link?: string | null
           reminder_days_before?: number | null
           robokassa_merchant_login?: string | null
@@ -114,6 +116,7 @@ export type Database = {
           notification_payment_reminder?: string | null
           notification_payment_success?: string | null
           notification_subscription_expired?: string | null
+          notification_subscription_expiring_single?: string | null
           payment_link?: string | null
           reminder_days_before?: number | null
           robokassa_merchant_login?: string | null
@@ -273,6 +276,7 @@ export type Database = {
           next_payment_notification_sent: boolean | null
           phone_number: string | null
           robokassa_invoice_id: string | null
+          single_expiry_notification_sent: boolean
           status: string | null
           subscriber_payment_method: string | null
           subscription_end: string | null
@@ -295,6 +299,7 @@ export type Database = {
           next_payment_notification_sent?: boolean | null
           phone_number?: string | null
           robokassa_invoice_id?: string | null
+          single_expiry_notification_sent?: boolean
           status?: string | null
           subscriber_payment_method?: string | null
           subscription_end?: string | null
@@ -317,6 +322,7 @@ export type Database = {
           next_payment_notification_sent?: boolean | null
           phone_number?: string | null
           robokassa_invoice_id?: string | null
+          single_expiry_notification_sent?: boolean
           status?: string | null
           subscriber_payment_method?: string | null
           subscription_end?: string | null

@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sendAdminNotification } from "../_shared/adminNotifications.ts";
+import { logUserNotification } from "../_shared/userNotificationLogger.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -215,10 +216,23 @@ serve(async (req) => {
               channel_name: channelName,
             });
 
-            await callTelegramApi(botToken, "sendMessage", {
+            const expiredMsgResult = await callTelegramApi(botToken, "sendMessage", {
               chat_id: subscriber.telegram_user_id,
               text: expiredMessage,
               parse_mode: "HTML",
+            });
+
+            // Log user notification
+            await logUserNotification({
+              supabaseAdmin,
+              source: "check-expired-subscriptions",
+              notificationKey: "subscription_expired",
+              subscriberId: subscriber.id,
+              telegramUserId: subscriber.telegram_user_id,
+              subscriptionEnd: subscriber.subscription_end,
+              telegramOk: expiredMsgResult.ok,
+              telegramError: expiredMsgResult.ok ? null : expiredMsgResult.description,
+              textPreview: expiredMessage,
             });
 
             // Send admin notification for subscription ended (no grace period case)
@@ -277,10 +291,24 @@ serve(async (req) => {
             days: String(daysLeft),
           });
 
-          await callTelegramApi(botToken, "sendMessage", {
+          const warningMsgResult = await callTelegramApi(botToken, "sendMessage", {
             chat_id: subscriber.telegram_user_id,
             text: warningMessage,
             parse_mode: "HTML",
+          });
+
+          // Log user notification
+          await logUserNotification({
+            supabaseAdmin,
+            source: "check-expired-subscriptions",
+            notificationKey: "grace_warning",
+            subscriberId: subscriber.id,
+            telegramUserId: subscriber.telegram_user_id,
+            subscriptionEnd: subscriber.subscription_end,
+            days: daysLeft,
+            telegramOk: warningMsgResult.ok,
+            telegramError: warningMsgResult.ok ? null : warningMsgResult.description,
+            textPreview: warningMessage,
           });
 
           // Send admin notification for grace period started
@@ -361,10 +389,23 @@ serve(async (req) => {
               channel_name: channelName,
             });
 
-            await callTelegramApi(botToken, "sendMessage", {
+            const expiredMsgResult = await callTelegramApi(botToken, "sendMessage", {
               chat_id: subscriber.telegram_user_id,
               text: expiredMessage,
               parse_mode: "HTML",
+            });
+
+            // Log user notification
+            await logUserNotification({
+              supabaseAdmin,
+              source: "check-expired-subscriptions",
+              notificationKey: "subscription_expired",
+              subscriberId: subscriber.id,
+              telegramUserId: subscriber.telegram_user_id,
+              subscriptionEnd: subscriber.subscription_end,
+              telegramOk: expiredMsgResult.ok,
+              telegramError: expiredMsgResult.ok ? null : expiredMsgResult.description,
+              textPreview: expiredMessage,
             });
 
             // Send admin notification for grace period ended

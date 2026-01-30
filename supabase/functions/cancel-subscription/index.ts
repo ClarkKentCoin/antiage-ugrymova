@@ -1,6 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { encode as hexEncode } from "https://deno.land/std@0.168.0/encoding/hex.ts";
+import { sendAdminNotification } from "../_shared/adminNotifications.ts";
+import { logUserNotification } from "../_shared/userNotificationLogger.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -333,6 +335,33 @@ serve(async (req) => {
         chat_id: telegram_user_id,
         text: message,
         parse_mode: "HTML",
+      });
+
+      // Log user notification
+      await logUserNotification({
+        supabaseAdmin,
+        source: "cancel-subscription",
+        notificationKey: "subscription_cancelled",
+        subscriberId: subscriber.id,
+        telegramUserId: telegram_user_id,
+        telegramOk: msgResult.ok,
+        telegramError: msgResult.ok ? null : msgResult.description,
+        textPreview: message,
+      });
+
+      // Send admin notification
+      await sendAdminNotification({
+        supabaseAdmin,
+        eventType: "SUBSCRIPTION_CANCELLED",
+        subscriber: {
+          id: subscriber.id,
+          name: null,
+          username: null,
+          telegram_user_id: telegram_user_id,
+          email: null,
+        },
+        status: "cancelled",
+        source: "cancel-subscription",
       });
 
       results.notification_sent = msgResult.ok;

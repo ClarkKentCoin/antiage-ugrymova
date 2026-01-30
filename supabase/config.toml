@@ -32,3 +32,6 @@ verify_jwt = true
 
 [functions.cancel-subscription]
 verify_jwt = false
+
+[functions.notify-expiring-single-subscriptions]
+verify_jwt = true
