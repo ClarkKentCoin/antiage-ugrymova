@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sendAdminNotification } from "../_shared/adminNotifications.ts";
 import { logUserNotification } from "../_shared/userNotificationLogger.ts";
+import { getDayWordRu, formatDaysRu } from "../_shared/textFormatters.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -17,8 +18,13 @@ interface TelegramResponse {
 const INVITE_LINK_EXPIRY_SECONDS = 600; // 10 minutes
 
 // Replace template variables with actual values
+// Handles backward compatibility: "{days} дней" → "{days} {days_word}"
 function replaceVariables(template: string, variables: Record<string, string>): string {
   let result = template;
+  
+  // Backward compatibility: replace "{days} дней" patterns with proper pluralization
+  result = result.replace(/\{days\}\s*дней/g, `{days} {days_word}`);
+  
   for (const [key, value] of Object.entries(variables)) {
     result = result.replace(new RegExp(`\\{${key}\\}`, "g"), value);
   }
@@ -46,7 +52,7 @@ const DEFAULT_GRACE_PERIOD_WARNING = `⚠️ Последнее предупре
 
 Ваша подписка на канал "{channel_name}" истекла.
 
-У вас осталось {days} дней для продления. После этого вы будете удалены из канала и потеряете доступ к архиву сообщений.
+У вас осталось {days} {days_word} для продления. После этого вы будете удалены из канала и потеряете доступ к архиву сообщений.
 
 💎 Продлите сейчас, чтобы сохранить доступ.`;
 
@@ -363,6 +369,8 @@ serve(async (req) => {
         const message = replaceVariables(template, {
           channel_name: channelName,
           days: String(gracePeriodDays),
+          days_word: getDayWordRu(gracePeriodDays),
+          days_label: formatDaysRu(gracePeriodDays),
         });
 
         const msgResult = await callTelegramApi(botToken, "sendMessage", {
