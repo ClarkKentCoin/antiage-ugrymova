@@ -29,6 +29,8 @@ export interface Subscriber {
     interval_count?: number | null;
     billing_timezone?: string | null;
   } | null;
+  // Used for inner join filtering - only subscribers with completed payments
+  payment_history?: { id: string; status: string }[];
 }
 
 export interface CreateSubscriberInput {
@@ -48,6 +50,8 @@ export function useSubscribers() {
   return useQuery({
     queryKey: ['subscribers'],
     queryFn: async () => {
+      // Use INNER join with payment_history to only get subscribers
+      // who have at least one completed payment (manual or robokassa)
       const { data, error } = await supabase
         .from('subscribers')
         .select(`
@@ -59,8 +63,10 @@ export function useSubscribers() {
             interval_unit,
             interval_count,
             billing_timezone
-          )
+          ),
+          payment_history!inner(id, status)
         `)
+        .eq('payment_history.status', 'completed')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
