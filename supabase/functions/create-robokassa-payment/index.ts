@@ -106,10 +106,10 @@ serve(async (req) => {
       }
 
       if (!subscriber) {
-        // Get admin settings to fetch telegram bot token
+        // Get admin settings to fetch telegram bot token and tenant_id
         const { data: settingsForBot } = await supabaseAdmin
           .from("admin_settings")
-          .select("telegram_bot_token")
+          .select("telegram_bot_token, tenant_id")
           .limit(1)
           .single();
 
@@ -136,7 +136,7 @@ serve(async (req) => {
           }
         }
 
-        // Create new subscriber with user info
+        // Create new subscriber with user info and tenant_id
         const { data: newSubscriber, error: createError } = await supabaseAdmin
           .from("subscribers")
           .insert({
@@ -146,6 +146,7 @@ serve(async (req) => {
             last_name: tgLastName,
             status: "inactive",
             tier_id: tier_id,
+            tenant_id: settingsForBot?.tenant_id || null,
           })
           .select("id")
           .single();
@@ -159,7 +160,7 @@ serve(async (req) => {
         }
 
         subscriber = newSubscriber;
-        console.log(`Created new subscriber: ${subscriber.id} for telegram_user_id: ${telegram_user_id} with username: ${tgUsername}`);
+        console.log(`Created new subscriber: ${subscriber.id} for telegram_user_id: ${telegram_user_id} with username: ${tgUsername}, tenant_id: ${settingsForBot?.tenant_id}`);
       }
 
       resolvedSubscriberId = subscriber.id;
@@ -172,10 +173,10 @@ serve(async (req) => {
       );
     }
 
-    // Get Robokassa settings
+    // Get Robokassa settings and tenant_id
     const { data: settings, error: settingsError } = await supabaseAdmin
       .from("admin_settings")
-      .select("robokassa_merchant_login, robokassa_password1, robokassa_test_mode")
+      .select("robokassa_merchant_login, robokassa_password1, robokassa_test_mode, tenant_id")
       .limit(1)
       .single();
 
@@ -269,7 +270,7 @@ serve(async (req) => {
     const random = Math.floor(Math.random() * 10000);
     const invoiceId = `${timestamp}${random}`;
 
-    // Create payment record with pending status
+    // Create payment record with pending status and tenant_id
     const { data: payment, error: paymentError } = await supabaseAdmin
       .from("payment_history")
       .insert({
@@ -280,6 +281,7 @@ serve(async (req) => {
         transaction_type: is_recurring ? "initial" : "initial",
         payment_method: is_recurring ? "robokassa_recurring" : "robokassa_single",
         status: "pending",
+        tenant_id: settings.tenant_id || null,
       })
       .select()
       .single();

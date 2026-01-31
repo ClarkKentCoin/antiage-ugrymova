@@ -409,10 +409,10 @@ serve(async (req) => {
       // No pending payment found - create a completed one
       console.log("No pending payment found, creating new record");
 
-      // Get subscriber and tier info
+      // Get subscriber and tier info including tenant_id
       const { data: subscriber } = await supabaseAdmin
         .from("subscribers")
-        .select("tier_id")
+        .select("tier_id, tenant_id")
         .eq("id", shpSubscriberId)
         .single();
 
@@ -428,6 +428,7 @@ serve(async (req) => {
             payment_method: "robokassa_single",
             status: "completed",
             robokassa_data: robokassaData,
+            tenant_id: subscriber.tenant_id || null,
           });
 
         if (createPaymentError) {
