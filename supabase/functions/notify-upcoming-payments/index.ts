@@ -37,11 +37,27 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  // Verify scheduled task secret
+  // Accept Supabase anon key JWT (from cron) or SCHEDULED_TASK_SECRET
   const authHeader = req.headers.get("Authorization");
+  const bearerToken = authHeader?.replace("Bearer ", "");
   const expectedSecret = Deno.env.get("SCHEDULED_TASK_SECRET");
+  const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
+  const projectRef = supabaseUrl.match(/https:\/\/([^.]+)\./)?.[1];
   
-  if (!authHeader || authHeader !== `Bearer ${expectedSecret}`) {
+  let isValidAuth = expectedSecret && bearerToken === expectedSecret;
+  
+  // Check if it's a valid Supabase JWT anon key
+  if (!isValidAuth && bearerToken && projectRef) {
+    try {
+      const payloadBase64 = bearerToken.split('.')[1];
+      if (payloadBase64) {
+        const payload = JSON.parse(atob(payloadBase64));
+        isValidAuth = payload.ref === projectRef && payload.role === 'anon';
+      }
+    } catch (e) {}
+  }
+
+  if (!isValidAuth) {
     console.error("Unauthorized scheduled task execution attempt");
     return new Response(
       JSON.stringify({ error: "Unauthorized" }),

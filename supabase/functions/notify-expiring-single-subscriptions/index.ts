@@ -37,16 +37,27 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  // Accept either SCHEDULED_TASK_SECRET or anon key for cron jobs
+  // Accept Supabase anon key JWT (from cron) or SCHEDULED_TASK_SECRET
   const authHeader = req.headers.get("Authorization");
-  const expectedSecret = Deno.env.get("SCHEDULED_TASK_SECRET");
-  const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
-
   const bearerToken = authHeader?.replace("Bearer ", "");
-  const isValidSecret = expectedSecret && bearerToken === expectedSecret;
-  const isValidAnonKey = anonKey && bearerToken === anonKey;
+  const expectedSecret = Deno.env.get("SCHEDULED_TASK_SECRET");
+  const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
+  const projectRef = supabaseUrl.match(/https:\/\/([^.]+)\./)?.[1];
+  
+  let isValidAuth = expectedSecret && bearerToken === expectedSecret;
+  
+  // Check if it's a valid Supabase JWT anon key
+  if (!isValidAuth && bearerToken && projectRef) {
+    try {
+      const payloadBase64 = bearerToken.split('.')[1];
+      if (payloadBase64) {
+        const payload = JSON.parse(atob(payloadBase64));
+        isValidAuth = payload.ref === projectRef && payload.role === 'anon';
+      }
+    } catch (e) {}
+  }
 
-  if (!authHeader || (!isValidSecret && !isValidAnonKey)) {
+  if (!isValidAuth) {
     console.error("Unauthorized scheduled task execution attempt");
     return new Response(
       JSON.stringify({ error: "Unauthorized" }),
