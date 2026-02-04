@@ -2,9 +2,14 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { encode as hexEncode } from "https://deno.land/std@0.168.0/encoding/hex.ts";
 
+// Debug version to track deployed code
+const FUNCTION_VERSION = "2026-02-05_00:debug1";
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Cache-Control": "no-store, max-age=0",
+  "Pragma": "no-cache",
 };
 
 // Default tenant ID for backward compatibility (production main tenant)
@@ -195,21 +200,25 @@ serve(async (req) => {
     // Calculate grace period info if subscriber exists and is in grace period
     let graceDaysRemaining: number | null = null;
     let graceEndAt: string | null = null;
+    let graceMsRemaining: number | null = null;
     const gracePeriodDays = settings.grace_period_days ?? 3;
+    const serverNow = new Date();
+    const serverNowMs = serverNow.getTime();
+    const expiresAtRaw = subscriber?.subscription_end ?? null;
 
     if (subscriber?.subscription_end && (subscriber.status === "grace_period" || subscriber.status === "past_due")) {
       const subscriptionEnd = new Date(subscriber.subscription_end).getTime();
-      const graceEnd = subscriptionEnd + (gracePeriodDays * MS_PER_DAY);
-      const now = Date.now();
+      const graceEndMs = subscriptionEnd + (gracePeriodDays * MS_PER_DAY);
       
       // Use Math.ceil to ensure we show "1 day" at the start, not "0 days"
-      graceDaysRemaining = Math.max(0, Math.ceil((graceEnd - now) / MS_PER_DAY));
-      graceEndAt = new Date(graceEnd).toISOString();
+      graceMsRemaining = graceEndMs - serverNowMs;
+      graceDaysRemaining = Math.max(0, Math.ceil(graceMsRemaining / MS_PER_DAY));
+      graceEndAt = new Date(graceEndMs).toISOString();
       
-      console.log(`[get-subscriber-status] Grace period: subscriptionEnd=${subscriber.subscription_end}, gracePeriodDays=${gracePeriodDays}, graceDaysRemaining=${graceDaysRemaining}`);
+      console.log(`[get-subscriber-status] Grace period: subscriptionEnd=${subscriber.subscription_end}, gracePeriodDays=${gracePeriodDays}, graceDaysRemaining=${graceDaysRemaining}, graceMsRemaining=${graceMsRemaining}`);
     }
 
-    console.log("Returning subscriber:", subscriber?.id, subscriber?.status, { tenant_id_used: tenantId, tenant_slug_used: tenant_slug || null });
+    console.log("Returning subscriber:", subscriber?.id, subscriber?.status, { tenant_id_used: tenantId, tenant_slug_used: tenant_slug || null, function_version: FUNCTION_VERSION });
 
     return new Response(
       JSON.stringify({ 
@@ -217,7 +226,11 @@ serve(async (req) => {
         grace_period_days: gracePeriodDays,
         grace_days_remaining: graceDaysRemaining,
         grace_end_at: graceEndAt,
-        // Debug info for verification
+        // Extended debug info for diagnosing iPhone issues
+        function_version: FUNCTION_VERSION,
+        server_now: serverNow.toISOString(),
+        expires_at_raw: expiresAtRaw,
+        grace_ms_remaining: graceMsRemaining,
         _debug: {
           tenant_id_used: tenantId,
           tenant_slug_used: tenant_slug || null,
