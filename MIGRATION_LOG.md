@@ -123,3 +123,104 @@ This file tracks all changes made to the production application for safety and r
 Migration log created successfully. Ready to track future changes.
 
 ---
+
+### Step 1.1 — Backfill NULL tenant_id in invite_links, system_logs, subscription_tiers
+
+**Date/Time:** 2026-02-04 (UTC)
+
+**Goal:** Backfill NULL tenant_id in invite_links/system_logs/subscription_tiers using canonical tenant_id from admin_settings (safe for production; no changes to payments/admin_settings).
+
+**Risk Level:** Low (data tagging only)
+
+---
+
+#### Code Changes
+
+| File | Description |
+|------|-------------|
+| N/A | No code changes — SQL only |
+
+---
+
+#### Supabase SQL Changes
+
+**Step 1.1A — READ ONLY (identification + counts):**
+```sql
+-- Identified canonical tenant_id from admin_settings
+SELECT tenant_id FROM admin_settings ORDER BY created_at DESC LIMIT 1;
+-- Result: 6749bded-94d6-4793-9f46-09724da30ab6
+
+-- Counted NULL tenant_id rows in each table
+SELECT COUNT(*) FROM invite_links WHERE tenant_id IS NULL;
+SELECT COUNT(*) FROM system_logs WHERE tenant_id IS NULL;
+SELECT COUNT(*) FROM subscription_tiers WHERE tenant_id IS NULL;
+```
+
+**Step 1.1B — WRITE (updates only where tenant_id IS NULL):**
+```sql
+-- Update invite_links where tenant_id is NULL
+UPDATE invite_links 
+SET tenant_id = '6749bded-94d6-4793-9f46-09724da30ab6' 
+WHERE tenant_id IS NULL;
+
+-- Update system_logs where tenant_id is NULL
+UPDATE system_logs 
+SET tenant_id = '6749bded-94d6-4793-9f46-09724da30ab6' 
+WHERE tenant_id IS NULL;
+
+-- Update subscription_tiers where tenant_id is NULL
+UPDATE subscription_tiers 
+SET tenant_id = '6749bded-94d6-4793-9f46-09724da30ab6' 
+WHERE tenant_id IS NULL;
+```
+
+**Executed in:** Live
+
+---
+
+#### Rollback Plan
+
+**Lovable Rollback:**
+- [ ] N/A — no code changes
+
+**Supabase Rollback SQL:**
+```sql
+-- ONLY use immediately if needed — sets tenant_id back to NULL for affected rows
+UPDATE invite_links 
+SET tenant_id = NULL 
+WHERE tenant_id = '6749bded-94d6-4793-9f46-09724da30ab6';
+
+UPDATE system_logs 
+SET tenant_id = NULL 
+WHERE tenant_id = '6749bded-94d6-4793-9f46-09724da30ab6';
+
+UPDATE subscription_tiers 
+SET tenant_id = NULL 
+WHERE tenant_id = '6749bded-94d6-4793-9f46-09724da30ab6';
+```
+
+---
+
+#### Post-Step Verification Checklist
+
+- [x] Verified canonical tenant_id: `6749bded-94d6-4793-9f46-09724da30ab6`
+- [x] Updated invite_links: 8 rows
+- [x] Updated system_logs: 10 rows
+- [x] Updated subscription_tiers: 1 row
+- [x] Post-check NULL counts: invite_links=0, logs=0, tiers=0
+- [x] No changes to payments or admin_settings tables
+
+---
+
+#### Result / Notes
+
+Successfully backfilled tenant_id for all rows that had NULL values:
+- **tenant_id_used:** `6749bded-94d6-4793-9f46-09724da30ab6`
+- **updated_invite_links:** 8
+- **updated_system_logs:** 10
+- **updated_subscription_tiers:** 1
+- **post-check null counts:** invite_links=0, logs=0, tiers=0
+
+All data now properly tagged with tenant_id for RLS policy compliance.
+
+---
