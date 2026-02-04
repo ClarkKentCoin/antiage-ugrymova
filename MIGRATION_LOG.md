@@ -447,3 +447,64 @@ All data now properly tagged with tenant_id for RLS policy compliance.
 [Pending verification]
 
 ---
+
+### Step 2.2C — Tenant-aware Logs (frontend)
+
+**Date/Time:** 2026-02-04 (UTC)
+
+**Goal:** Make Admin Logs page tenant-aware so that each admin only sees system_logs for their own tenant, preventing cross-tenant log visibility.
+
+**Risk Level:** Low/Medium (additive filter, no breaking changes to existing functionality)
+
+---
+
+#### Code Changes
+
+| File | Description |
+|------|-------------|
+| `src/hooks/useSystemLogs.tsx` | Import useAuth; add tenant_id filter for authenticated users in useSystemLogs and useLogEventTypes; update query keys to include tenantId for cache isolation; add `enabled` condition to wait for tenant context |
+| `src/pages/admin/AdminLogs.tsx` | Import useAuth; read tenantLoading; show loading UI while tenantLoading is true to avoid briefly showing global logs |
+
+---
+
+#### Supabase SQL Changes
+
+```sql
+-- N/A — no database changes
+```
+
+**Executed in:** N/A
+
+---
+
+#### Rollback Plan
+
+**Lovable Rollback:**
+- [ ] Revert `src/hooks/useSystemLogs.tsx` to previous version (remove useAuth import and tenant filtering)
+- [ ] Revert `src/pages/admin/AdminLogs.tsx` to previous version (remove tenantLoading check)
+
+**Supabase Rollback SQL:**
+```sql
+-- N/A — no database changes to rollback
+```
+
+---
+
+#### Post-Step Verification Checklist
+
+- [ ] Login as admin A → sees only admin A's logs
+- [ ] Login as admin B → sees only admin B's logs (likely empty if new tenant)
+- [ ] Log filters (event type, level, source, date range, search) still work correctly
+- [ ] Email filter still works correctly
+- [ ] Clicking on a log row opens the detail dialog
+- [ ] Subscriber link in log detail navigates to correct subscriber
+- [ ] No console errors in admin logs page
+- [ ] No impact on payments/webhooks/notifications
+
+---
+
+#### Result / Notes
+
+[Pending verification]
+
+---
