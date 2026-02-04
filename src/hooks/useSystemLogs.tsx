@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
 
 export interface SystemLog {
   id: string;
@@ -25,8 +26,10 @@ export interface LogFilters {
 }
 
 export function useSystemLogs(filters: LogFilters = {}, page: number = 0, pageSize: number = 50) {
+  const { user, tenantId, tenantLoading } = useAuth();
+
   return useQuery({
-    queryKey: ['system-logs', filters, page, pageSize],
+    queryKey: ['system-logs', user ? tenantId : 'public', filters, page, pageSize],
     queryFn: async () => {
       // Fetch logs with subscriber join
       let query = supabase
@@ -34,6 +37,11 @@ export function useSystemLogs(filters: LogFilters = {}, page: number = 0, pageSi
         .select('*, subscribers(telegram_username, first_name, last_name, email)', { count: 'exact' })
         .order('created_at', { ascending: false })
         .range(page * pageSize, (page + 1) * pageSize - 1);
+
+      // For authenticated users (admin UI), filter by tenant
+      if (user && tenantId) {
+        query = query.eq('tenant_id', tenantId);
+      }
 
       // Apply filters
       if (filters.event_type && filters.event_type !== 'all') {
@@ -90,16 +98,32 @@ export function useSystemLogs(filters: LogFilters = {}, page: number = 0, pageSi
       type LogWithSubscriber = SystemLog & { subscribers: { telegram_username: string | null; first_name: string | null; last_name: string | null; email: string | null } | null };
       let logs = data as LogWithSubscriber[];
 
+      // For subscriber lookup, also filter by tenant if authenticated
+      const subscriberQuery = supabase
+        .from('subscribers')
+        .select('telegram_user_id, telegram_username, first_name, last_name, email');
+      
+      if (user && tenantId) {
+        subscriberQuery.eq('tenant_id', tenantId);
+      }
+
       // For logs without subscriber_id but with telegram_user_id, try to find subscriber by telegram_user_id
       const logsNeedingLookup = logs.filter(log => !log.subscriber_id && log.telegram_user_id);
       
       if (logsNeedingLookup.length > 0) {
         const telegramUserIds = [...new Set(logsNeedingLookup.map(log => log.telegram_user_id!))];
         
-        const { data: subscribersByTelegramId } = await supabase
+        let subscriberLookupQuery = supabase
           .from('subscribers')
           .select('telegram_user_id, telegram_username, first_name, last_name, email')
           .in('telegram_user_id', telegramUserIds);
+        
+        // Filter subscriber lookup by tenant for authenticated users
+        if (user && tenantId) {
+          subscriberLookupQuery = subscriberLookupQuery.eq('tenant_id', tenantId);
+        }
+        
+        const { data: subscribersByTelegramId } = await subscriberLookupQuery;
         
         if (subscribersByTelegramId) {
           const subscriberMap = new Map(
@@ -139,17 +163,28 @@ export function useSystemLogs(filters: LogFilters = {}, page: number = 0, pageSi
         totalCount: filters.email ? logs.length : (count || 0),
       };
     },
+    // For authenticated users, wait until tenant context is loaded
+    enabled: !user || (!tenantLoading && !!tenantId),
   });
 }
 
 export function useLogEventTypes() {
+  const { user, tenantId, tenantLoading } = useAuth();
+
   return useQuery({
-    queryKey: ['log-event-types'],
+    queryKey: ['log-event-types', user ? tenantId : 'public'],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from('system_logs')
         .select('event_type')
         .limit(1000);
+
+      // For authenticated users (admin UI), filter by tenant
+      if (user && tenantId) {
+        query = query.eq('tenant_id', tenantId);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
 
@@ -158,5 +193,7 @@ export function useLogEventTypes() {
       return uniqueTypes;
     },
     staleTime: 60000, // Cache for 1 minute
+    // For authenticated users, wait until tenant context is loaded
+    enabled: !user || (!tenantLoading && !!tenantId),
   });
 }

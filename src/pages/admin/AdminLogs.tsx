@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { AdminLayout } from '@/components/admin/AdminLayout';
 import { useSystemLogs, useLogEventTypes, LogFilters, SystemLog } from '@/hooks/useSystemLogs';
+import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -42,6 +43,7 @@ const DATE_RANGES = [
 
 export default function AdminLogs() {
   const navigate = useNavigate();
+  const { tenantLoading } = useAuth();
   const [page, setPage] = useState(0);
   const [selectedLog, setSelectedLog] = useState<(SystemLog & { subscribers: any }) | null>(null);
   const [filters, setFilters] = useState<LogFilters>({
@@ -55,6 +57,9 @@ export default function AdminLogs() {
 
   const { data, isLoading } = useSystemLogs(filters, page);
   const { data: eventTypes } = useLogEventTypes();
+
+  // Show loading while tenant context is loading to avoid showing global logs
+  const showLoading = isLoading || tenantLoading;
 
   const pageSize = 50;
   const totalPages = Math.ceil((data?.totalCount || 0) / pageSize);
@@ -225,7 +230,7 @@ export default function AdminLogs() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {isLoading ? (
+              {showLoading ? (
                 <TableRow>
                   <TableCell colSpan={6} className="text-center py-8">
                     <div className="animate-spin h-6 w-6 border-2 border-primary border-t-transparent rounded-full mx-auto" />
