@@ -3,7 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { encode as hexEncode } from "https://deno.land/std@0.168.0/encoding/hex.ts";
 
 // Debug version to track deployed code
-const FUNCTION_VERSION = "2026-02-05_00:debug1";
+const FUNCTION_VERSION = "2026-02-05_01:step2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -128,13 +128,44 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
     );
 
-    const { telegram_user_id, init_data, tenant_slug } = await req.json();
+    const { telegram_user_id, init_data, tenant_slug, nocache, test_mode } = await req.json();
 
-    console.log("get-subscriber-status request:", { telegram_user_id, hasInitData: !!init_data, tenant_slug });
+    console.log("get-subscriber-status request:", { telegram_user_id, hasInitData: !!init_data, tenant_slug, nocache, test_mode });
 
-    if (!telegram_user_id || !init_data) {
+    // Determine identity source and resolved user id
+    const isTestMode = test_mode === true && !init_data;
+    let identitySource: "telegram" | "test" = "telegram";
+    let resolvedUserId: number | null = null;
+
+    if (!telegram_user_id) {
       return new Response(
-        JSON.stringify({ error: "telegram_user_id and init_data are required" }),
+        JSON.stringify({ 
+          error: "telegram_user_id is required",
+          _debug: {
+            identity_source: "none",
+            resolved_user_id: null,
+            tenant_resolved: null,
+          }
+        }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    // For test mode without initData, skip validation and use telegram_user_id directly
+    if (isTestMode) {
+      identitySource = "test";
+      resolvedUserId = Number(telegram_user_id);
+      console.log("[get-subscriber-status] Test mode - skipping initData validation, using telegram_user_id:", resolvedUserId);
+    } else if (!init_data) {
+      return new Response(
+        JSON.stringify({ 
+          error: "init_data is required for non-test mode",
+          _debug: {
+            identity_source: "none",
+            resolved_user_id: Number(telegram_user_id) || null,
+            tenant_resolved: null,
+          }
+        }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
@@ -153,27 +184,54 @@ serve(async (req) => {
     if (settingsError || !settings?.telegram_bot_token) {
       console.error("Settings error:", settingsError);
       return new Response(
-        JSON.stringify({ error: "telegram_bot_not_configured" }),
+        JSON.stringify({ 
+          error: "telegram_bot_not_configured",
+          _debug: {
+            identity_source: identitySource,
+            resolved_user_id: resolvedUserId,
+            tenant_resolved: tenantId,
+          }
+        }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
-    const validation = await isValidInitData(init_data, settings.telegram_bot_token);
-    console.log("Validation result:", validation);
+    // Only validate initData if not in test mode
+    if (!isTestMode) {
+      const validation = await isValidInitData(init_data, settings.telegram_bot_token);
+      console.log("Validation result:", validation);
 
-    if (!validation.ok) {
-      return new Response(
-        JSON.stringify({ error: "invalid_init_data", reason: validation.reason }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
-    }
+      if (!validation.ok) {
+        return new Response(
+          JSON.stringify({ 
+            error: "invalid_init_data", 
+            reason: validation.reason,
+            _debug: {
+              identity_source: "telegram",
+              resolved_user_id: null,
+              tenant_resolved: tenantId,
+            }
+          }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
 
-    if (validation.telegramUserId !== Number(telegram_user_id)) {
-      console.log("User ID mismatch:", { validated: validation.telegramUserId, requested: telegram_user_id });
-      return new Response(
-        JSON.stringify({ error: "user_id_mismatch" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
+      if (validation.telegramUserId !== Number(telegram_user_id)) {
+        console.log("User ID mismatch:", { validated: validation.telegramUserId, requested: telegram_user_id });
+        return new Response(
+          JSON.stringify({ 
+            error: "user_id_mismatch",
+            _debug: {
+              identity_source: "telegram",
+              resolved_user_id: validation.telegramUserId,
+              tenant_resolved: tenantId,
+            }
+          }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+
+      resolvedUserId = validation.telegramUserId;
     }
 
     // Query subscriber for this specific tenant
@@ -218,7 +276,13 @@ serve(async (req) => {
       console.log(`[get-subscriber-status] Grace period: subscriptionEnd=${subscriber.subscription_end}, gracePeriodDays=${gracePeriodDays}, graceDaysRemaining=${graceDaysRemaining}, graceMsRemaining=${graceMsRemaining}`);
     }
 
-    console.log("Returning subscriber:", subscriber?.id, subscriber?.status, { tenant_id_used: tenantId, tenant_slug_used: tenant_slug || null, function_version: FUNCTION_VERSION });
+    console.log("Returning subscriber:", subscriber?.id, subscriber?.status, { 
+      tenant_id_used: tenantId, 
+      tenant_slug_used: tenant_slug || null, 
+      function_version: FUNCTION_VERSION,
+      identity_source: identitySource,
+      resolved_user_id: resolvedUserId,
+    });
 
     return new Response(
       JSON.stringify({ 
@@ -234,6 +298,8 @@ serve(async (req) => {
         _debug: {
           tenant_id_used: tenantId,
           tenant_slug_used: tenant_slug || null,
+          identity_source: identitySource,
+          resolved_user_id: resolvedUserId,
         }
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
