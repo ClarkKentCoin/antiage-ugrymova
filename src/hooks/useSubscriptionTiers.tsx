@@ -3,6 +3,10 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 
+// Default tenant ID for public/MiniApp queries (temporary until Step 4 implements t=tenant_slug)
+const DEFAULT_PUBLIC_TENANT_ID =
+  import.meta.env.VITE_PUBLIC_TENANT_ID || '6749bded-94d6-4793-9f46-09724da30ab6';
+
 export type IntervalUnit = 'day' | 'week' | 'month' | 'year';
 
 export interface SubscriptionTier {
@@ -116,7 +120,7 @@ export function useSubscriptionTiers() {
   const { user, tenantId, tenantLoading } = useAuth();
 
   return useQuery({
-    queryKey: ['subscription_tiers', user ? tenantId : 'public'],
+    queryKey: ['subscription_tiers', user ? tenantId : DEFAULT_PUBLIC_TENANT_ID],
     queryFn: async () => {
       let query = supabase
         .from('subscription_tiers')
@@ -126,6 +130,9 @@ export function useSubscriptionTiers() {
       // For authenticated users (admin UI), filter by tenant
       if (user && tenantId) {
         query = query.eq('tenant_id', tenantId);
+      } else {
+        // For public/MiniApp, lock to default production tenant
+        query = query.eq('tenant_id', DEFAULT_PUBLIC_TENANT_ID);
       }
       
       const { data, error } = await query;
@@ -146,7 +153,7 @@ export function useActiveTiers(options?: { includeAdminOnly?: boolean }) {
   const includeAdminOnly = options?.includeAdminOnly ?? false;
   
   return useQuery({
-    queryKey: ['subscription_tiers', 'active', user ? tenantId : 'public', { includeAdminOnly }],
+    queryKey: ['subscription_tiers', 'active', user ? tenantId : DEFAULT_PUBLIC_TENANT_ID, { includeAdminOnly }],
     queryFn: async () => {
       let query = supabase
         .from('subscription_tiers')
@@ -157,6 +164,9 @@ export function useActiveTiers(options?: { includeAdminOnly?: boolean }) {
       // For authenticated users (admin UI), filter by tenant
       if (user && tenantId) {
         query = query.eq('tenant_id', tenantId);
+      } else {
+        // For public/MiniApp, lock to default production tenant
+        query = query.eq('tenant_id', DEFAULT_PUBLIC_TENANT_ID);
       }
       
       const { data, error } = await query;
