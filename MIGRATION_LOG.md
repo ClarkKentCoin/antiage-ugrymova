@@ -331,3 +331,63 @@ All data now properly tagged with tenant_id for RLS policy compliance.
 [Pending verification]
 
 ---
+
+### Step 2.2B — Tenant-aware Tiers (frontend)
+
+**Date/Time:** 2026-02-04 (UTC)
+
+**Goal:** Make Subscription Tiers fully tenant-aware for authenticated admins in the frontend, so a second admin cannot see/edit/delete another admin's tiers.
+
+**Risk Level:** Low/Medium (affects tier queries/mutations but maintains same behavior for mini-app)
+
+---
+
+#### Code Changes
+
+| File | Description |
+|------|-------------|
+| `src/hooks/useSubscriptionTiers.tsx` | Import useAuth; all queries now filter by `.eq('tenant_id', tenantId)` for authenticated users; query keys include tenantId to prevent cache leakage; mutations include tenant_id on create and filter by tenant_id on update/delete; non-authenticated usage (mini-app) unchanged |
+| `src/pages/admin/AdminTiers.tsx` | Import useAuth; show loading UI while tenantLoading is true to prevent brief display of global tiers |
+
+---
+
+#### Supabase SQL Changes
+
+```sql
+-- N/A — no database changes
+```
+
+**Executed in:** N/A
+
+---
+
+#### Rollback Plan
+
+**Lovable Rollback:**
+- [ ] Revert `src/hooks/useSubscriptionTiers.tsx` to previous version (remove tenant filtering and tenantId from query keys)
+- [ ] Revert `src/pages/admin/AdminTiers.tsx` to previous version (remove tenantLoading check)
+
+**Supabase Rollback SQL:**
+```sql
+-- N/A — no database changes to rollback
+```
+
+---
+
+#### Post-Step Verification Checklist
+
+- [ ] Login as admin A → sees only A's tiers
+- [ ] Login as admin B → sees only B's tiers (likely empty if new tenant)
+- [ ] Create a tier as admin B → admin A does not see it (logout/login to verify)
+- [ ] Edit tier as admin B → works only for B's tiers
+- [ ] Delete tier as admin B → works only for B's tiers
+- [ ] Mini-app still loads and shows tiers as before (no changes expected yet)
+- [ ] No changes to subscription/payment/notification functionality
+
+---
+
+#### Result / Notes
+
+[Pending verification]
+
+---

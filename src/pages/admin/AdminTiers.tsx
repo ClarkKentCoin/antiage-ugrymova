@@ -4,13 +4,16 @@ import { TierCard } from '@/components/admin/TierCard';
 import { CreateTierDialog } from '@/components/admin/CreateTierDialog';
 import { Button } from '@/components/ui/button';
 import { useSubscriptionTiers } from '@/hooks/useSubscriptionTiers';
+import { useAuth } from '@/hooks/useAuth';
 import { Plus } from 'lucide-react';
 
 export default function AdminTiers() {
+  const { tenantLoading } = useAuth();
   const { data: tiers, isLoading } = useSubscriptionTiers();
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
 
-  if (isLoading) {
+  // Show loading while tenant context or tiers are loading
+  if (tenantLoading || isLoading) {
     return (
       <AdminLayout>
         <div className="animate-pulse space-y-4">
