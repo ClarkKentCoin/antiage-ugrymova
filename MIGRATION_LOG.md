@@ -391,3 +391,59 @@ All data now properly tagged with tenant_id for RLS policy compliance.
 [Pending verification]
 
 ---
+
+### Step 2.2B.2 — Hotfix: lock MiniApp tiers to default tenant
+
+**Date/Time:** 2026-02-04 (UTC)
+
+**Goal:** Prevent MiniApp from showing tiers from other tenants by locking public/unauthenticated tier queries to the default production tenant ID. This is a TEMPORARY measure until Step 4 implements `t=tenant_slug` URL parameter for proper multi-tenant MiniApp support.
+
+**Risk Level:** Low (additive filter only, no breaking changes)
+
+---
+
+#### Code Changes
+
+| File | Description |
+|------|-------------|
+| `src/hooks/useSubscriptionTiers.tsx` | Added DEFAULT_PUBLIC_TENANT_ID constant; useSubscriptionTiers and useActiveTiers now filter by this tenant ID for public queries; query keys updated to use DEFAULT_PUBLIC_TENANT_ID instead of 'public' string |
+
+---
+
+#### Supabase SQL Changes
+
+```sql
+-- N/A — no database changes
+```
+
+**Executed in:** N/A
+
+---
+
+#### Rollback Plan
+
+**Lovable Rollback:**
+- [ ] Revert `src/hooks/useSubscriptionTiers.tsx` to previous version (remove DEFAULT_PUBLIC_TENANT_ID constant and public tenant filtering)
+
+**Supabase Rollback SQL:**
+```sql
+-- N/A — no database changes to rollback
+```
+
+---
+
+#### Post-Step Verification Checklist
+
+- [ ] MiniApp still shows original tenant tiers (default production tenant)
+- [ ] Admin A (default tenant) sees their tiers in admin UI
+- [ ] Admin B creates a tier → it does NOT appear in MiniApp
+- [ ] Admin B's tier only visible in Admin B's admin UI
+- [ ] No console errors in MiniApp or admin UI
+
+---
+
+#### Result / Notes
+
+[Pending verification]
+
+---
