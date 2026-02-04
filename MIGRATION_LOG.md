@@ -508,3 +508,82 @@ All data now properly tagged with tenant_id for RLS policy compliance.
 [Pending verification]
 
 ---
+
+### Step 2.3 — Tenant-aware MiniApp Edge Functions + Grace Period Fix
+
+**Date/Time:** 2026-02-04 (UTC)
+
+**Goal:** Fix critical production bug where Telegram MiniApp (real Telegram WebApp on user devices) shows subscription tiers from other tenants and displays incorrect grace period days ("0 дней" instead of correct remaining days). Root cause: Edge Functions used by MiniApp were not tenant-aware and had inconsistent grace-days calculation using Math.floor.
+
+**Risk Level:** Medium (affects live MiniApp user experience; backward compatible with fallback to default tenant)
+
+---
+
+#### Code Changes
+
+| File | Description |
+|------|-------------|
+| `src/pages/TelegramApp.tsx` | Added getTenantSlug() helper to extract `t` query param; pass tenant_slug to all Edge Function calls (get-subscriber-status, cancel-subscription, create-robokassa-payment) |
+| `src/hooks/useSubscribers.tsx` | Added tenantSlug parameter to useSubscriber hook; pass tenant_slug to get-subscriber-status Edge Function |
+| `src/hooks/usePaymentHistory.tsx` | Added tenantSlug parameter to usePaymentHistoryForUser hook; pass tenant_slug to get-payment-history Edge Function |
+| `supabase/functions/get-subscriber-status/index.ts` | Added resolveTenantId() to resolve tenant from slug or default; filter admin_settings and subscribers by tenant_id; calculate grace_days_remaining using Math.ceil for correct display; return debug info |
+| `supabase/functions/get-payment-history/index.ts` | Added resolveTenantId() to resolve tenant from slug or default; filter admin_settings, subscribers, and payment_history by tenant_id; return debug info |
+| `supabase/functions/cancel-subscription/index.ts` | Added resolveTenantId() to resolve tenant from slug or default; filter admin_settings and subscribers by tenant_id; include tenant_id in system_logs; return debug info |
+| `supabase/functions/create-robokassa-payment/index.ts` | Added resolveTenantId() to resolve tenant from slug or default; filter admin_settings, subscribers, and subscription_tiers by tenant_id; include tenant_id in all DB inserts; return debug info |
+
+---
+
+#### Supabase SQL Changes
+
+```sql
+-- N/A — no database changes
+```
+
+**Executed in:** N/A
+
+---
+
+#### Rollback Plan
+
+**Lovable Rollback:**
+- [ ] Revert `src/pages/TelegramApp.tsx` to previous version (remove getTenantSlug and tenant_slug from Edge Function calls)
+- [ ] Revert `src/hooks/useSubscribers.tsx` to previous version (remove tenantSlug parameter)
+- [ ] Revert `src/hooks/usePaymentHistory.tsx` to previous version (remove tenantSlug parameter)
+- [ ] Revert `supabase/functions/get-subscriber-status/index.ts` to previous version
+- [ ] Revert `supabase/functions/get-payment-history/index.ts` to previous version
+- [ ] Revert `supabase/functions/cancel-subscription/index.ts` to previous version
+- [ ] Revert `supabase/functions/create-robokassa-payment/index.ts` to previous version
+
+**Supabase Rollback SQL:**
+```sql
+-- N/A — no database changes to rollback
+```
+
+---
+
+#### Post-Step Verification Checklist
+
+- [ ] **Critical:** MiniApp shows ONLY tiers from the default production tenant (no Admin B tiers visible)
+- [ ] **Critical:** Grace period days shown in MiniApp match browser test mode (e.g., "1 день" instead of "0 дней")
+- [ ] Browser test mode: subscriber status loads correctly with tenant debug info
+- [ ] Real Telegram MiniApp: subscriber status loads correctly
+- [ ] Cancel subscription flow works correctly in MiniApp
+- [ ] Payment flow (create-robokassa-payment) works correctly in MiniApp
+- [ ] Payment history displays correctly in MiniApp
+- [ ] Edge Function logs show `tenant_id_used` and `tenant_slug_used` for debugging
+- [ ] No cross-tenant data leakage for any MiniApp user
+- [ ] Admin panel still functions correctly (existing tenant-aware queries unchanged)
+- [ ] No console errors in MiniApp or admin panel
+
+---
+
+#### Result / Notes
+
+This is a TEMPORARY solution until Step 4 implements full `t=tenant_slug` URL parameter support in MiniApp links. The Edge Functions now:
+1. Accept optional `tenant_slug` from the request body
+2. Resolve tenant_id from slug (if provided) or fallback to DEFAULT_TENANT_ID
+3. Filter all tenant-specific queries by the resolved tenant_id
+4. Return `_debug` object with `tenant_id_used` and `tenant_slug_used` for verification
+5. Calculate grace period using Math.ceil to show "1 день" at the start of grace period (not "0 дней")
+
+---

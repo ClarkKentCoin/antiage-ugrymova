@@ -7,6 +7,9 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Default tenant ID for backward compatibility (production main tenant)
+const DEFAULT_TENANT_ID = Deno.env.get("PUBLIC_TENANT_ID") ?? "6749bded-94d6-4793-9f46-09724da30ab6";
+
 const enc = new TextEncoder();
 const dec = new TextDecoder();
 
@@ -85,6 +88,26 @@ async function isValidInitData(initData: string, botToken: string): Promise<{ ok
   }
 }
 
+// Resolve tenant ID from slug or use default
+async function resolveTenantId(supabaseAdmin: any, tenantSlug: string | null): Promise<string> {
+  if (!tenantSlug) {
+    return DEFAULT_TENANT_ID;
+  }
+
+  const { data: tenant, error } = await supabaseAdmin
+    .from("tenants")
+    .select("id")
+    .eq("slug", tenantSlug)
+    .maybeSingle();
+
+  if (error || !tenant) {
+    console.log(`[get-payment-history] Tenant not found for slug: ${tenantSlug}, using default`);
+    return DEFAULT_TENANT_ID;
+  }
+
+  return tenant.id;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -94,9 +117,9 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
     );
 
-    const { telegram_user_id, init_data } = await req.json();
+    const { telegram_user_id, init_data, tenant_slug } = await req.json();
 
-    console.log("get-payment-history request:", { telegram_user_id, hasInitData: !!init_data });
+    console.log("get-payment-history request:", { telegram_user_id, hasInitData: !!init_data, tenant_slug });
 
     if (!telegram_user_id || !init_data) {
       return new Response(
@@ -105,10 +128,15 @@ serve(async (req) => {
       );
     }
 
+    // Resolve tenant ID from slug (or use default)
+    const tenantId = await resolveTenantId(supabaseAdmin, tenant_slug);
+    console.log(`[get-payment-history] Resolved tenant_id: ${tenantId} from slug: ${tenant_slug || 'null'}`);
+
+    // Get settings for this specific tenant
     const { data: settings, error: settingsError } = await supabaseAdmin
       .from("admin_settings")
       .select("telegram_bot_token")
-      .limit(1)
+      .eq("tenant_id", tenantId)
       .maybeSingle();
 
     if (settingsError || !settings?.telegram_bot_token) {
@@ -136,11 +164,12 @@ serve(async (req) => {
       );
     }
 
-    // Find subscriber
+    // Find subscriber for this specific tenant
     const { data: subscriber, error: subError } = await supabaseAdmin
       .from("subscribers")
       .select("id")
       .eq("telegram_user_id", Number(telegram_user_id))
+      .eq("tenant_id", tenantId)
       .maybeSingle();
 
     if (subError) {
@@ -158,11 +187,12 @@ serve(async (req) => {
       );
     }
 
-    // Fetch payment history - only completed payments for MiniApp users
+    // Fetch payment history - only completed payments for MiniApp users, filtered by tenant
     const { data: payments, error: payError } = await supabaseAdmin
       .from("payment_history")
       .select("id, created_at, payment_date, amount, status, payment_method, invoice_id, payment_note")
       .eq("subscriber_id", subscriber.id)
+      .eq("tenant_id", tenantId)
       .eq("status", "completed")
       .order("created_at", { ascending: false })
       .limit(50);
@@ -175,10 +205,16 @@ serve(async (req) => {
       );
     }
 
-    console.log("Returning", payments?.length ?? 0, "payments for subscriber", subscriber.id);
+    console.log("Returning", payments?.length ?? 0, "payments for subscriber", subscriber.id, { tenant_id_used: tenantId });
 
     return new Response(
-      JSON.stringify({ payments: payments ?? [] }),
+      JSON.stringify({ 
+        payments: payments ?? [],
+        _debug: {
+          tenant_id_used: tenantId,
+          tenant_slug_used: tenant_slug || null,
+        }
+      }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (error) {

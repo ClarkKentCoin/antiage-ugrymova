@@ -7,6 +7,11 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Default tenant ID for backward compatibility (production main tenant)
+const DEFAULT_TENANT_ID = Deno.env.get("PUBLIC_TENANT_ID") ?? "6749bded-94d6-4793-9f46-09724da30ab6";
+
+const MS_PER_DAY = 1000 * 60 * 60 * 24;
+
 const enc = new TextEncoder();
 const dec = new TextDecoder();
 
@@ -89,6 +94,26 @@ async function isValidInitData(initData: string, botToken: string): Promise<{ ok
   }
 }
 
+// Resolve tenant ID from slug or use default
+async function resolveTenantId(supabaseAdmin: any, tenantSlug: string | null): Promise<string> {
+  if (!tenantSlug) {
+    return DEFAULT_TENANT_ID;
+  }
+
+  const { data: tenant, error } = await supabaseAdmin
+    .from("tenants")
+    .select("id")
+    .eq("slug", tenantSlug)
+    .maybeSingle();
+
+  if (error || !tenant) {
+    console.log(`[get-subscriber-status] Tenant not found for slug: ${tenantSlug}, using default`);
+    return DEFAULT_TENANT_ID;
+  }
+
+  return tenant.id;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -98,9 +123,9 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
     );
 
-    const { telegram_user_id, init_data } = await req.json();
+    const { telegram_user_id, init_data, tenant_slug } = await req.json();
 
-    console.log("get-subscriber-status request:", { telegram_user_id, hasInitData: !!init_data });
+    console.log("get-subscriber-status request:", { telegram_user_id, hasInitData: !!init_data, tenant_slug });
 
     if (!telegram_user_id || !init_data) {
       return new Response(
@@ -109,10 +134,15 @@ serve(async (req) => {
       );
     }
 
+    // Resolve tenant ID from slug (or use default)
+    const tenantId = await resolveTenantId(supabaseAdmin, tenant_slug);
+    console.log(`[get-subscriber-status] Resolved tenant_id: ${tenantId} from slug: ${tenant_slug || 'null'}`);
+
+    // Get settings for this specific tenant
     const { data: settings, error: settingsError } = await supabaseAdmin
       .from("admin_settings")
-      .select("telegram_bot_token")
-      .limit(1)
+      .select("telegram_bot_token, grace_period_days")
+      .eq("tenant_id", tenantId)
       .maybeSingle();
 
     if (settingsError || !settings?.telegram_bot_token) {
@@ -141,6 +171,7 @@ serve(async (req) => {
       );
     }
 
+    // Query subscriber for this specific tenant
     const { data: subscriber, error } = await supabaseAdmin
       .from("subscribers")
       .select(
@@ -150,6 +181,7 @@ serve(async (req) => {
          subscription_tiers ( id, name, price, duration_days )`,
       )
       .eq("telegram_user_id", Number(telegram_user_id))
+      .eq("tenant_id", tenantId)
       .maybeSingle();
 
     if (error) {
@@ -160,10 +192,37 @@ serve(async (req) => {
       );
     }
 
-    console.log("Returning subscriber:", subscriber?.id, subscriber?.status);
+    // Calculate grace period info if subscriber exists and is in grace period
+    let graceDaysRemaining: number | null = null;
+    let graceEndAt: string | null = null;
+    const gracePeriodDays = settings.grace_period_days ?? 3;
+
+    if (subscriber?.subscription_end && (subscriber.status === "grace_period" || subscriber.status === "past_due")) {
+      const subscriptionEnd = new Date(subscriber.subscription_end).getTime();
+      const graceEnd = subscriptionEnd + (gracePeriodDays * MS_PER_DAY);
+      const now = Date.now();
+      
+      // Use Math.ceil to ensure we show "1 day" at the start, not "0 days"
+      graceDaysRemaining = Math.max(0, Math.ceil((graceEnd - now) / MS_PER_DAY));
+      graceEndAt = new Date(graceEnd).toISOString();
+      
+      console.log(`[get-subscriber-status] Grace period: subscriptionEnd=${subscriber.subscription_end}, gracePeriodDays=${gracePeriodDays}, graceDaysRemaining=${graceDaysRemaining}`);
+    }
+
+    console.log("Returning subscriber:", subscriber?.id, subscriber?.status, { tenant_id_used: tenantId, tenant_slug_used: tenant_slug || null });
 
     return new Response(
-      JSON.stringify({ subscriber: subscriber ?? null }),
+      JSON.stringify({ 
+        subscriber: subscriber ?? null,
+        grace_period_days: gracePeriodDays,
+        grace_days_remaining: graceDaysRemaining,
+        grace_end_at: graceEndAt,
+        // Debug info for verification
+        _debug: {
+          tenant_id_used: tenantId,
+          tenant_slug_used: tenant_slug || null,
+        }
+      }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (error) {

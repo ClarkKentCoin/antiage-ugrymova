@@ -6,6 +6,9 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Default tenant ID for backward compatibility (production main tenant)
+const DEFAULT_TENANT_ID = Deno.env.get("PUBLIC_TENANT_ID") ?? "6749bded-94d6-4793-9f46-09724da30ab6";
+
 // Robokassa signatures: SignatureValue uses SHA256 (Password#1) when configured in merchant settings
 async function robokassaSignature(message: string): Promise<string> {
   const msgUint8 = new TextEncoder().encode(message);
@@ -15,6 +18,26 @@ async function robokassaSignature(message: string): Promise<string> {
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("")
     .toUpperCase();
+}
+
+// Resolve tenant ID from slug or use default
+async function resolveTenantId(supabaseAdmin: any, tenantSlug: string | null): Promise<string> {
+  if (!tenantSlug) {
+    return DEFAULT_TENANT_ID;
+  }
+
+  const { data: tenant, error } = await supabaseAdmin
+    .from("tenants")
+    .select("id")
+    .eq("slug", tenantSlug)
+    .maybeSingle();
+
+  if (error || !tenant) {
+    console.log(`[create-robokassa-payment] Tenant not found for slug: ${tenantSlug}, using default`);
+    return DEFAULT_TENANT_ID;
+  }
+
+  return tenant.id;
 }
 
 serve(async (req) => {
@@ -30,9 +53,9 @@ serve(async (req) => {
     );
 
     // Parse request body first to check source
-    const { subscriber_id, tier_id, is_recurring, ip_address, user_agent, telegram_user_id, telegram_username, first_name, last_name } = await req.json();
+    const { subscriber_id, tier_id, is_recurring, ip_address, user_agent, telegram_user_id, telegram_username, first_name, last_name, tenant_slug } = await req.json();
 
-    console.log("Request received:", { subscriber_id, tier_id, is_recurring, telegram_user_id, telegram_username, first_name, last_name });
+    console.log("Request received:", { subscriber_id, tier_id, is_recurring, telegram_user_id, telegram_username, first_name, last_name, tenant_slug });
 
     if (!tier_id) {
       return new Response(
@@ -40,6 +63,10 @@ serve(async (req) => {
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
+    // Resolve tenant ID from slug (or use default)
+    const tenantId = await resolveTenantId(supabaseAdmin, tenant_slug);
+    console.log(`[create-robokassa-payment] Resolved tenant_id: ${tenantId} from slug: ${tenant_slug || 'null'}`);
 
     // Check if this is a request from Telegram mini app (has telegram_user_id) or from admin panel
     const authHeader = req.headers.get("Authorization");
@@ -90,11 +117,12 @@ serve(async (req) => {
 
       console.log(`Telegram user request: ${telegram_user_id}`);
 
-      // Find or create subscriber by telegram_user_id
+      // Find or create subscriber by telegram_user_id for this tenant
       let { data: subscriber, error: subError } = await supabaseAdmin
         .from("subscribers")
         .select("id")
         .eq("telegram_user_id", telegram_user_id)
+        .eq("tenant_id", tenantId)
         .maybeSingle();
 
       if (subError) {
@@ -106,12 +134,12 @@ serve(async (req) => {
       }
 
       if (!subscriber) {
-        // Get admin settings to fetch telegram bot token and tenant_id
+        // Get admin settings to fetch telegram bot token
         const { data: settingsForBot } = await supabaseAdmin
           .from("admin_settings")
-          .select("telegram_bot_token, tenant_id")
-          .limit(1)
-          .single();
+          .select("telegram_bot_token")
+          .eq("tenant_id", tenantId)
+          .maybeSingle();
 
         // Try to get user info from Telegram API
         let tgUsername = telegram_username || null;
@@ -146,7 +174,7 @@ serve(async (req) => {
             last_name: tgLastName,
             status: "inactive",
             tier_id: tier_id,
-            tenant_id: settingsForBot?.tenant_id || null,
+            tenant_id: tenantId,
           })
           .select("id")
           .single();
@@ -160,7 +188,7 @@ serve(async (req) => {
         }
 
         subscriber = newSubscriber;
-        console.log(`Created new subscriber: ${subscriber.id} for telegram_user_id: ${telegram_user_id} with username: ${tgUsername}, tenant_id: ${settingsForBot?.tenant_id}`);
+        console.log(`Created new subscriber: ${subscriber.id} for telegram_user_id: ${telegram_user_id} with username: ${tgUsername}, tenant_id: ${tenantId}`);
       }
 
       resolvedSubscriberId = subscriber.id;
@@ -173,12 +201,12 @@ serve(async (req) => {
       );
     }
 
-    // Get Robokassa settings and tenant_id
+    // Get Robokassa settings for this tenant
     const { data: settings, error: settingsError } = await supabaseAdmin
       .from("admin_settings")
-      .select("robokassa_merchant_login, robokassa_password1, robokassa_test_mode, tenant_id")
-      .limit(1)
-      .single();
+      .select("robokassa_merchant_login, robokassa_password1, robokassa_test_mode")
+      .eq("tenant_id", tenantId)
+      .maybeSingle();
 
     if (settingsError || !settings?.robokassa_merchant_login || !settings?.robokassa_password1) {
       console.error("Settings error:", settingsError);
@@ -188,11 +216,12 @@ serve(async (req) => {
       );
     }
 
-    // Get tier information
+    // Get tier information for this tenant
     const { data: tier, error: tierError } = await supabaseAdmin
       .from("subscription_tiers")
       .select("name, price")
       .eq("id", tier_id)
+      .eq("tenant_id", tenantId)
       .single();
 
     if (tierError || !tier) {
@@ -281,7 +310,7 @@ serve(async (req) => {
         transaction_type: is_recurring ? "initial" : "initial",
         payment_method: is_recurring ? "robokassa_recurring" : "robokassa_single",
         status: "pending",
-        tenant_id: settings.tenant_id || null,
+        tenant_id: tenantId,
       })
       .select()
       .single();
@@ -296,6 +325,7 @@ serve(async (req) => {
         subscriber_id: resolvedSubscriberId,
         telegram_user_id: subscriber.telegram_user_id,
         tier_id,
+        tenant_id: tenantId,
         message: "Failed to create payment record",
         payload: { error: paymentError.message },
       });
@@ -318,6 +348,7 @@ serve(async (req) => {
         telegram_user_id: subscriber.telegram_user_id,
         tier_id,
         request_id: payment.id,
+        tenant_id: tenantId,
         message: "Payment attempt created",
         payload: {
           payment_id: payment.id,
@@ -401,14 +432,18 @@ serve(async (req) => {
     paymentUrl += `&Shp_subscriber_id=${shpSubscriberId}`;
     paymentUrl += `&Shp_telegram_user_id=${shpTelegramUserId}`;
 
-    console.log(`Generated payment URL for subscriber ${resolvedSubscriberId}, telegram_user_id: ${shpTelegramUserId}`);
+    console.log(`Generated payment URL for subscriber ${resolvedSubscriberId}, telegram_user_id: ${shpTelegramUserId}, tenant_id: ${tenantId}`);
 
     return new Response(
       JSON.stringify({ 
         success: true, 
         payment_url: paymentUrl,
         invoice_id: invoiceId,
-        amount: tier.price
+        amount: tier.price,
+        _debug: {
+          tenant_id_used: tenantId,
+          tenant_slug_used: tenant_slug || null,
+        }
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

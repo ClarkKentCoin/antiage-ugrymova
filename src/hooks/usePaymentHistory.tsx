@@ -42,17 +42,22 @@ export interface UsePaymentHistoryOptions {
 // Hook for MiniApp - fetches via edge function with init_data validation
 export function usePaymentHistoryForUser(
   telegramUserId: number | null | undefined,
-  initData: string | null | undefined
+  initData: string | null | undefined,
+  tenantSlug?: string | null
 ) {
   return useQuery({
-    queryKey: ['payment_history_user', telegramUserId],
+    queryKey: ['payment_history_user', telegramUserId, tenantSlug],
     queryFn: async () => {
       if (!telegramUserId || !initData) {
         return [];
       }
 
       const { data, error } = await supabase.functions.invoke('get-payment-history', {
-        body: { telegram_user_id: telegramUserId, init_data: initData },
+        body: { 
+          telegram_user_id: telegramUserId, 
+          init_data: initData,
+          tenant_slug: tenantSlug,
+        },
       });
 
       if (error) {

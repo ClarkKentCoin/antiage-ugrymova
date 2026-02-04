@@ -9,6 +9,9 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Default tenant ID for backward compatibility (production main tenant)
+const DEFAULT_TENANT_ID = Deno.env.get("PUBLIC_TENANT_ID") ?? "6749bded-94d6-4793-9f46-09724da30ab6";
+
 const enc = new TextEncoder();
 const dec = new TextDecoder();
 
@@ -101,6 +104,26 @@ async function isValidInitData(initData: string, botToken: string): Promise<{ ok
   }
 }
 
+// Resolve tenant ID from slug or use default
+async function resolveTenantId(supabaseAdmin: any, tenantSlug: string | null): Promise<string> {
+  if (!tenantSlug) {
+    return DEFAULT_TENANT_ID;
+  }
+
+  const { data: tenant, error } = await supabaseAdmin
+    .from("tenants")
+    .select("id")
+    .eq("slug", tenantSlug)
+    .maybeSingle();
+
+  if (error || !tenant) {
+    console.log(`[cancel-subscription] Tenant not found for slug: ${tenantSlug}, using default`);
+    return DEFAULT_TENANT_ID;
+  }
+
+  return tenant.id;
+}
+
 // Call Telegram API
 async function callTelegramApi(
   botToken: string,
@@ -186,9 +209,9 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
     );
 
-    const { telegram_user_id, init_data } = await req.json();
+    const { telegram_user_id, init_data, tenant_slug } = await req.json();
 
-    console.log("[cancel-subscription] Request data:", { telegram_user_id, hasInitData: !!init_data });
+    console.log("[cancel-subscription] Request data:", { telegram_user_id, hasInitData: !!init_data, tenant_slug });
 
     // Validate required fields
     if (!telegram_user_id || !init_data) {
@@ -198,11 +221,15 @@ serve(async (req) => {
       );
     }
 
-    // Get bot token from admin settings
+    // Resolve tenant ID from slug (or use default)
+    const tenantId = await resolveTenantId(supabaseAdmin, tenant_slug);
+    console.log(`[cancel-subscription] Resolved tenant_id: ${tenantId} from slug: ${tenant_slug || 'null'}`);
+
+    // Get bot token from admin settings for this tenant
     const { data: settings, error: settingsError } = await supabaseAdmin
       .from("admin_settings")
       .select("telegram_bot_token, telegram_channel_id, channel_name")
-      .limit(1)
+      .eq("tenant_id", tenantId)
       .maybeSingle();
 
     if (settingsError || !settings?.telegram_bot_token) {
@@ -235,11 +262,12 @@ serve(async (req) => {
 
     console.log("[cancel-subscription] init_data validated successfully");
 
-    // Find subscriber by telegram_user_id
+    // Find subscriber by telegram_user_id for this tenant
     const { data: subscriber, error: subscriberError } = await supabaseAdmin
       .from("subscribers")
       .select("id, status, telegram_user_id")
       .eq("telegram_user_id", Number(telegram_user_id))
+      .eq("tenant_id", tenantId)
       .maybeSingle();
 
     if (subscriberError) {
@@ -251,7 +279,7 @@ serve(async (req) => {
     }
 
     if (!subscriber) {
-      console.log("[cancel-subscription] Subscriber not found:", telegram_user_id);
+      console.log("[cancel-subscription] Subscriber not found:", telegram_user_id, "for tenant:", tenantId);
       return new Response(
         JSON.stringify({ error: "subscriber_not_found" }),
         { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } },
@@ -372,7 +400,7 @@ serve(async (req) => {
       }
     }
 
-    console.log("[cancel-subscription] Completed:", results);
+    console.log("[cancel-subscription] Completed:", results, { tenant_id_used: tenantId });
 
     // Log successful cancellation to system_logs
     try {
@@ -382,6 +410,7 @@ serve(async (req) => {
         source: "edge_fn",
         subscriber_id: subscriber.id,
         telegram_user_id: Number(telegram_user_id),
+        tenant_id: tenantId,
         message: "Subscription cancelled by user via MiniApp",
         payload: {
           channel_id: channelId,
@@ -398,6 +427,7 @@ serve(async (req) => {
           source: "edge_fn",
           subscriber_id: subscriber.id,
           telegram_user_id: Number(telegram_user_id),
+          tenant_id: tenantId,
           message: "User banned from channel after cancellation",
           payload: { channel_id: channelId },
         });
@@ -410,6 +440,7 @@ serve(async (req) => {
           source: "edge_fn",
           subscriber_id: subscriber.id,
           telegram_user_id: Number(telegram_user_id),
+          tenant_id: tenantId,
           message: `Revoked ${results.invites_revoked} invite links`,
           payload: { channel_id: channelId, count: results.invites_revoked },
         });
@@ -419,7 +450,14 @@ serve(async (req) => {
     }
 
     return new Response(
-      JSON.stringify({ success: true, results }),
+      JSON.stringify({ 
+        success: true, 
+        results,
+        _debug: {
+          tenant_id_used: tenantId,
+          tenant_slug_used: tenant_slug || null,
+        }
+      }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (error) {
