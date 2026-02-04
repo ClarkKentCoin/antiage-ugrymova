@@ -38,27 +38,20 @@ export interface ServerDebugInfo {
   grace_end_at?: string | null;
   grace_days_remaining?: number | null;
   grace_ms_remaining?: number | null;
-  _debug?: {
-    identity_source?: 'telegram' | 'test';
-    resolved_user_id?: number | null;
-    tenant_id_used?: string;
-    tenant_slug_used?: string | null;
-  };
 }
 
 interface MiniAppBuildBadgeProps {
   serverDebug?: ServerDebugInfo | null;
-  subscriberStatus?: string | null;
 }
 
-export function MiniAppBuildBadge({ serverDebug, subscriberStatus }: MiniAppBuildBadgeProps) {
+export function MiniAppBuildBadge({ serverDebug }: MiniAppBuildBadgeProps) {
   const assetHash = useMemo(() => getAssetHash(), []);
   const tenantSlug = useMemo(() => getTenantSlug(), []);
   const mode = import.meta.env.MODE;
 
   return (
     <div 
-      className="fixed bottom-2 right-2 z-50 px-2 py-1.5 rounded-md bg-black/60 backdrop-blur-sm text-[9px] font-mono leading-tight text-white/80 pointer-events-none select-none max-w-[220px]"
+      className="fixed bottom-2 right-2 z-50 px-2 py-1.5 rounded-md bg-black/60 backdrop-blur-sm text-[9px] font-mono leading-tight text-white/80 pointer-events-none select-none max-w-[200px]"
     >
       <div>Build: {assetHash}</div>
       <div>Mode: {mode}</div>
@@ -72,20 +65,6 @@ export function MiniAppBuildBadge({ serverDebug, subscriberStatus }: MiniAppBuil
             {serverDebug.grace_end_at && <div>grEnd: {serverDebug.grace_end_at.slice(0, 10)}</div>}
             <div>grDays: {serverDebug.grace_days_remaining ?? 'null'}</div>
           </div>
-          {/* Identity diagnostics */}
-          {serverDebug._debug && (
-            <div className="border-t border-white/20 my-1 pt-1">
-              <div>src: {serverDebug._debug.identity_source || '?'}</div>
-              <div>uid: {serverDebug._debug.resolved_user_id ?? 'null'}</div>
-              <div>tn: {serverDebug._debug.tenant_slug_used || serverDebug._debug.tenant_id_used?.slice(0, 8) || '?'}</div>
-            </div>
-          )}
-          {/* Status if provided */}
-          {subscriberStatus && (
-            <div className="border-t border-white/20 my-1 pt-1">
-              <div>status: {subscriberStatus}</div>
-            </div>
-          )}
         </>
       )}
     </div>

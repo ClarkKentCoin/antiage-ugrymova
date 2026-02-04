@@ -70,7 +70,6 @@ export default function TelegramApp() {
     grace_end_at: subscriberResponse.grace_end_at,
     grace_days_remaining: subscriberResponse.grace_days_remaining,
     grace_ms_remaining: subscriberResponse.grace_ms_remaining,
-    _debug: subscriberResponse._debug,
   } : null;
   
   const { data: tiers } = useActiveTiers();
@@ -111,27 +110,13 @@ export default function TelegramApp() {
     fetchSettings();
   }, []);
 
-  // For testing outside Telegram (DEV or ?test=1) - now uses edge function with test_mode flag
+  // For testing outside Telegram (DEV or ?test=1)
   const [testUserId, setTestUserId] = useState<number | null>(null);
-  const { data: testSubscriberResponse, isLoading: loadingTestSubscriber, refetch: refetchTestSubscriber } = useSubscriber(
-    testUserId, 
-    null, // no initData in test mode 
-    tenantSlug,
-    true  // test_mode flag
-  );
+  const { data: testSubscriberResponse, isLoading: loadingTestSubscriber, refetch: refetchTestSubscriber } = useSubscriber(testUserId);
   const testSubscriber = testSubscriberResponse?.subscriber ?? null;
-  const testDebugInfo = testSubscriberResponse ? {
-    function_version: testSubscriberResponse.function_version,
-    server_now: testSubscriberResponse.server_now,
-    expires_at_raw: testSubscriberResponse.expires_at_raw,
-    grace_end_at: testSubscriberResponse.grace_end_at,
-    grace_days_remaining: testSubscriberResponse.grace_days_remaining,
-    grace_ms_remaining: testSubscriberResponse.grace_ms_remaining,
-    _debug: testSubscriberResponse._debug,
-  } : null;
 
   const activeSubscriber = user ? subscriber : testSubscriber;
-  const activeDebugInfo = user ? serverDebugInfo : testDebugInfo;
+  const activeDebugInfo = user ? serverDebugInfo : null;
   const isLoading = user ? loadingSubscriber : loadingTestSubscriber;
   const refetch = user ? refetchSubscriber : refetchTestSubscriber;
 
@@ -284,9 +269,9 @@ export default function TelegramApp() {
           onRefetch={refetch}
           gracePeriodDays={gracePeriodDays}
           isCancelling={isCancelling}
-          serverGraceDaysRemaining={testDebugInfo?.grace_days_remaining ?? null}
+          serverGraceDaysRemaining={null}
         />
-        <MiniAppBuildBadge serverDebug={testDebugInfo} subscriberStatus={testSubscriber?.status ?? 'none'} />
+        <MiniAppBuildBadge serverDebug={null} />
       </main>
     );
   }
@@ -343,7 +328,7 @@ export default function TelegramApp() {
         isCancelling={isCancelling}
         serverGraceDaysRemaining={activeDebugInfo?.grace_days_remaining ?? null}
       />
-      <MiniAppBuildBadge serverDebug={activeDebugInfo} subscriberStatus={activeSubscriber?.status ?? 'none'} />
+      <MiniAppBuildBadge serverDebug={activeDebugInfo} />
     </div>
   );
 }

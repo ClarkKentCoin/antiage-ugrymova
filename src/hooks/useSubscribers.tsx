@@ -89,31 +89,22 @@ export interface SubscriberStatusResponse {
   _debug?: {
     tenant_id_used: string;
     tenant_slug_used: string | null;
-    identity_source?: 'telegram' | 'test';
-    resolved_user_id?: number | null;
   };
 }
 
-export function useSubscriber(telegramUserId: number | null, initData?: string | null, tenantSlug?: string | null, testMode?: boolean) {
-  // Check if we're in browser test mode (no initData but have user id)
-  const isTestMode = testMode === true || (!initData && typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('test'));
-  
+export function useSubscriber(telegramUserId: number | null, initData?: string | null, tenantSlug?: string | null) {
   return useQuery({
-    // Include nocache timestamp in key ONLY for test mode to prevent stale cache
-    queryKey: ['subscriber', telegramUserId, initData ? 'telegram' : 'direct', tenantSlug, isTestMode ? Date.now() : 'stable'],
+    queryKey: ['subscriber', telegramUserId, initData ? 'telegram' : 'direct', tenantSlug],
     queryFn: async (): Promise<SubscriberStatusResponse | null> => {
       if (telegramUserId == null) return null;
 
       // In Telegram Mini App we use a backend function that validates initData
-      // In test mode, we also use the edge function but skip initData validation
-      if (initData || isTestMode) {
+      if (initData) {
         const { data, error } = await supabase.functions.invoke('get-subscriber-status', {
           body: {
             telegram_user_id: telegramUserId,
-            init_data: initData ?? null,
+            init_data: initData,
             tenant_slug: tenantSlug,
-            // For test mode, add nocache to bypass any server caching and signal test mode
-            ...(isTestMode ? { nocache: Date.now(), test_mode: true } : {}),
           },
         });
 
@@ -125,7 +116,7 @@ export function useSubscriber(telegramUserId: number | null, initData?: string |
 
         // Handle application-level errors returned from edge function
         if (data?.error) {
-          console.error('[useSubscriber] API error:', data.error, data.reason, data._debug);
+          console.error('[useSubscriber] API error:', data.error, data.reason);
           // For invalid_init_data or other auth errors, return null (user not found/not authorized)
           if (data.error === 'invalid_init_data' || data.error === 'user_id_mismatch') {
             return null;
