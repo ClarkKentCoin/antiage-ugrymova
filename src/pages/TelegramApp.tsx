@@ -3,6 +3,7 @@ import { useTelegramWebApp } from '@/hooks/useTelegramWebApp';
 import { useSubscriber } from '@/hooks/useSubscribers';
 import { useActiveTiers } from '@/hooks/useSubscriptionTiers';
 import { usePaymentHistoryForUser } from '@/hooks/usePaymentHistory';
+import { useDebugBadgeToggle } from '@/hooks/useDebugBadgeToggle';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -55,6 +56,9 @@ export default function TelegramApp() {
   // Get tenant slug from URL (for multi-tenant support)
   const tenantSlug = useMemo(() => getTenantSlug(), []);
 
+  // Debug badge toggle (7 taps on logo to enable/disable)
+  const { isEnabled: debugBadgeEnabled, handleTap: handleDebugTap } = useDebugBadgeToggle();
+
   const { data: subscriberResponse, isLoading: loadingSubscriber, refetch: refetchSubscriber, error: subscriberError } = useSubscriber(
     user?.id ?? null,
     initData,
@@ -81,6 +85,19 @@ export default function TelegramApp() {
   });
   const [paymentLink, setPaymentLink] = useState<string | null>(null);
   const { toast } = useToast();
+
+  // Handle debug badge tap with toast feedback
+  const onDebugTap = () => {
+    const toggled = handleDebugTap();
+    if (toggled) {
+      // After toggle, check the new state from localStorage
+      const newState = localStorage.getItem('miniapp_debug_badge') === '1';
+      toast({
+        title: newState ? 'Debug badge: ON' : 'Debug badge: OFF',
+        description: newState ? 'Диагностика включена' : 'Диагностика отключена',
+      });
+    }
+  };
 
   const [channelInfo, setChannelInfo] = useState<{ name: string; description: string } | null>(null);
   const [gracePeriodDays, setGracePeriodDays] = useState<number | null>(null);
@@ -270,8 +287,9 @@ export default function TelegramApp() {
           gracePeriodDays={gracePeriodDays}
           isCancelling={isCancelling}
           serverGraceDaysRemaining={null}
+          onDebugTap={onDebugTap}
         />
-        <MiniAppBuildBadge serverDebug={null} />
+        {debugBadgeEnabled && <MiniAppBuildBadge serverDebug={null} />}
       </main>
     );
   }
@@ -327,8 +345,9 @@ export default function TelegramApp() {
         gracePeriodDays={gracePeriodDays}
         isCancelling={isCancelling}
         serverGraceDaysRemaining={activeDebugInfo?.grace_days_remaining ?? null}
+        onDebugTap={onDebugTap}
       />
-      <MiniAppBuildBadge serverDebug={activeDebugInfo} />
+      {debugBadgeEnabled && <MiniAppBuildBadge serverDebug={activeDebugInfo} />}
     </div>
   );
 }
@@ -339,13 +358,15 @@ function NewUserView({
   tiers,
   telegramUserId,
   subscriber,
-  onRefetch
+  onRefetch,
+  onDebugTap,
 }: {
   channelInfo: { name: string; description: string } | null;
   tiers: any[];
   telegramUserId?: number | null;
   subscriber: any;
   onRefetch?: () => void;
+  onDebugTap?: () => void;
 }) {
   const [selectedTier, setSelectedTier] = useState<string | null>(null);
   const [autoRenewal, setAutoRenewal] = useState(false);
@@ -434,7 +455,10 @@ function NewUserView({
     <div className="p-4 space-y-6">
       {/* Channel Header */}
       <div className="text-center py-6">
-        <div className="flex items-center justify-center mx-auto mb-4">
+        <div 
+          className="flex items-center justify-center mx-auto mb-4 cursor-pointer select-none"
+          onClick={onDebugTap}
+        >
           <img src={logoUgrymova} alt="Ugrymova" className="max-w-[200px] h-auto" />
         </div>
         <h1 className="text-2xl font-bold mb-3">
@@ -596,7 +620,8 @@ function GracePeriodView({
   telegramUserId,
   subscriber,
   onRefetch,
-  graceDaysRemaining
+  graceDaysRemaining,
+  onDebugTap,
 }: {
   channelInfo: { name: string; description: string } | null;
   tiers: any[];
@@ -604,6 +629,7 @@ function GracePeriodView({
   subscriber: any;
   onRefetch?: () => void;
   graceDaysRemaining: number;
+  onDebugTap?: () => void;
 }) {
   const [selectedTier, setSelectedTier] = useState<string | null>(null);
   const [autoRenewal, setAutoRenewal] = useState(false);
@@ -658,6 +684,16 @@ function GracePeriodView({
 
   return (
     <div className="p-4 space-y-6">
+      {/* Tappable logo for debug toggle */}
+      <div className="text-center pt-4">
+        <div 
+          className="flex items-center justify-center mx-auto mb-2 cursor-pointer select-none"
+          onClick={onDebugTap}
+        >
+          <img src={logoUgrymova} alt="Ugrymova" className="max-w-[160px] h-auto" />
+        </div>
+      </div>
+
       {/* Grace Period Warning */}
       <Card className="border-warning bg-warning/10">
         <CardContent className="pt-6">
@@ -836,6 +872,7 @@ function SubscriptionContent({
   gracePeriodDays = 0,
   isCancelling = false,
   serverGraceDaysRemaining = null,
+  onDebugTap,
 }: {
   subscriber: any; 
   isLoading: boolean;
@@ -852,6 +889,7 @@ function SubscriptionContent({
   gracePeriodDays?: number | null;
   isCancelling?: boolean;
   serverGraceDaysRemaining?: number | null;
+  onDebugTap?: () => void;
 }) {
   const [selectedTier, setSelectedTier] = useState<string | null>(null);
   const [autoRenewal, setAutoRenewal] = useState(false);
@@ -980,6 +1018,7 @@ function SubscriptionContent({
         subscriber={subscriber}
         onRefetch={onRefetch}
         graceDaysRemaining={graceDaysRemaining}
+        onDebugTap={onDebugTap}
       />
     );
   }
@@ -993,6 +1032,7 @@ function SubscriptionContent({
         telegramUserId={telegramUserId}
         subscriber={subscriber}
         onRefetch={onRefetch}
+        onDebugTap={onDebugTap}
       />
     );
   }
@@ -1006,7 +1046,10 @@ function SubscriptionContent({
     <div className="p-4 space-y-4">
       {/* Channel Header */}
       <div className="text-center py-4">
-        <div className="flex items-center justify-center mx-auto mb-4">
+        <div 
+          className="flex items-center justify-center mx-auto mb-4 cursor-pointer select-none"
+          onClick={onDebugTap}
+        >
           <img src={logoUgrymova} alt="Ugrymova" className="max-w-[200px] h-auto" />
         </div>
         <h2 className="text-2xl font-bold mb-2">
