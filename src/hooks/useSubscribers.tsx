@@ -75,9 +75,9 @@ export function useSubscribers() {
   });
 }
 
-export function useSubscriber(telegramUserId: number | null, initData?: string | null) {
+export function useSubscriber(telegramUserId: number | null, initData?: string | null, tenantSlug?: string | null) {
   return useQuery({
-    queryKey: ['subscriber', telegramUserId, initData ? 'telegram' : 'direct'],
+    queryKey: ['subscriber', telegramUserId, initData ? 'telegram' : 'direct', tenantSlug],
     queryFn: async () => {
       if (telegramUserId == null) return null;
 
@@ -87,6 +87,7 @@ export function useSubscriber(telegramUserId: number | null, initData?: string |
           body: {
             telegram_user_id: telegramUserId,
             init_data: initData,
+            tenant_slug: tenantSlug,
           },
         });
 

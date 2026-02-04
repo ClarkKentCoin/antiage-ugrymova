@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useTelegramWebApp } from '@/hooks/useTelegramWebApp';
 import { useSubscriber } from '@/hooks/useSubscribers';
 import { useActiveTiers } from '@/hooks/useSubscriptionTiers';
@@ -16,6 +16,11 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { formatDaysRu } from '@/lib/textFormatters';
+
+// Extract tenant slug from URL for multi-tenant MiniApp support
+const getTenantSlug = (): string | null => {
+  return new URLSearchParams(window.location.search).get('t');
+};
 import {
   AlertDialog,
   AlertDialogAction,
@@ -45,10 +50,14 @@ const openPaymentUrl = (url: string) => {
 export default function TelegramApp() {
   const { isReady, isTelegramWebApp, user, showConfirm, hapticFeedback, webApp } = useTelegramWebApp();
   const initData = webApp?.initData ?? null;
+  
+  // Get tenant slug from URL (for multi-tenant support)
+  const tenantSlug = useMemo(() => getTenantSlug(), []);
 
   const { data: subscriber, isLoading: loadingSubscriber, refetch: refetchSubscriber, error: subscriberError } = useSubscriber(
     user?.id ?? null,
     initData,
+    tenantSlug,
   );
   const { data: tiers } = useActiveTiers();
   const publicTiers = (tiers ?? []).filter((t) => {
@@ -98,7 +107,7 @@ export default function TelegramApp() {
 
   // Fetch payments via edge function with init_data validation
   const telegramUserIdForPayments = user?.id ?? testUserId;
-  const { data: payments } = usePaymentHistoryForUser(telegramUserIdForPayments, initData);
+  const { data: payments } = usePaymentHistoryForUser(telegramUserIdForPayments, initData, tenantSlug);
 
   const daysRemaining = activeSubscriber?.subscription_end
     ? differenceInDays(new Date(activeSubscriber.subscription_end), new Date())
@@ -134,6 +143,7 @@ export default function TelegramApp() {
         body: {
           telegram_user_id: telegramUserId,
           init_data: initData ?? '',
+          tenant_slug: tenantSlug,
         },
       });
 
@@ -355,6 +365,7 @@ function NewUserView({
         ip_address: null,
         user_agent: navigator.userAgent,
         telegram_user_id: telegramUserId,
+        tenant_slug: getTenantSlug(),
       };
 
       // Optional: if subscriber exists (например, в тестовом режиме), передадим его
@@ -605,6 +616,7 @@ function GracePeriodView({
           ip_address: null,
           user_agent: navigator.userAgent,
           telegram_user_id: telegramUserId,
+          tenant_slug: getTenantSlug(),
         },
       });
 
@@ -846,6 +858,7 @@ function SubscriptionContent({
           ip_address: null,
           user_agent: navigator.userAgent,
           telegram_user_id: telegramUserId,
+          tenant_slug: getTenantSlug(),
         },
       });
 
