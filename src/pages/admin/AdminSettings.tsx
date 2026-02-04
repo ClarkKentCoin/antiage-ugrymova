@@ -8,6 +8,7 @@ import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/hooks/useAuth';
 import { Loader2, Copy, Check } from 'lucide-react';
 
 interface AdminSettingsData {
@@ -40,6 +41,7 @@ interface AdminSettingsData {
 
 export default function AdminSettings() {
   const { toast } = useToast();
+  const { tenantId, tenantLoading } = useAuth();
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isSettingBotWebhook, setIsSettingBotWebhook] = useState(false);
@@ -76,16 +78,23 @@ export default function AdminSettings() {
   const botWebhookUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/telegram-bot-webhook`;
 
   useEffect(() => {
-    loadSettings();
-  }, []);
+    if (!tenantLoading) {
+      loadSettings();
+    }
+  }, [tenantLoading, tenantId]);
 
   const loadSettings = async () => {
+    if (!tenantId) {
+      toast({ title: 'Tenant not found for this user', variant: 'destructive' });
+      setIsLoading(false);
+      return;
+    }
+
     try {
       const { data, error } = await supabase
         .from('admin_settings')
         .select('*')
-        .order('created_at', { ascending: false })
-        .limit(1)
+        .eq('tenant_id', tenantId)
         .maybeSingle();
 
       if (error) throw error;
@@ -125,13 +134,18 @@ export default function AdminSettings() {
   };
 
   const handleSave = async () => {
+    if (!tenantId) {
+      toast({ title: 'Cannot save: tenant not found', variant: 'destructive' });
+      return;
+    }
+
     setIsSaving(true);
     try {
-      // First check if a settings row exists
+      // First check if a settings row exists for this tenant
       const { data: existingSettings } = await supabase
         .from('admin_settings')
         .select('id')
-        .limit(1)
+        .eq('tenant_id', tenantId)
         .maybeSingle();
 
       const settingsData = {
@@ -169,10 +183,10 @@ export default function AdminSettings() {
           .eq('id', existingSettings.id);
         error = result.error;
       } else {
-        // Insert new row
+        // Insert new row with tenant_id
         const result = await supabase
           .from('admin_settings')
-          .insert(settingsData as any);
+          .insert({ ...settingsData, tenant_id: tenantId } as any);
         error = result.error;
       }
 
