@@ -184,20 +184,15 @@ WHERE tenant_id IS NULL;
 - [ ] N/A — no code changes
 
 **Supabase Rollback SQL:**
-```sql
--- ONLY use immediately if needed — sets tenant_id back to NULL for affected rows
-UPDATE invite_links 
-SET tenant_id = NULL 
-WHERE tenant_id = '6749bded-94d6-4793-9f46-09724da30ab6';
 
-UPDATE system_logs 
-SET tenant_id = NULL 
-WHERE tenant_id = '6749bded-94d6-4793-9f46-09724da30ab6';
+⚠️ **WARNING: No safe SQL rollback is available for Step 1.1.**
 
-UPDATE subscription_tiers 
-SET tenant_id = NULL 
-WHERE tenant_id = '6749bded-94d6-4793-9f46-09724da30ab6';
-```
+The original row IDs that had `tenant_id = NULL` were not captured before the update. Running a blanket `UPDATE ... SET tenant_id = NULL WHERE tenant_id = '<canonical_id>'` would incorrectly null out ALL rows (including those that legitimately had the tenant_id set before this migration), which is unsafe.
+
+**If rollback is required:**
+- Use Supabase point-in-time recovery (PITR) to restore the database to a snapshot taken before Step 1.1B was executed.
+- Alternatively, restore from a manual database backup if one was created prior to this step.
+- Contact Supabase support if PITR is not available or if assistance is needed.
 
 ---
 
