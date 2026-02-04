@@ -75,10 +75,27 @@ export function useSubscribers() {
   });
 }
 
+// Response type from get-subscriber-status edge function
+export interface SubscriberStatusResponse {
+  subscriber: Subscriber | null;
+  grace_period_days: number;
+  grace_days_remaining: number | null;
+  grace_end_at: string | null;
+  // Debug fields
+  function_version?: string;
+  server_now?: string;
+  expires_at_raw?: string | null;
+  grace_ms_remaining?: number | null;
+  _debug?: {
+    tenant_id_used: string;
+    tenant_slug_used: string | null;
+  };
+}
+
 export function useSubscriber(telegramUserId: number | null, initData?: string | null, tenantSlug?: string | null) {
   return useQuery({
     queryKey: ['subscriber', telegramUserId, initData ? 'telegram' : 'direct', tenantSlug],
-    queryFn: async () => {
+    queryFn: async (): Promise<SubscriberStatusResponse | null> => {
       if (telegramUserId == null) return null;
 
       // In Telegram Mini App we use a backend function that validates initData
@@ -107,7 +124,18 @@ export function useSubscriber(telegramUserId: number | null, initData?: string |
           throw new Error(data.error);
         }
 
-        return (data?.subscriber ?? null) as Subscriber | null;
+        // Return full response with debug info
+        return {
+          subscriber: data?.subscriber ?? null,
+          grace_period_days: data?.grace_period_days ?? 0,
+          grace_days_remaining: data?.grace_days_remaining ?? null,
+          grace_end_at: data?.grace_end_at ?? null,
+          function_version: data?.function_version,
+          server_now: data?.server_now,
+          expires_at_raw: data?.expires_at_raw,
+          grace_ms_remaining: data?.grace_ms_remaining,
+          _debug: data?._debug,
+        } as SubscriberStatusResponse;
       }
 
       // Fallback for dev/test flows (no Telegram initData available)
@@ -129,7 +157,14 @@ export function useSubscriber(telegramUserId: number | null, initData?: string |
         .maybeSingle();
 
       if (error) throw error;
-      return data as Subscriber | null;
+      
+      // Wrap in response format for consistency
+      return {
+        subscriber: data as Subscriber | null,
+        grace_period_days: 0,
+        grace_days_remaining: null,
+        grace_end_at: null,
+      } as SubscriberStatusResponse;
     },
     enabled: telegramUserId != null,
     staleTime: 0,

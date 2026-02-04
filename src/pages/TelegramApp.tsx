@@ -55,11 +55,23 @@ export default function TelegramApp() {
   // Get tenant slug from URL (for multi-tenant support)
   const tenantSlug = useMemo(() => getTenantSlug(), []);
 
-  const { data: subscriber, isLoading: loadingSubscriber, refetch: refetchSubscriber, error: subscriberError } = useSubscriber(
+  const { data: subscriberResponse, isLoading: loadingSubscriber, refetch: refetchSubscriber, error: subscriberError } = useSubscriber(
     user?.id ?? null,
     initData,
     tenantSlug,
   );
+  
+  // Extract subscriber and debug info from response
+  const subscriber = subscriberResponse?.subscriber ?? null;
+  const serverDebugInfo = subscriberResponse ? {
+    function_version: subscriberResponse.function_version,
+    server_now: subscriberResponse.server_now,
+    expires_at_raw: subscriberResponse.expires_at_raw,
+    grace_end_at: subscriberResponse.grace_end_at,
+    grace_days_remaining: subscriberResponse.grace_days_remaining,
+    grace_ms_remaining: subscriberResponse.grace_ms_remaining,
+  } : null;
+  
   const { data: tiers } = useActiveTiers();
   const publicTiers = (tiers ?? []).filter((t) => {
     const name = (t?.name ?? '').trim().toLowerCase();
@@ -100,9 +112,11 @@ export default function TelegramApp() {
 
   // For testing outside Telegram (DEV or ?test=1)
   const [testUserId, setTestUserId] = useState<number | null>(null);
-  const { data: testSubscriber, isLoading: loadingTestSubscriber, refetch: refetchTestSubscriber } = useSubscriber(testUserId);
+  const { data: testSubscriberResponse, isLoading: loadingTestSubscriber, refetch: refetchTestSubscriber } = useSubscriber(testUserId);
+  const testSubscriber = testSubscriberResponse?.subscriber ?? null;
 
   const activeSubscriber = user ? subscriber : testSubscriber;
+  const activeDebugInfo = user ? serverDebugInfo : null;
   const isLoading = user ? loadingSubscriber : loadingTestSubscriber;
   const refetch = user ? refetchSubscriber : refetchTestSubscriber;
 
@@ -255,8 +269,9 @@ export default function TelegramApp() {
           onRefetch={refetch}
           gracePeriodDays={gracePeriodDays}
           isCancelling={isCancelling}
+          serverGraceDaysRemaining={null}
         />
-        <MiniAppBuildBadge />
+        <MiniAppBuildBadge serverDebug={null} />
       </main>
     );
   }
@@ -311,8 +326,9 @@ export default function TelegramApp() {
         onRefetch={refetch}
         gracePeriodDays={gracePeriodDays}
         isCancelling={isCancelling}
+        serverGraceDaysRemaining={activeDebugInfo?.grace_days_remaining ?? null}
       />
-      <MiniAppBuildBadge />
+      <MiniAppBuildBadge serverDebug={activeDebugInfo} />
     </div>
   );
 }
@@ -818,7 +834,8 @@ function SubscriptionContent({
   userName,
   onRefetch,
   gracePeriodDays = 0,
-  isCancelling = false
+  isCancelling = false,
+  serverGraceDaysRemaining = null,
 }: {
   subscriber: any; 
   isLoading: boolean;
@@ -834,6 +851,7 @@ function SubscriptionContent({
   onRefetch?: () => void;
   gracePeriodDays?: number | null;
   isCancelling?: boolean;
+  serverGraceDaysRemaining?: number | null;
 }) {
   const [selectedTier, setSelectedTier] = useState<string | null>(null);
   const [autoRenewal, setAutoRenewal] = useState(false);
@@ -928,15 +946,20 @@ function SubscriptionContent({
   const isActiveSubscriber = subscriber && subscriber.status === 'active';
   const isGracePeriod = subscriber && subscriber.status === 'grace_period';
 
-  // Calculate grace period days remaining
+  // Calculate grace period days remaining - prefer server value if available
   let graceDaysRemaining = 0;
   const effectiveGracePeriodDays = gracePeriodDays ?? 0;
   
-  if (isGracePeriod && subscriber.subscription_end && effectiveGracePeriodDays > 0) {
+  // Use server-calculated value if available (more accurate, no timezone issues)
+  if (serverGraceDaysRemaining !== null && serverGraceDaysRemaining !== undefined) {
+    graceDaysRemaining = serverGraceDaysRemaining;
+    console.log('[GracePeriod] Using server value:', graceDaysRemaining);
+  } else if (isGracePeriod && subscriber.subscription_end && effectiveGracePeriodDays > 0) {
+    // Fallback to local calculation (for test mode without initData)
     const subscriptionEnd = new Date(subscriber.subscription_end);
     const graceEndDate = addDays(subscriptionEnd, effectiveGracePeriodDays);
     graceDaysRemaining = Math.max(0, differenceInDays(graceEndDate, new Date()));
-    console.log('[GracePeriod] subscriptionEnd:', subscriptionEnd, 'graceEndDate:', graceEndDate, 'gracePeriodDays:', effectiveGracePeriodDays, 'graceDaysRemaining:', graceDaysRemaining);
+    console.log('[GracePeriod] Local calc: subscriptionEnd:', subscriptionEnd, 'graceEndDate:', graceEndDate, 'gracePeriodDays:', effectiveGracePeriodDays, 'graceDaysRemaining:', graceDaysRemaining);
   } else if (isGracePeriod && subscriber.subscription_end && gracePeriodDays === null) {
     // Grace period days not loaded yet - wait for it
     console.log('[GracePeriod] Waiting for gracePeriodDays to load...');
