@@ -219,3 +219,59 @@ Successfully backfilled tenant_id for all rows that had NULL values:
 All data now properly tagged with tenant_id for RLS policy compliance.
 
 ---
+
+### Step 2.1 — Frontend tenant context (useAuth)
+
+**Date/Time:** 2026-02-04 (UTC)
+
+**Goal:** Add tenant context (tenantId, tenantSlug, tenantLoading) to AuthContext so frontend components can access the current admin's tenant information without additional queries.
+
+**Risk Level:** Low (additive change only, no existing logic modified)
+
+---
+
+#### Code Changes
+
+| File | Description |
+|------|-------------|
+| `src/hooks/useAuth.tsx` | Added tenantId, tenantSlug, tenantLoading to AuthContextType; added loadTenantContext() function; integrated into getSession() and onAuthStateChange flows; reset on logout |
+
+---
+
+#### Supabase SQL Changes
+
+```sql
+-- N/A — no database changes
+```
+
+**Executed in:** N/A
+
+---
+
+#### Rollback Plan
+
+**Lovable Rollback:**
+- [ ] Revert `src/hooks/useAuth.tsx` to previous version (remove tenantId, tenantSlug, tenantLoading state and loadTenantContext function)
+
+**Supabase Rollback SQL:**
+```sql
+-- N/A — no database changes to rollback
+```
+
+---
+
+#### Post-Step Verification Checklist
+
+- [ ] Login as admin A → check browser console for `Tenant context loaded` debug message with tenantSlug
+- [ ] Login as admin B → check browser console for `Tenant context loaded` debug message with tenantSlug
+- [ ] Existing admin pages (Dashboard, Subscribers, Tiers, Payments, Settings, Logs) still load correctly
+- [ ] Logout → tenantId/tenantSlug reset (no errors in console)
+- [ ] No changes to subscription/payment/notification functionality
+
+---
+
+#### Result / Notes
+
+[Pending verification]
+
+---
