@@ -17,10 +17,35 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { formatDaysRu } from '@/lib/textFormatters';
 
+// Build ID for diagnostic purposes (timestamp when code was deployed)
+const BUILD_ID = '2026-02-04T23:15:00Z';
+
+// Default tenant ID fallback (same as Edge Functions)
+const DEFAULT_TENANT_ID = '6749bded-94d6-4793-9f46-09724da30ab6';
+
 // Extract tenant slug from URL for multi-tenant MiniApp support
 const getTenantSlug = (): string | null => {
   return new URLSearchParams(window.location.search).get('t');
 };
+
+// Check if debug mode is enabled via URL param
+const isDebugMode = (): boolean => {
+  return new URLSearchParams(window.location.search).get('debug') === '1';
+};
+
+// Debug panel component
+function DebugPanel({ tenantSlug }: { tenantSlug: string | null }) {
+  if (!isDebugMode()) return null;
+  
+  return (
+    <div className="fixed bottom-0 left-0 right-0 bg-muted/90 backdrop-blur-sm border-t border-border p-2 text-[10px] text-muted-foreground font-mono space-y-0.5 z-50">
+      <div><span className="text-foreground/70">Build:</span> {BUILD_ID}</div>
+      <div><span className="text-foreground/70">URL:</span> {window.location.href}</div>
+      <div><span className="text-foreground/70">tenant_slug:</span> {tenantSlug ?? '(null)'}</div>
+      <div><span className="text-foreground/70">DEFAULT_TENANT_ID:</span> {DEFAULT_TENANT_ID}</div>
+    </div>
+  );
+}
 import {
   AlertDialog,
   AlertDialogAction,
@@ -293,7 +318,7 @@ export default function TelegramApp() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background pb-20">
       <SubscriptionContent
         subscriber={activeSubscriber}
         isLoading={isLoading}
@@ -310,6 +335,7 @@ export default function TelegramApp() {
         gracePeriodDays={gracePeriodDays}
         isCancelling={isCancelling}
       />
+      <DebugPanel tenantSlug={tenantSlug} />
     </div>
   );
 }
