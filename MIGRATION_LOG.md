@@ -275,3 +275,59 @@ All data now properly tagged with tenant_id for RLS policy compliance.
 [Pending verification]
 
 ---
+
+### Step 2.2A — Tenant-aware Admin Settings
+
+**Date/Time:** 2026-02-04 (UTC)
+
+**Goal:** Update AdminSettings.tsx to load/save settings per-tenant using tenantId from useAuth, instead of the global `.limit(1)` pattern.
+
+**Risk Level:** Low/Medium (affects settings queries but maintains same behavior for existing single-tenant usage)
+
+---
+
+#### Code Changes
+
+| File | Description |
+|------|-------------|
+| `src/pages/admin/AdminSettings.tsx` | Import useAuth; read tenantId/tenantLoading; loadSettings now filters by `.eq('tenant_id', tenantId)` instead of `.order().limit(1)`; handleSave checks for existing settings by tenant_id and includes tenant_id when inserting new row |
+
+---
+
+#### Supabase SQL Changes
+
+```sql
+-- N/A — no database changes
+```
+
+**Executed in:** N/A
+
+---
+
+#### Rollback Plan
+
+**Lovable Rollback:**
+- [ ] Revert `src/pages/admin/AdminSettings.tsx` to previous version (restore `.order('created_at', ...).limit(1)` pattern)
+
+**Supabase Rollback SQL:**
+```sql
+-- N/A — no database changes to rollback
+```
+
+---
+
+#### Post-Step Verification Checklist
+
+- [ ] Login as main admin → Settings page loads correctly with existing values
+- [ ] Save settings → success toast, settings persist on page reload
+- [ ] Console shows no errors related to tenant_id
+- [ ] (Optional) Login as second admin → saving creates a separate settings row for that tenant
+- [ ] No changes to subscription/payment/notification functionality
+
+---
+
+#### Result / Notes
+
+[Pending verification]
+
+---
