@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/hooks/useAuth';
 
 export type IntervalUnit = 'day' | 'week' | 'month' | 'year';
 
@@ -112,17 +113,28 @@ export function formatDuration(tier: SubscriptionTier): string {
 }
 
 export function useSubscriptionTiers() {
+  const { user, tenantId, tenantLoading } = useAuth();
+
   return useQuery({
-    queryKey: ['subscription_tiers'],
+    queryKey: ['subscription_tiers', user ? tenantId : 'public'],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from('subscription_tiers')
         .select('*')
         .order('price', { ascending: true });
       
+      // For authenticated users (admin UI), filter by tenant
+      if (user && tenantId) {
+        query = query.eq('tenant_id', tenantId);
+      }
+      
+      const { data, error } = await query;
+      
       if (error) throw error;
       return data as SubscriptionTier[];
     },
+    // Don't query until tenant is loaded for authenticated users
+    enabled: !user || (!tenantLoading && !!tenantId),
   });
 }
 
@@ -130,16 +142,24 @@ export function useSubscriptionTiers() {
 const ADMIN_ONLY_TIER_NAME = 'добавлен админом';
 
 export function useActiveTiers(options?: { includeAdminOnly?: boolean }) {
+  const { user, tenantId, tenantLoading } = useAuth();
   const includeAdminOnly = options?.includeAdminOnly ?? false;
   
   return useQuery({
-    queryKey: ['subscription_tiers', 'active', { includeAdminOnly }],
+    queryKey: ['subscription_tiers', 'active', user ? tenantId : 'public', { includeAdminOnly }],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from('subscription_tiers')
         .select('*')
         .eq('is_active', true)
         .order('price', { ascending: true });
+      
+      // For authenticated users (admin UI), filter by tenant
+      if (user && tenantId) {
+        query = query.eq('tenant_id', tenantId);
+      }
+      
+      const { data, error } = await query;
       
       if (error) throw error;
       
@@ -152,18 +172,26 @@ export function useActiveTiers(options?: { includeAdminOnly?: boolean }) {
       
       return tiers;
     },
+    // Don't query until tenant is loaded for authenticated users
+    enabled: !user || (!tenantLoading && !!tenantId),
   });
 }
 
 export function useCreateTier() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { user, tenantId } = useAuth();
 
   return useMutation({
     mutationFn: async (input: CreateTierInput) => {
+      // For authenticated users, always include tenant_id
+      const insertData = user && tenantId 
+        ? { ...input, tenant_id: tenantId }
+        : input;
+
       const { data, error } = await supabase
         .from('subscription_tiers')
-        .insert(input)
+        .insert(insertData)
         .select()
         .single();
 
@@ -183,15 +211,21 @@ export function useCreateTier() {
 export function useUpdateTier() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { user, tenantId } = useAuth();
 
   return useMutation({
     mutationFn: async ({ id, ...updates }: UpdateTierInput) => {
-      const { data, error } = await supabase
+      let query = supabase
         .from('subscription_tiers')
         .update(updates)
-        .eq('id', id)
-        .select()
-        .single();
+        .eq('id', id);
+
+      // For authenticated users, also filter by tenant_id to prevent cross-tenant updates
+      if (user && tenantId) {
+        query = query.eq('tenant_id', tenantId);
+      }
+
+      const { data, error } = await query.select().single();
 
       if (error) throw error;
       return data;
@@ -209,21 +243,37 @@ export function useUpdateTier() {
 export function useDeleteTier() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { user, tenantId } = useAuth();
 
   return useMutation({
     mutationFn: async (id: string) => {
-      // First try hard delete
-      const { error: deleteError } = await supabase
+      // Build delete query
+      let deleteQuery = supabase
         .from('subscription_tiers')
         .delete()
         .eq('id', id);
 
+      // For authenticated users, also filter by tenant_id to prevent cross-tenant deletes
+      if (user && tenantId) {
+        deleteQuery = deleteQuery.eq('tenant_id', tenantId);
+      }
+
+      // First try hard delete
+      const { error: deleteError } = await deleteQuery;
+
       // If foreign key constraint error, soft delete instead
       if (deleteError?.code === '23503') {
-        const { error: updateError } = await supabase
+        let updateQuery = supabase
           .from('subscription_tiers')
           .update({ is_active: false })
           .eq('id', id);
+
+        // For authenticated users, also filter by tenant_id
+        if (user && tenantId) {
+          updateQuery = updateQuery.eq('tenant_id', tenantId);
+        }
+
+        const { error: updateError } = await updateQuery;
 
         if (updateError) throw updateError;
         return { softDeleted: true };
