@@ -666,4 +666,6 @@ Created shared tenant resolver helper. This module is NOT yet imported by any Ed
 
 **Hotfix (2026-02-05):** Deploy failed with "Bundle generation timed out". Applied hotfix: made `SupabaseClient` import type-only (`import type { SupabaseClient }`) to reduce runtime bundling overhead. No behavior changes.
 
+**Hotfix #2 (2026-02-05):** Bundle generation still timed out. Switched ALL edge functions and `_shared` modules from `https://esm.sh/@supabase/supabase-js@2` to `npm:@supabase/supabase-js@2` specifier. This eliminates remote ESM bundling and should resolve the timeout. No behavior changes.
+
 ---

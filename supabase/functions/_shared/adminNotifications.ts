@@ -5,7 +5,7 @@
  * Never throws exceptions - all errors are logged silently.
  */
 
-import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { formatDaysRu } from "./textFormatters.ts";
 
 export type AdminNotificationEventType =
