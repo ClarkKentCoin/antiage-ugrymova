@@ -10,7 +10,8 @@
  * - Fallback to default tenant
  */
 
-import { SupabaseClient, createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 // Default tenant ID - used when no tenant context can be determined
 export const DEFAULT_TENANT_ID = Deno.env.get("PUBLIC_TENANT_ID") ?? "6749bded-94d6-4793-9f46-09724da30ab6";

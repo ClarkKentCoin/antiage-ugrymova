@@ -664,4 +664,6 @@ This is a TEMPORARY solution until Step 4 implements full `t=tenant_slug` URL pa
 
 Created shared tenant resolver helper. This module is NOT yet imported by any Edge Functions — that will be done in subsequent steps (3.2+) to gradually migrate each function to use the shared helper.
 
+**Hotfix (2026-02-05):** Deploy failed with "Bundle generation timed out". Applied hotfix: made `SupabaseClient` import type-only (`import type { SupabaseClient }`) to reduce runtime bundling overhead. No behavior changes.
+
 ---
