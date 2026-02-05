@@ -587,3 +587,81 @@ This is a TEMPORARY solution until Step 4 implements full `t=tenant_slug` URL pa
 5. Calculate grace period using Math.ceil to show "1 день" at the start of grace period (not "0 дней")
 
 ---
+
+### Step 3.1 — Shared Tenant Resolver Helper
+
+**Date/Time:** 2026-02-05 (UTC)
+
+**Goal:** Add a shared tenant resolution helper module (`_shared/tenant.ts`) for consistent multi-tenant context resolution across all Edge Functions. This is a preparatory step for migrating existing functions to use the shared helper.
+
+**Risk Level:** Low (additive only, no existing code modified)
+
+---
+
+#### Code Changes
+
+| File | Description |
+|------|-------------|
+| `supabase/functions/_shared/tenant.ts` | Created new shared module with tenant resolution utilities |
+
+---
+
+#### New Module Exports
+
+- `DEFAULT_TENANT_ID` — fallback tenant ID from env or hardcoded default
+- `TenantResolveSource` — type: "slug" | "auth" | "default"
+- `ResolvedTenant` — interface with tenantId, tenantSlug, source, ownerUserId
+- `resolveTenantIdFromSlug(supabaseAdmin, slug)` — resolve tenant from slug
+- `resolveTenantFromRequest(opts)` — resolve tenant from request context (query param, body, header, auth)
+- `getAdminSettingsForTenant(supabaseAdmin, tenantId, select)` — get admin_settings by tenant_id
+- `requireAdminSettingsForTenant(supabaseAdmin, tenantId, select)` — same but throws if not found
+
+---
+
+#### Resolution Priority (resolveTenantFromRequest)
+
+1. Query param `?t=<slug>`
+2. Body field `tenant_slug`
+3. Header `x-tenant-slug`
+4. Authenticated user's tenant (via Authorization header → owner_id lookup)
+5. Default tenant (fallback)
+
+---
+
+#### Supabase SQL Changes
+
+```sql
+-- N/A — no database changes
+```
+
+**Executed in:** N/A
+
+---
+
+#### Rollback Plan
+
+**Lovable Rollback:**
+- [ ] Delete `supabase/functions/_shared/tenant.ts`
+- [ ] Remove this entry from `MIGRATION_LOG.md`
+
+**Supabase Rollback SQL:**
+```sql
+-- N/A — no database changes to rollback
+```
+
+---
+
+#### Post-Step Verification Checklist
+
+- [ ] File `supabase/functions/_shared/tenant.ts` exists
+- [ ] Edge functions deploy successfully (no syntax errors)
+- [ ] Existing Edge Functions behavior unchanged (they don't import the new module yet)
+- [ ] No runtime errors in Edge Function logs
+
+---
+
+#### Result / Notes
+
+Created shared tenant resolver helper. This module is NOT yet imported by any Edge Functions — that will be done in subsequent steps (3.2+) to gradually migrate each function to use the shared helper.
+
+---
