@@ -1,7 +1,13 @@
 project_id = "zmewfhnaycjuvpjxkiin"
 
 [functions.telegram-channel]
-verify_jwt = true
+verify_jwt = false
+
+[functions.set-telegram-webhook]
+verify_jwt = false
+
+[functions.get-payment-history]
+verify_jwt = false
 
 [functions.create-robokassa-payment]
 verify_jwt = false

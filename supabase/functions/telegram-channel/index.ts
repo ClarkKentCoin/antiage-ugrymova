@@ -1,10 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { corsHeaders } from "../_shared/cors.ts";
+import { DEFAULT_TENANT_ID, requireAdminSettingsForTenant } from "../_shared/tenant.ts";
 
 interface TelegramResponse {
   ok: boolean;
@@ -114,94 +111,146 @@ async function createAndSaveInviteLink(
 }
 
 serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+  const { method, pathname } = { method: req.method, pathname: new URL(req.url).pathname };
+  console.log("[telegram-channel] hit", { method, pathname });
+
+  // Handle CORS preflight FIRST
+  if (method === "OPTIONS") {
+    return new Response("ok", { status: 200, headers: corsHeaders });
+  }
+
+  // Only allow POST
+  if (method !== "POST") {
+    return new Response(
+      JSON.stringify({ ok: false, error: "Method not allowed" }),
+      { status: 405, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
   }
 
   try {
+    const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+    const anonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+
+    if (!supabaseUrl || !anonKey || !serviceKey) {
+      console.error("[telegram-channel] missing backend env");
+      return new Response(
+        JSON.stringify({ ok: false, error: "Server misconfigured" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     // Create Supabase client with service role for database operations
-    const supabaseAdmin = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
-    );
+    const supabaseAdmin = createClient(supabaseUrl, serviceKey);
 
     // Authentication check - require valid user session
-    const authHeader = req.headers.get("Authorization");
+    const authHeader = req.headers.get("Authorization") ?? "";
     if (!authHeader) {
-      console.error("No authorization header provided");
+      console.error("[telegram-channel] No authorization header provided");
       return new Response(
-        JSON.stringify({ error: "Unauthorized - No authorization header" }),
+        JSON.stringify({ ok: false, error: "Unauthorized - No authorization header" }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
     // Create a client with the user's token to verify their identity
-    const supabaseUser = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_ANON_KEY") ?? "",
-      {
-        global: {
-          headers: { Authorization: authHeader },
-        },
-      }
-    );
+    const supabaseUser = createClient(supabaseUrl, anonKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
 
     // Verify the user's token
-    const { data: { user }, error: authError } = await supabaseUser.auth.getUser();
+    const { data: userData, error: authError } = await supabaseUser.auth.getUser();
     
-    if (authError || !user) {
-      console.error("Auth error:", authError?.message || "No user found");
+    if (authError || !userData?.user) {
+      console.error("[telegram-channel] Auth error:", authError?.message || "No user found");
       return new Response(
-        JSON.stringify({ error: "Unauthorized - Invalid token" }),
+        JSON.stringify({ ok: false, error: "Unauthorized - Invalid token" }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    console.log(`Authenticated user: ${user.id}`);
+    const userId = userData.user.id;
+    console.log(`[telegram-channel] Authenticated user: ${userId}`);
 
-    // Check if user has admin role
-    const { data: roleData, error: roleError } = await supabaseAdmin
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", user.id)
-      .eq("role", "admin")
-      .maybeSingle();
+    // Check if user has admin role using RPC
+    const { data: isAdmin, error: roleError } = await supabaseUser.rpc("has_role", {
+      _user_id: userId,
+      _role: "admin",
+    });
 
     if (roleError) {
-      console.error("Role check error:", roleError.message);
+      console.error("[telegram-channel] Role check error:", roleError.message);
       return new Response(
-        JSON.stringify({ error: "Error checking permissions" }),
+        JSON.stringify({ ok: false, error: "Error checking permissions" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    if (!roleData) {
-      console.error(`User ${user.id} does not have admin role`);
+    if (!isAdmin) {
+      console.warn(`[telegram-channel] Forbidden for user ${userId}`);
       return new Response(
-        JSON.stringify({ error: "Forbidden - Admin access required" }),
+        JSON.stringify({ ok: false, error: "Forbidden - Admin access required" }),
         { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    console.log(`Admin access verified for user: ${user.id}`);
+    console.log(`[telegram-channel] Admin access verified for user: ${userId}`);
 
-    // Get admin settings for bot token and channel ID
-    const { data: settings, error: settingsError } = await supabaseAdmin
-      .from("admin_settings")
-      .select("telegram_bot_token, telegram_channel_id")
-      .limit(1)
-      .single();
+    // Parse request body
+    const body = await req.json();
+    const { 
+      action, 
+      telegram_user_id: tgUserId, 
+      telegramUserId: tgUserIdCamel,
+      subscriber_id: subId,
+      subscriberId: subIdCamel,
+      tenant_slug: tenantSlug,
+    } = body;
 
-    if (settingsError || !settings?.telegram_bot_token || !settings?.telegram_channel_id) {
-      console.error("Settings error:", settingsError);
+    // Support both snake_case and camelCase
+    const telegram_user_id = tgUserId ?? tgUserIdCamel;
+    const subscriber_id = subId ?? subIdCamel;
+
+    // Resolve tenant (optional - defaults to first admin's settings)
+    let tenantId = DEFAULT_TENANT_ID;
+    if (tenantSlug) {
+      const { data: tenantData } = await supabaseAdmin
+        .from("tenants")
+        .select("id")
+        .eq("slug", tenantSlug)
+        .maybeSingle();
+      if (tenantData?.id) {
+        tenantId = tenantData.id;
+      }
+    }
+    console.log(`[telegram-channel] Using tenant_id: ${tenantId}`);
+
+    // Get admin settings for bot token and channel ID for this tenant
+    let settings: any;
+    try {
+      settings = await requireAdminSettingsForTenant(
+        supabaseAdmin,
+        tenantId,
+        "telegram_bot_token, telegram_channel_id"
+      );
+    } catch (err) {
+      console.error("[telegram-channel] Settings error:", err);
       return new Response(
-        JSON.stringify({ error: "Telegram bot not configured" }),
+        JSON.stringify({ ok: false, error: "Telegram bot not configured" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    const { telegram_bot_token: botToken, telegram_channel_id } = settings;
-    const { action, telegram_user_id, subscriber_id } = await req.json();
+    if (!settings?.telegram_bot_token || !settings?.telegram_channel_id) {
+      console.error("[telegram-channel] Missing bot token or channel ID");
+      return new Response(
+        JSON.stringify({ ok: false, error: "Telegram bot not configured" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const botToken = settings.telegram_bot_token;
+    const telegram_channel_id = settings.telegram_channel_id;
     
     // Ensure channel ID is properly formatted (add -100 prefix if needed for supergroups/channels)
     let channelId = telegram_channel_id.toString();
@@ -209,9 +258,12 @@ serve(async (req) => {
       channelId = "-100" + channelId.substring(1);
     }
 
-    console.log(`Processing action: ${action} for user: ${telegram_user_id}, channel: ${channelId}`);
+    // Normalize action names (support aliases)
+    const normalizedAction = action === "kick" ? "kick_user" : action;
 
-    if (action === "create_invite_link") {
+    console.log(`[telegram-channel] Processing action: ${normalizedAction} for user: ${telegram_user_id}, channel: ${channelId}, tenant: ${tenantId}`);
+
+    if (normalizedAction === "create_invite_link") {
       // Revoke old links first if subscriber_id is provided
       if (subscriber_id) {
         await revokeOldInviteLinks(supabaseAdmin, botToken, channelId, subscriber_id);
@@ -253,7 +305,7 @@ serve(async (req) => {
       );
     }
 
-    if (action === "unban_user") {
+    if (normalizedAction === "unban_user") {
       // First unban user (in case they were banned before)
       const unbanResult = await callTelegramApi(botToken, "unbanChatMember", {
         chat_id: channelId,
@@ -308,7 +360,7 @@ serve(async (req) => {
       );
     }
 
-    if (action === "kick_user") {
+    if (normalizedAction === "kick_user") {
       // First revoke all old invite links so user can't rejoin with them
       if (subscriber_id) {
         await revokeOldInviteLinks(supabaseAdmin, botToken, channelId, subscriber_id);
@@ -376,7 +428,7 @@ serve(async (req) => {
       );
     }
 
-    if (action === "check_membership") {
+    if (normalizedAction === "check_membership") {
       // Check if user is a member of the channel
       console.log(`Checking membership for user ${telegram_user_id} in channel ${channelId}`);
       
@@ -422,7 +474,7 @@ serve(async (req) => {
       );
     }
 
-    if (action === "send_invite") {
+    if (normalizedAction === "send_invite") {
       // Check if user is already in channel
       const { data: subscriber } = await supabaseAdmin
         .from("subscribers")
@@ -506,16 +558,17 @@ serve(async (req) => {
       );
     }
 
+    console.error(`[telegram-channel] Unknown action: ${normalizedAction}`);
     return new Response(
-      JSON.stringify({ error: "Unknown action" }),
+      JSON.stringify({ ok: false, error: `Unknown action: ${normalizedAction}` }),
       { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
 
   } catch (error) {
-    console.error("Error:", error);
+    console.error("[telegram-channel] Error:", error);
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
     return new Response(
-      JSON.stringify({ error: errorMessage }),
+      JSON.stringify({ ok: false, error: errorMessage }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
