@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { corsHeaders } from "../_shared/cors.ts";
 
 interface TelegramUpdate {
   update_id: number;
@@ -39,15 +40,22 @@ async function callTelegramApi(botToken: string, method: string, params: Record<
 }
 
 serve(async (req) => {
-  // Only accept POST requests from Telegram
-  if (req.method !== "POST") {
-    console.log(`Rejected ${req.method} request - only POST allowed`);
-    return new Response("Method not allowed", { status: 405 });
+  const { method, pathname } = { method: req.method, pathname: new URL(req.url).pathname };
+  console.log("[telegram-bot-webhook] hit", { method, pathname });
+
+  // Handle CORS preflight FIRST
+  if (method === "OPTIONS") {
+    return new Response("ok", { status: 200, headers: corsHeaders });
   }
 
-  // Log webhook hit for diagnostics
-  const { pathname } = new URL(req.url);
-  console.log(`[telegram-bot-webhook] Webhook hit, method: ${req.method}, path: ${pathname}`);
+  // Only accept POST requests from Telegram
+  if (method !== "POST") {
+    console.log(`[telegram-bot-webhook] Rejected ${method} request - only POST allowed`);
+    return new Response(
+      JSON.stringify({ ok: false, error: "Method not allowed" }),
+      { status: 405, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
 
   // Verify Telegram webhook secret token if configured
   const webhookSecret = Deno.env.get("TELEGRAM_WEBHOOK_SECRET");
@@ -55,8 +63,11 @@ serve(async (req) => {
     const receivedToken = req.headers.get("X-Telegram-Bot-Api-Secret-Token");
     console.log(`[telegram-bot-webhook] Secret required, header present: ${Boolean(receivedToken)}`);
     if (!receivedToken || receivedToken !== webhookSecret) {
-      console.error("Invalid or missing webhook secret token");
-      return new Response("Unauthorized", { status: 401 });
+      console.error("[telegram-bot-webhook] Invalid or missing webhook secret token");
+      return new Response(
+        JSON.stringify({ ok: false, error: "Unauthorized" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
     console.log("[telegram-bot-webhook] Secret token verified");
   } else {
@@ -78,10 +89,10 @@ serve(async (req) => {
       .maybeSingle();
 
     if (settingsError || !settings?.telegram_bot_token) {
-      console.error("Settings error:", settingsError);
+      console.error("[telegram-bot-webhook] Settings error:", settingsError);
       return new Response(
-        JSON.stringify({ error: "Bot not configured" }),
-        { status: 400, headers: { "Content-Type": "application/json" } }
+        JSON.stringify({ ok: false, error: "Bot not configured" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -134,7 +145,7 @@ serve(async (req) => {
 
         // If photo fails, fall back to text message
         if (!result.ok) {
-          console.log("Photo send failed, falling back to text:", result.description);
+          console.log("[telegram-bot-webhook] Photo send failed, falling back to text:", result.description);
           result = await callTelegramApi(botToken, "sendMessage", {
             chat_id: chatId,
             text: welcomeText,
@@ -156,22 +167,22 @@ serve(async (req) => {
 
       return new Response(
         JSON.stringify({ ok: true }),
-        { headers: { "Content-Type": "application/json" } }
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
     // Return ok for other updates
     return new Response(
       JSON.stringify({ ok: true }),
-      { headers: { "Content-Type": "application/json" } }
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
 
   } catch (error) {
-    console.error("Error:", error);
+    console.error("[telegram-bot-webhook] Error:", error);
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
     return new Response(
-      JSON.stringify({ error: errorMessage }),
-      { status: 500, headers: { "Content-Type": "application/json" } }
+      JSON.stringify({ ok: false, error: errorMessage }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 });
