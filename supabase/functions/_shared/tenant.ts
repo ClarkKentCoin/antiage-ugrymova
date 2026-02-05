@@ -10,7 +10,7 @@
  * - Fallback to default tenant
  */
 
-import { SupabaseClient, createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 // Default tenant ID - used when no tenant context can be determined
 export const DEFAULT_TENANT_ID = Deno.env.get("PUBLIC_TENANT_ID") ?? "6749bded-94d6-4793-9f46-09724da30ab6";
@@ -27,7 +27,10 @@ export interface ResolvedTenant {
 export interface ResolveTenantOptions {
   req: Request;
   supabaseAdmin: SupabaseClient;
+  /** Optional pre-parsed request body */
   body?: Record<string, unknown>;
+  /** Optional user-scoped Supabase client (with Authorization header) for auth-based resolution */
+  supabaseUser?: SupabaseClient;
 }
 
 /**
@@ -94,13 +97,13 @@ export async function resolveTenantIdFromSlug(
  * 1. Query param ?t=<slug>
  * 2. Body field tenant_slug
  * 3. Header x-tenant-slug
- * 4. Authenticated user's tenant (via Authorization header)
+ * 4. Authenticated user's tenant (via supabaseUser client)
  * 5. Default tenant
  */
 export async function resolveTenantFromRequest(
   opts: ResolveTenantOptions
 ): Promise<ResolvedTenant> {
-  const { req, supabaseAdmin, body } = opts;
+  const { req, supabaseAdmin, body, supabaseUser } = opts;
 
   // 1. Try query param ?t=<slug>
   const url = new URL(req.url);
@@ -130,42 +133,30 @@ export async function resolveTenantFromRequest(
     }
   }
 
-  // 4. Try to resolve from authenticated user
-  const authHeader = req.headers.get("Authorization");
-  if (authHeader) {
+  // 4. Try to resolve from authenticated user (if supabaseUser client provided)
+  if (supabaseUser) {
     try {
-      const supabaseUrl = Deno.env.get("SUPABASE_URL");
-      const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
+      const { data: userData, error: userError } = await supabaseUser.auth.getUser();
 
-      if (supabaseUrl && supabaseAnonKey) {
-        const supabaseUser = createClient(supabaseUrl, supabaseAnonKey, {
-          global: {
-            headers: { Authorization: authHeader },
-          },
-        });
+      if (!userError && userData?.user) {
+        const userId = userData.user.id;
 
-        const { data: userData, error: userError } = await supabaseUser.auth.getUser();
+        // Look up tenant by owner_id
+        const { data: tenantData, error: tenantError } = await supabaseAdmin
+          .from("tenants")
+          .select("id, slug, owner_id")
+          .eq("owner_id", userId)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
 
-        if (!userError && userData?.user) {
-          const userId = userData.user.id;
-
-          // Look up tenant by owner_id
-          const { data: tenantData, error: tenantError } = await supabaseAdmin
-            .from("tenants")
-            .select("id, slug, owner_id")
-            .eq("owner_id", userId)
-            .order("created_at", { ascending: false })
-            .limit(1)
-            .maybeSingle();
-
-          if (!tenantError && tenantData) {
-            return {
-              tenantId: tenantData.id,
-              tenantSlug: tenantData.slug,
-              source: "auth",
-              ownerUserId: tenantData.owner_id,
-            };
-          }
+        if (!tenantError && tenantData) {
+          return {
+            tenantId: tenantData.id,
+            tenantSlug: tenantData.slug,
+            source: "auth",
+            ownerUserId: tenantData.owner_id,
+          };
         }
       }
     } catch (err) {
