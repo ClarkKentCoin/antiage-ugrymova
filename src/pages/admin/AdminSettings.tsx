@@ -45,6 +45,7 @@ export default function AdminSettings() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isSettingBotWebhook, setIsSettingBotWebhook] = useState(false);
+  const [isResettingBotWebhook, setIsResettingBotWebhook] = useState(false);
   const [copied, setCopied] = useState(false);
   const [copiedBotWebhook, setCopiedBotWebhook] = useState(false);
   const [settings, setSettings] = useState<AdminSettingsData>({
@@ -243,6 +244,45 @@ export default function AdminSettings() {
     }
   };
 
+  const resetTelegramBotWebhook = async () => {
+    if (!window.confirm('Reset webhook? This will delete and set webhook again (drop pending updates).')) {
+      return;
+    }
+
+    setIsResettingBotWebhook(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('set-telegram-webhook', {
+        body: { reset: true },
+      });
+
+      if (error) throw error;
+
+      const response = data as { ok: boolean; description?: string; deleteResult?: { ok: boolean }; setResult?: { ok: boolean } };
+
+      if (response.ok) {
+        toast({
+          title: 'Webhook reset successfully',
+          description: `deleteWebhook: ${response.deleteResult?.ok ? 'ok' : 'failed'}, setWebhook: ${response.setResult?.ok ? 'ok' : 'failed'}`,
+        });
+      } else {
+        toast({
+          title: 'Reset failed',
+          description: response.description || 'Unknown error',
+          variant: 'destructive',
+        });
+      }
+    } catch (error) {
+      console.error('Error resetting Telegram webhook:', error);
+      toast({
+        title: 'Не удалось сбросить webhook',
+        description: 'Проверьте Bot Token и TELEGRAM_WEBHOOK_SECRET.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsResettingBotWebhook(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <AdminLayout>
@@ -304,12 +344,12 @@ export default function AdminSettings() {
                   Установите этот URL как webhook для бота через @BotFather или API.
                 </p>
 
-                <div className="pt-2">
+                <div className="pt-2 space-y-2">
                   <Button
                     type="button"
                     variant="secondary"
                     onClick={setTelegramBotWebhook}
-                    disabled={isSettingBotWebhook}
+                    disabled={isSettingBotWebhook || isResettingBotWebhook}
                     className="w-full"
                   >
                     {isSettingBotWebhook ? (
@@ -321,8 +361,28 @@ export default function AdminSettings() {
                       'Set Telegram Webhook (with secret_token)'
                     )}
                   </Button>
-                  <p className="mt-2 text-xs text-muted-foreground">
+                  <p className="text-xs text-muted-foreground">
                     Кнопка вызовет Telegram API setWebhook с secret_token из backend переменной TELEGRAM_WEBHOOK_SECRET.
+                  </p>
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={resetTelegramBotWebhook}
+                    disabled={isSettingBotWebhook || isResettingBotWebhook}
+                    className="w-full"
+                  >
+                    {isResettingBotWebhook ? (
+                      <span className="inline-flex items-center gap-2">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Сбрасываю webhook…
+                      </span>
+                    ) : (
+                      'Reset Telegram Webhook'
+                    )}
+                  </Button>
+                  <p className="text-xs text-muted-foreground">
+                    Удаляет webhook (drop pending updates) и устанавливает заново.
                   </p>
                 </div>
               </div>

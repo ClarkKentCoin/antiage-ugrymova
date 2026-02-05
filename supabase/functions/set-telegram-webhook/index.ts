@@ -52,6 +52,16 @@ serve(async (req) => {
       });
     }
 
+    // Parse request body to check for reset flag
+    let body: Record<string, unknown> = {};
+    try {
+      body = await req.json();
+    } catch {
+      // Body is optional, continue with empty object
+    }
+    const resetMode = body.reset === true;
+    console.log("[set-telegram-webhook] resetMode:", resetMode);
+
     const authHeader = req.headers.get("Authorization") ?? "";
     const userClient = createClient(supabaseUrl, anonKey, {
       global: { headers: authHeader ? { Authorization: authHeader } : {} },
@@ -128,20 +138,52 @@ serve(async (req) => {
     const botToken = settings.telegram_bot_token;
     const webhookUrl = `${supabaseUrl}/functions/v1/telegram-bot-webhook`;
 
-    console.log(`[set-telegram-webhook] setting webhook url=${webhookUrl}`);
+    let deleteResult: TelegramResponse | null = null;
 
-    const result = await callTelegramApi(botToken, "setWebhook", {
+    // If reset mode, first delete the webhook
+    if (resetMode) {
+      console.log("[set-telegram-webhook] calling deleteWebhook with drop_pending_updates=true");
+      deleteResult = await callTelegramApi(botToken, "deleteWebhook", {
+        drop_pending_updates: true,
+      });
+      console.log(
+        `[set-telegram-webhook] deleteWebhook result ok=${deleteResult.ok} description=${deleteResult.description ?? "none"}`
+      );
+    }
+
+    // Set the webhook
+    console.log(`[set-telegram-webhook] setting webhook url=${webhookUrl}`);
+    const setResult = await callTelegramApi(botToken, "setWebhook", {
       url: webhookUrl,
       secret_token: secretToken,
       allowed_updates: ["message"],
     });
 
     console.log(
-      `[set-telegram-webhook] telegram result ok=${result.ok} description=${result.description ?? "none"}`,
+      `[set-telegram-webhook] setWebhook result ok=${setResult.ok} description=${setResult.description ?? "none"}`
     );
 
-    return new Response(JSON.stringify(result), {
-      status: result.ok ? 200 : 400,
+    const responseBody: Record<string, unknown> = {
+      ok: setResult.ok,
+      reset: resetMode,
+      setResult,
+    };
+
+    if (deleteResult !== null) {
+      responseBody.deleteResult = deleteResult;
+    }
+
+    // If reset mode, add description about both operations
+    if (resetMode) {
+      responseBody.description = setResult.ok
+        ? "Webhook reset successfully"
+        : setResult.description ?? "setWebhook failed";
+    } else {
+      responseBody.description = setResult.description;
+    }
+
+    return new Response(JSON.stringify(responseBody), {
+      status: setResult.ok ? 200 : 400,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
