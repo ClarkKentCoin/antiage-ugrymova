@@ -1,10 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { corsHeaders } from "../_shared/cors.ts";
 
 type TelegramResponse = {
   ok: boolean;
@@ -27,15 +23,21 @@ async function callTelegramApi(
 }
 
 serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+  const { method, pathname } = { method: req.method, pathname: new URL(req.url).pathname };
+  console.log("[set-telegram-webhook] hit", { method, pathname });
+
+  // Handle CORS preflight FIRST
+  if (method === "OPTIONS") {
+    return new Response("ok", { status: 200, headers: corsHeaders });
   }
 
-  if (req.method !== "POST") {
-    return new Response("Method not allowed", { status: 405, headers: corsHeaders });
+  // Only allow POST
+  if (method !== "POST") {
+    return new Response(
+      JSON.stringify({ ok: false, description: "Method not allowed" }),
+      { status: 405, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
   }
-
-  console.log(`[set-telegram-webhook] hit method=${req.method}`);
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";

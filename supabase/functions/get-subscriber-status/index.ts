@@ -1,16 +1,10 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { encode as hexEncode } from "https://deno.land/std@0.168.0/encoding/hex.ts";
+import { corsHeaders } from "../_shared/cors.ts";
 
 // Debug version to track deployed code
-const FUNCTION_VERSION = "2026-02-05_00:debug1";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Cache-Control": "no-store, max-age=0",
-  "Pragma": "no-cache",
-};
+const FUNCTION_VERSION = "2026-02-05_01:cors-fix";
 
 // Default tenant ID for backward compatibility (production main tenant)
 const DEFAULT_TENANT_ID = Deno.env.get("PUBLIC_TENANT_ID") ?? "6749bded-94d6-4793-9f46-09724da30ab6";
@@ -120,7 +114,21 @@ async function resolveTenantId(supabaseAdmin: any, tenantSlug: string | null): P
 }
 
 serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  const { method, pathname } = { method: req.method, pathname: new URL(req.url).pathname };
+  console.log("[get-subscriber-status] hit", { method, pathname });
+
+  // Handle CORS preflight FIRST
+  if (method === "OPTIONS") {
+    return new Response("ok", { status: 200, headers: corsHeaders });
+  }
+
+  // Only allow POST
+  if (method !== "POST") {
+    return new Response(
+      JSON.stringify({ ok: false, error: "Method not allowed" }),
+      { status: 405, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
 
   try {
     const supabaseAdmin = createClient(
@@ -236,7 +244,7 @@ serve(async (req) => {
           tenant_slug_used: tenant_slug || null,
         }
       }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      { headers: { ...corsHeaders, "Content-Type": "application/json", "Cache-Control": "no-store, max-age=0", "Pragma": "no-cache" } },
     );
   } catch (error) {
     console.error("get-subscriber-status error:", error);
