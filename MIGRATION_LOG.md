@@ -739,3 +739,62 @@ Created shared tenant resolver helper. This module is NOT yet imported by any Ed
 [Pending verification]
 
 ---
+
+### Step 3.2C — Reset Telegram Webhook feature
+
+**Date/Time:** 2026-02-05 (UTC)
+
+**Goal:** Add "Reset Telegram Webhook" button to admin settings that deletes webhook (with drop_pending_updates) and re-sets it, clearing error queues.
+
+**Risk Level:** Low
+
+---
+
+#### Code Changes
+
+| File | Description |
+|------|-------------|
+| `supabase/functions/set-telegram-webhook/index.ts` | Added support for `reset: true` in request body; calls `deleteWebhook` first, then `setWebhook`; returns both results |
+| `src/pages/admin/AdminSettings.tsx` | Added `isResettingBotWebhook` state, `resetTelegramBotWebhook` handler, and "Reset Telegram Webhook" button with confirmation dialog |
+
+---
+
+#### Supabase SQL Changes
+
+```sql
+-- N/A — no database changes
+```
+
+**Executed in:** N/A
+
+---
+
+#### Rollback Plan
+
+**Lovable Rollback:**
+- [ ] Revert `supabase/functions/set-telegram-webhook/index.ts` to previous version (remove reset logic)
+- [ ] Revert `src/pages/admin/AdminSettings.tsx` to previous version (remove Reset button)
+- [ ] Remove this entry from `MIGRATION_LOG.md`
+
+**Supabase Rollback SQL:**
+```sql
+-- N/A — no database changes to rollback
+```
+
+---
+
+#### Post-Step Verification Checklist
+
+- [ ] "Set Telegram Webhook" button still works as before
+- [ ] "Reset Telegram Webhook" button shows confirmation dialog
+- [ ] After reset, logs show both `deleteWebhook` and `setWebhook` calls
+- [ ] Toast shows success with both operation results
+- [ ] Webhook works correctly after reset (bot receives messages)
+
+---
+
+#### Result / Notes
+
+[Pending verification]
+
+---
