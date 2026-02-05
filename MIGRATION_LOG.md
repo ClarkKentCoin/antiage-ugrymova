@@ -669,3 +669,73 @@ Created shared tenant resolver helper. This module is NOT yet imported by any Ed
 **Hotfix #2 (2026-02-05):** Bundle generation still timed out. Switched ALL edge functions and `_shared` modules from `https://esm.sh/@supabase/supabase-js@2` to `npm:@supabase/supabase-js@2` specifier. This eliminates remote ESM bundling and should resolve the timeout. No behavior changes.
 
 ---
+
+### Step 3.2A — robokassa-webhook tenant-aware secret resolution
+
+**Date/Time:** 2026-02-05 (UTC)
+
+**Goal:** Update `robokassa-webhook` to resolve tenant from `payment_history.invoice_id` (InvId), then load admin_settings for that tenant_id, instead of using global `.limit(1)`.
+
+**Risk Level:** Medium (affects payment processing, but signature logic unchanged)
+
+---
+
+#### Code Changes
+
+| File | Description |
+|------|-------------|
+| `supabase/functions/robokassa-webhook/index.ts` | Added import of `DEFAULT_TENANT_ID` and `requireAdminSettingsForTenant` from `_shared/tenant.ts`; replaced `.limit(1)` admin_settings query with tenant-aware resolution via `payment_history.invoice_id`; reused loaded settings for Telegram notifications (removed duplicate query) |
+
+---
+
+#### Key Logic
+
+1. Extract `InvId` from incoming Robokassa POST
+2. Query `payment_history` by `invoice_id` to get `tenant_id`
+3. If not found → fallback to `DEFAULT_TENANT_ID`
+4. Load `admin_settings` for that `tenant_id` using `requireAdminSettingsForTenant`
+5. Use `robokassa_password2` from tenant-specific settings for signature validation
+6. Reuse same settings for Telegram bot operations (no second query)
+
+---
+
+#### Supabase SQL Changes
+
+```sql
+-- N/A — no database changes
+```
+
+**Executed in:** N/A
+
+---
+
+#### Rollback Plan
+
+**Lovable Rollback:**
+- [ ] Revert `supabase/functions/robokassa-webhook/index.ts` to previous version (restore `.limit(1)` pattern)
+- [ ] Remove this entry from `MIGRATION_LOG.md`
+
+**Supabase Rollback SQL:**
+```sql
+-- N/A — no database changes to rollback
+```
+
+---
+
+#### Post-Step Verification Checklist
+
+- [ ] Real payment succeeds (or test payment in test mode)
+- [ ] Webhook returns `OK{InvId}` response
+- [ ] Subscription becomes active/extended after payment
+- [ ] Telegram notification sent to user
+- [ ] Invite link generated (if user not in channel)
+- [ ] No changes to Robokassa signature scheme/params
+- [ ] Logs show correct `tenant_id` resolution
+
+---
+
+#### Result / Notes
+
+[Pending verification]
+
+---
