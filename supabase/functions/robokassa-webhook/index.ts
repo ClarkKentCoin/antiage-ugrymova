@@ -3,6 +3,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { DateTime } from "https://esm.sh/luxon@3.4.4";
 import { sendAdminNotification } from "../_shared/adminNotifications.ts";
 import { logUserNotification } from "../_shared/userNotificationLogger.ts";
+import { DEFAULT_TENANT_ID, requireAdminSettingsForTenant } from "../_shared/tenant.ts";
 
 // SHA256 hash function (Robokassa signatures)
 async function sha256(message: string): Promise<string> {
@@ -141,19 +142,47 @@ serve(async (req) => {
       return new Response("bad sign", { status: 400 });
     }
 
-    // Get Password2 from admin_settings
-    const { data: settings, error: settingsError } = await supabaseAdmin
-      .from("admin_settings")
-      .select("robokassa_password2")
-      .limit(1)
-      .single();
+    // Step 3.2A: Resolve tenant from payment_history by invoice_id
+    const invoiceIdStr = String(invId ?? "");
+    let tenantId = DEFAULT_TENANT_ID;
+    
+    if (invoiceIdStr && invoiceIdStr !== "null" && invoiceIdStr !== "undefined") {
+      const { data: ph } = await supabaseAdmin
+        .from("payment_history")
+        .select("tenant_id")
+        .eq("invoice_id", invoiceIdStr)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      
+      if (ph?.tenant_id) {
+        tenantId = ph.tenant_id;
+        console.log(`[robokassa-webhook] Resolved tenant_id=${tenantId} from payment_history.invoice_id=${invoiceIdStr}`);
+      } else {
+        console.log(`[robokassa-webhook] No payment_history for invoice_id=${invoiceIdStr}, using DEFAULT_TENANT_ID=${DEFAULT_TENANT_ID}`);
+      }
+    } else {
+      console.log(`[robokassa-webhook] No valid invoice_id, using DEFAULT_TENANT_ID=${DEFAULT_TENANT_ID}`);
+    }
 
-    if (settingsError || !settings?.robokassa_password2) {
+    // Get Password2 from admin_settings for this tenant
+    let settings: Record<string, unknown>;
+    try {
+      settings = await requireAdminSettingsForTenant(
+        supabaseAdmin,
+        tenantId,
+        "tenant_id, robokassa_password2, telegram_bot_token, telegram_channel_id, channel_name, notification_payment_success"
+      );
+    } catch (settingsError) {
       console.error("Settings error:", settingsError);
       return new Response("config error", { status: 500 });
     }
 
-    const password2 = settings.robokassa_password2;
+    const password2 = settings.robokassa_password2 as string;
+    if (!password2) {
+      console.error("robokassa_password2 not configured for tenant", tenantId);
+      return new Response("config error", { status: 500 });
+    }
 
     // Build signature verification string
     // Format: OutSum:InvId:Password2:Shp_source=value:Shp_subscriber_id=value:Shp_telegram_user_id=value
@@ -446,21 +475,20 @@ serve(async (req) => {
         .single();
 
       if (subscriberData?.telegram_user_id) {
-        // Get telegram settings including notification template
-        const { data: telegramSettings } = await supabaseAdmin
-          .from("admin_settings")
-          .select("telegram_bot_token, telegram_channel_id, channel_name, notification_payment_success")
-          .limit(1)
-          .single();
+        // Use settings already loaded at the start (tenant-aware)
+        const telegramBotToken = settings.telegram_bot_token as string | null;
+        const telegramChannelId = settings.telegram_channel_id as string | null;
+        const channelName = settings.channel_name as string | null;
+        const notificationPaymentSuccess = settings.notification_payment_success as string | null;
 
-        if (telegramSettings?.telegram_bot_token && telegramSettings?.telegram_channel_id) {
-          let channelId = telegramSettings.telegram_channel_id.toString();
+        if (telegramBotToken && telegramChannelId) {
+          let channelId = telegramChannelId.toString();
           if (!channelId.startsWith("-100") && channelId.startsWith("-")) {
             channelId = "-100" + channelId.substring(1);
           }
 
           // First send the success payment message from settings
-          if (telegramSettings.notification_payment_success) {
+          if (notificationPaymentSuccess) {
             const expiresDate = computedNewEndISO 
               ? DateTime.fromISO(computedNewEndISO, { zone: 'utc' })
                   .setZone('Europe/Moscow')
@@ -468,13 +496,13 @@ serve(async (req) => {
               : 'неизвестно';
             
             const formattedAmount = Math.round(parseFloat(outSum)).toString();
-            let successMessage = telegramSettings.notification_payment_success
-              .replace(/{channel_name}/g, telegramSettings.channel_name || 'канал')
+            let successMessage = notificationPaymentSuccess
+              .replace(/{channel_name}/g, channelName || 'канал')
               .replace(/{amount}/g, formattedAmount)
               .replace(/{expires_date}/g, expiresDate);
 
             const msgResult = await fetch(
-              `https://api.telegram.org/bot${telegramSettings.telegram_bot_token}/sendMessage`,
+              `https://api.telegram.org/bot${telegramBotToken}/sendMessage`,
               {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -546,7 +574,7 @@ serve(async (req) => {
               // Step 1: Unban the user if they were previously banned
               console.log(`[robokassa] Unbanning user ${subscriberData.telegram_user_id} if banned`);
               const unbanResponse = await fetch(
-                `https://api.telegram.org/bot${telegramSettings.telegram_bot_token}/unbanChatMember`,
+                `https://api.telegram.org/bot${telegramBotToken}/unbanChatMember`,
                 {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
@@ -578,7 +606,7 @@ serve(async (req) => {
               
               for (const link of previousLinks) {
                 const revokeResponse = await fetch(
-                  `https://api.telegram.org/bot${telegramSettings.telegram_bot_token}/revokeChatInviteLink`,
+                  `https://api.telegram.org/bot${telegramBotToken}/revokeChatInviteLink`,
                   {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
@@ -612,7 +640,7 @@ serve(async (req) => {
             const expiresAtISO = new Date(expireTimestamp * 1000).toISOString();
 
             const inviteResponse = await fetch(
-              `https://api.telegram.org/bot${telegramSettings.telegram_bot_token}/createChatInviteLink`,
+              `https://api.telegram.org/bot${telegramBotToken}/createChatInviteLink`,
               {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -662,7 +690,7 @@ serve(async (req) => {
               }
 
               await fetch(
-                `https://api.telegram.org/bot${telegramSettings.telegram_bot_token}/sendMessage`,
+                `https://api.telegram.org/bot${telegramBotToken}/sendMessage`,
                 {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
