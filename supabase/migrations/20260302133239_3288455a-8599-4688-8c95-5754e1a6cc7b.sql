@@ -1,0 +1,1 @@
+ALTER TABLE public.subscription_tiers ADD COLUMN grace_period_enabled boolean NOT NULL DEFAULT true;

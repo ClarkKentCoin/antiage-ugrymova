@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Pencil, Trash2 } from 'lucide-react';
+import { Pencil, Trash2, ShieldCheck, ShieldOff } from 'lucide-react';
 import { SubscriptionTier, useDeleteTier, formatDuration } from '@/hooks/useSubscriptionTiers';
 import { EditTierDialog } from './EditTierDialog';
 
@@ -30,9 +30,20 @@ export function TierCard({ tier }: TierCardProps) {
               <p className="text-sm text-muted-foreground mt-1">{tier.description}</p>
             )}
           </div>
-          <Badge variant={tier.is_active ? 'default' : 'secondary'}>
-            {tier.is_active ? 'Активен' : 'Неактивен'}
-          </Badge>
+          <div className="flex flex-col items-end gap-1">
+            <Badge variant={tier.is_active ? 'default' : 'secondary'}>
+              {tier.is_active ? 'Активен' : 'Неактивен'}
+            </Badge>
+            {tier.grace_period_enabled ? (
+              <Badge variant="outline" className="text-xs gap-1">
+                <ShieldCheck className="h-3 w-3" /> Грейс
+              </Badge>
+            ) : (
+              <Badge variant="outline" className="text-xs gap-1 text-muted-foreground">
+                <ShieldOff className="h-3 w-3" /> Без грейса
+              </Badge>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
           <div className="flex items-baseline gap-1 mb-4">

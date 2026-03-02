@@ -397,6 +397,7 @@ export type Database = {
           created_at: string
           description: string | null
           duration_days: number
+          grace_period_enabled: boolean
           id: string
           interval_count: number
           interval_unit: string
@@ -411,6 +412,7 @@ export type Database = {
           created_at?: string
           description?: string | null
           duration_days: number
+          grace_period_enabled?: boolean
           id?: string
           interval_count?: number
           interval_unit?: string
@@ -425,6 +427,7 @@ export type Database = {
           created_at?: string
           description?: string | null
           duration_days?: number
+          grace_period_enabled?: boolean
           id?: string
           interval_count?: number
           interval_unit?: string
