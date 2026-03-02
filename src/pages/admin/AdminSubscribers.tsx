@@ -1,29 +1,61 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { AdminLayout } from '@/components/admin/AdminLayout';
 import { SubscriberTable } from '@/components/admin/SubscriberTable';
 import { AddSubscriberDialog } from '@/components/admin/AddSubscriberDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
 import { useSubscribers } from '@/hooks/useSubscribers';
 import { Plus, Search } from 'lucide-react';
+
+type StatusFilter = 'all' | 'active' | 'grace_period' | 'inactive' | 'expired' | 'cancelled';
+
+const filterTabs: { value: StatusFilter; label: string }[] = [
+  { value: 'all', label: 'Все' },
+  { value: 'active', label: 'Активные' },
+  { value: 'grace_period', label: 'Грейс-период' },
+  { value: 'inactive', label: 'Неактивные' },
+  { value: 'expired', label: 'Истекшие' },
+  { value: 'cancelled', label: 'Отменённые' },
+];
 
 export default function AdminSubscribers() {
   const { data: subscribers, isLoading } = useSubscribers();
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
 
-  const filteredSubscribers = subscribers?.filter(sub => {
-    if (!search) return true;
-    const searchLower = search.toLowerCase();
-    return (
-      sub.telegram_username?.toLowerCase().includes(searchLower) ||
-      sub.first_name?.toLowerCase().includes(searchLower) ||
-      sub.last_name?.toLowerCase().includes(searchLower) ||
-      sub.email?.toLowerCase().includes(searchLower) ||
-      sub.phone_number?.includes(search) ||
-      sub.telegram_user_id.toString().includes(search)
-    );
-  });
+  const statusCounts = useMemo(() => {
+    const counts: Record<StatusFilter, number> = {
+      all: 0, active: 0, grace_period: 0, inactive: 0, expired: 0, cancelled: 0,
+    };
+    if (!subscribers) return counts;
+    counts.all = subscribers.length;
+    for (const sub of subscribers) {
+      const s = sub.status as StatusFilter;
+      if (s in counts && s !== 'all') counts[s]++;
+    }
+    return counts;
+  }, [subscribers]);
+
+  const filteredSubscribers = useMemo(() => {
+    let list = subscribers ?? [];
+    if (statusFilter !== 'all') {
+      list = list.filter(sub => sub.status === statusFilter);
+    }
+    if (search) {
+      const q = search.toLowerCase();
+      list = list.filter(sub =>
+        sub.telegram_username?.toLowerCase().includes(q) ||
+        sub.first_name?.toLowerCase().includes(q) ||
+        sub.last_name?.toLowerCase().includes(q) ||
+        sub.email?.toLowerCase().includes(q) ||
+        sub.phone_number?.includes(search) ||
+        sub.telegram_user_id.toString().includes(search)
+      );
+    }
+    return list;
+  }, [subscribers, statusFilter, search]);
 
   if (isLoading) {
     return (
@@ -50,6 +82,23 @@ export default function AdminSubscribers() {
           </Button>
         </div>
 
+        <div className="flex gap-2 flex-wrap">
+          {filterTabs.map((tab) => (
+            <Button
+              key={tab.value}
+              variant={statusFilter === tab.value ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setStatusFilter(tab.value)}
+              className="flex-1 sm:flex-none"
+            >
+              <span className="truncate">{tab.label}</span>
+              <Badge variant="secondary" className="ml-2 bg-background/20">
+                {statusCounts[tab.value]}
+              </Badge>
+            </Button>
+          ))}
+        </div>
+
         <div className="relative w-full sm:max-w-sm">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -60,7 +109,7 @@ export default function AdminSubscribers() {
           />
         </div>
 
-        <SubscriberTable subscribers={filteredSubscribers || []} />
+        <SubscriberTable subscribers={filteredSubscribers} />
 
         <AddSubscriberDialog
           open={isAddDialogOpen}
