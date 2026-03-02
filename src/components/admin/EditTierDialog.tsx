@@ -50,6 +50,7 @@ export function EditTierDialog({ tier, open, onOpenChange }: EditTierDialogProps
     billing_timezone: 'Europe/Moscow',
     price: '',
     is_active: true,
+    grace_period_enabled: true,
   });
 
   useEffect(() => {
@@ -76,6 +77,7 @@ export function EditTierDialog({ tier, open, onOpenChange }: EditTierDialogProps
         billing_timezone: tier.billing_timezone || 'Europe/Moscow',
         price: tier.price.toString(),
         is_active: tier.is_active,
+        grace_period_enabled: tier.grace_period_enabled ?? true,
       });
     }
   }, [tier]);
@@ -102,6 +104,7 @@ export function EditTierDialog({ tier, open, onOpenChange }: EditTierDialogProps
       duration_days: durationDays,
       price: parseFloat(formData.price),
       is_active: formData.is_active,
+      grace_period_enabled: formData.grace_period_enabled,
       interval_unit: formData.interval_unit,
       interval_count: intervalCount,
       billing_timezone: formData.billing_timezone,
@@ -226,6 +229,18 @@ export function EditTierDialog({ tier, open, onOpenChange }: EditTierDialogProps
               id="is_active"
               checked={formData.is_active}
               onCheckedChange={(checked) => setFormData({ ...formData, is_active: checked })}
+            />
+          </div>
+
+          <div className="flex items-center justify-between">
+            <div>
+              <Label htmlFor="grace_period_enabled">Грейс-период</Label>
+              <p className="text-xs text-muted-foreground">Разрешить льготный период после окончания подписки</p>
+            </div>
+            <Switch
+              id="grace_period_enabled"
+              checked={formData.grace_period_enabled}
+              onCheckedChange={(checked) => setFormData({ ...formData, grace_period_enabled: checked })}
             />
           </div>
 
