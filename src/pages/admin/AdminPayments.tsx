@@ -27,7 +27,8 @@ import {
 } from '@/components/ui/pagination';
 import { usePaymentHistory, usePaymentCounts, PaymentStatus } from '@/hooks/usePaymentHistory';
 import { format } from 'date-fns';
-import { Download } from 'lucide-react';
+import { Download, Search } from 'lucide-react';
+import { Input } from '@/components/ui/input';
 
 const paymentMethodLabels: Record<string, string> = {
   manual: 'Manual',
@@ -64,6 +65,7 @@ const PAGE_SIZE_OPTIONS = [25, 50, 100];
 export default function AdminPayments() {
   const [statusFilter, setStatusFilter] = useState<FilterStatus>('all');
   const [methodFilter, setMethodFilter] = useState<MethodFilter>('all');
+  const [search, setSearch] = useState('');
   const [pageSize, setPageSize] = useState(25);
   const [currentPage, setCurrentPage] = useState(1);
   
@@ -75,12 +77,23 @@ export default function AdminPayments() {
 
   const filteredPayments = useMemo(() => {
     if (!payments) return [];
-    if (methodFilter === 'all') return payments;
+    let result = payments;
     if (methodFilter === 'single') {
-      return payments.filter(p => p.payment_method === 'manual' || p.payment_method === 'robokassa_single');
+      result = result.filter(p => p.payment_method === 'manual' || p.payment_method === 'robokassa_single');
+    } else if (methodFilter === 'recurring') {
+      result = result.filter(p => p.payment_method === 'robokassa_recurring');
     }
-    return payments.filter(p => p.payment_method === 'robokassa_recurring');
-  }, [payments, methodFilter]);
+    if (search) {
+      const s = search.toLowerCase();
+      result = result.filter(p =>
+        p.subscribers?.telegram_username?.toLowerCase().includes(s) ||
+        p.subscribers?.first_name?.toLowerCase().includes(s) ||
+        p.subscribers?.last_name?.toLowerCase().includes(s) ||
+        p.subscribers?.email?.toLowerCase().includes(s)
+      );
+    }
+    return result;
+  }, [payments, methodFilter, search]);
 
   const methodCounts = useMemo(() => {
     if (!payments) return { all: 0, single: 0, recurring: 0 };
@@ -214,6 +227,16 @@ export default function AdminPayments() {
               </Badge>
             </Button>
           ))}
+        </div>
+
+        <div className="relative w-full sm:max-w-sm">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Поиск по имени, username или email..."
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
+            className="pl-9"
+          />
         </div>
 
         <div className="overflow-x-auto rounded-lg border border-border bg-card">
