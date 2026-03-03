@@ -1,13 +1,16 @@
+import { useMemo } from 'react';
 import { AdminLayout } from '@/components/admin/AdminLayout';
 import { StatsCard } from '@/components/admin/StatsCard';
 import { useSubscribers } from '@/hooks/useSubscribers';
 import { usePaymentHistory } from '@/hooks/usePaymentHistory';
-import { Users, CreditCard, TrendingUp, AlertTriangle } from 'lucide-react';
+import { useSubscriptionTiers } from '@/hooks/useSubscriptionTiers';
+import { Users, CreditCard, TrendingUp, AlertTriangle, Repeat, Banknote, Tag } from 'lucide-react';
 import { format, isAfter, isBefore, addDays } from 'date-fns';
 
 export default function AdminDashboard() {
   const { data: subscribers, isLoading: loadingSubscribers } = useSubscribers();
   const { data: payments, isLoading: loadingPayments } = usePaymentHistory({ status: 'completed' });
+  const { data: tiers, isLoading: loadingTiers } = useSubscriptionTiers();
 
   const activeSubscribers = subscribers?.filter(s => s.status === 'active').length || 0;
   const expiringSoon = subscribers?.filter(s => {
@@ -15,6 +18,23 @@ export default function AdminDashboard() {
     const end = new Date(s.subscription_end);
     return isAfter(end, new Date()) && isBefore(end, addDays(new Date(), 7));
   }).length || 0;
+
+  const singlePaymentUsers = subscribers?.filter(s =>
+    s.subscriber_payment_method === 'manual' || s.subscriber_payment_method === 'robokassa_single'
+  ).length || 0;
+
+  const recurrentPaymentUsers = subscribers?.filter(s =>
+    s.subscriber_payment_method === 'robokassa_recurring'
+  ).length || 0;
+
+  const tierCounts = useMemo(() => {
+    if (!tiers || !subscribers) return [];
+    return tiers.map(tier => ({
+      id: tier.id,
+      name: tier.name,
+      count: subscribers.filter(s => s.tier_id === tier.id).length,
+    }));
+  }, [tiers, subscribers]);
 
   const thisMonthRevenue = payments?.filter(p => {
     const paymentDate = new Date(p.payment_date);
@@ -25,7 +45,7 @@ export default function AdminDashboard() {
 
   const totalRevenue = payments?.reduce((sum, p) => sum + Number(p.amount), 0) || 0;
 
-  if (loadingSubscribers || loadingPayments) {
+  if (loadingSubscribers || loadingPayments || loadingTiers) {
     return (
       <AdminLayout>
         <div className="animate-pulse space-y-4">
@@ -75,6 +95,38 @@ export default function AdminDashboard() {
             icon={CreditCard}
           />
         </div>
+
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <StatsCard
+            title="Single Payment"
+            value={singlePaymentUsers}
+            description="Manual / one-time"
+            icon={Banknote}
+          />
+          <StatsCard
+            title="Recurrent Payment"
+            value={recurrentPaymentUsers}
+            description="Auto-renewal"
+            icon={Repeat}
+          />
+        </div>
+
+        {tierCounts.length > 0 && (
+          <div className="space-y-4">
+            <h2 className="text-lg font-semibold">Tiers</h2>
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+              {tierCounts.map(tc => (
+                <StatsCard
+                  key={tc.id}
+                  title={tc.name}
+                  value={tc.count}
+                  description="subscribers"
+                  icon={Tag}
+                />
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Recent Activity */}
         <div className="space-y-4">
