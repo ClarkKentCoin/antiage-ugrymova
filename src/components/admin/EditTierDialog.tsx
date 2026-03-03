@@ -51,6 +51,7 @@ export function EditTierDialog({ tier, open, onOpenChange }: EditTierDialogProps
     price: '',
     is_active: true,
     grace_period_enabled: true,
+    show_in_dashboard: false,
   });
 
   useEffect(() => {
@@ -78,6 +79,7 @@ export function EditTierDialog({ tier, open, onOpenChange }: EditTierDialogProps
         price: tier.price.toString(),
         is_active: tier.is_active,
         grace_period_enabled: tier.grace_period_enabled ?? true,
+        show_in_dashboard: tier.show_in_dashboard ?? false,
       });
     }
   }, [tier]);
@@ -105,6 +107,7 @@ export function EditTierDialog({ tier, open, onOpenChange }: EditTierDialogProps
       price: parseFloat(formData.price),
       is_active: formData.is_active,
       grace_period_enabled: formData.grace_period_enabled,
+      show_in_dashboard: formData.show_in_dashboard,
       interval_unit: formData.interval_unit,
       interval_count: intervalCount,
       billing_timezone: formData.billing_timezone,
@@ -241,6 +244,18 @@ export function EditTierDialog({ tier, open, onOpenChange }: EditTierDialogProps
               id="grace_period_enabled"
               checked={formData.grace_period_enabled}
               onCheckedChange={(checked) => setFormData({ ...formData, grace_period_enabled: checked })}
+            />
+          </div>
+
+          <div className="flex items-center justify-between">
+            <div>
+              <Label htmlFor="show_in_dashboard">Показывать на дашборде</Label>
+              <p className="text-xs text-muted-foreground">Отображать карточку с этим тарифом в статистике</p>
+            </div>
+            <Switch
+              id="show_in_dashboard"
+              checked={formData.show_in_dashboard}
+              onCheckedChange={(checked) => setFormData({ ...formData, show_in_dashboard: checked })}
             />
           </div>
 

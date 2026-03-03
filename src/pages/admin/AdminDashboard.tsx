@@ -29,11 +29,13 @@ export default function AdminDashboard() {
 
   const tierCounts = useMemo(() => {
     if (!tiers || !subscribers) return [];
-    return tiers.map(tier => ({
-      id: tier.id,
-      name: tier.name,
-      count: subscribers.filter(s => s.tier_id === tier.id).length,
-    }));
+    return tiers
+      .filter(tier => tier.show_in_dashboard)
+      .map(tier => ({
+        id: tier.id,
+        name: tier.name,
+        count: subscribers.filter(s => s.tier_id === tier.id).length,
+      }));
   }, [tiers, subscribers]);
 
   const thisMonthRevenue = payments?.filter(p => {

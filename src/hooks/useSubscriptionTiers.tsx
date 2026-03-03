@@ -20,6 +20,7 @@ export interface SubscriptionTier {
   interval_count: number | null;
   billing_timezone: string | null;
   grace_period_enabled: boolean;
+  show_in_dashboard: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -31,6 +32,7 @@ export interface CreateTierInput {
   price: number;
   is_active?: boolean;
   grace_period_enabled?: boolean;
+  show_in_dashboard?: boolean;
   interval_unit: IntervalUnit;
   interval_count: number;
   billing_timezone: string;
@@ -44,6 +46,7 @@ export interface UpdateTierInput {
   price?: number;
   is_active?: boolean;
   grace_period_enabled?: boolean;
+  show_in_dashboard?: boolean;
   interval_unit?: IntervalUnit;
   interval_count?: number;
   billing_timezone?: string;
