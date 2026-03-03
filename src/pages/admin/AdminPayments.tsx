@@ -44,6 +44,7 @@ const statusConfig: Record<string, { label: string; variant: 'default' | 'second
 };
 
 type FilterStatus = PaymentStatus | 'all';
+type MethodFilter = 'all' | 'single' | 'recurring';
 
 const filterTabs: { value: FilterStatus; label: string }[] = [
   { value: 'all', label: 'Все платежи' },
@@ -52,10 +53,17 @@ const filterTabs: { value: FilterStatus; label: string }[] = [
   { value: 'failed', label: 'Неудачные' },
 ];
 
+const methodTabs: { value: MethodFilter; label: string }[] = [
+  { value: 'all', label: 'Все методы' },
+  { value: 'single', label: 'Разовые' },
+  { value: 'recurring', label: 'Рекуррентные' },
+];
+
 const PAGE_SIZE_OPTIONS = [25, 50, 100];
 
 export default function AdminPayments() {
   const [statusFilter, setStatusFilter] = useState<FilterStatus>('all');
+  const [methodFilter, setMethodFilter] = useState<MethodFilter>('all');
   const [pageSize, setPageSize] = useState(25);
   const [currentPage, setCurrentPage] = useState(1);
   
@@ -65,16 +73,32 @@ export default function AdminPayments() {
   
   const { data: counts } = usePaymentCounts();
 
-  const paginatedPayments = useMemo(() => {
+  const filteredPayments = useMemo(() => {
     if (!payments) return [];
+    if (methodFilter === 'all') return payments;
+    if (methodFilter === 'single') {
+      return payments.filter(p => p.payment_method === 'manual' || p.payment_method === 'robokassa_single');
+    }
+    return payments.filter(p => p.payment_method === 'robokassa_recurring');
+  }, [payments, methodFilter]);
+
+  const methodCounts = useMemo(() => {
+    if (!payments) return { all: 0, single: 0, recurring: 0 };
+    return {
+      all: payments.length,
+      single: payments.filter(p => p.payment_method === 'manual' || p.payment_method === 'robokassa_single').length,
+      recurring: payments.filter(p => p.payment_method === 'robokassa_recurring').length,
+    };
+  }, [payments]);
+
+  const paginatedPayments = useMemo(() => {
     const startIndex = (currentPage - 1) * pageSize;
-    return payments.slice(startIndex, startIndex + pageSize);
-  }, [payments, currentPage, pageSize]);
+    return filteredPayments.slice(startIndex, startIndex + pageSize);
+  }, [filteredPayments, currentPage, pageSize]);
 
   const totalPages = useMemo(() => {
-    if (!payments) return 1;
-    return Math.ceil(payments.length / pageSize);
-  }, [payments, pageSize]);
+    return Math.ceil(filteredPayments.length / pageSize) || 1;
+  }, [filteredPayments, pageSize]);
 
   const handlePageChange = (page: number) => {
     if (page >= 1 && page <= totalPages) {
@@ -89,6 +113,11 @@ export default function AdminPayments() {
 
   const handleStatusFilterChange = (status: FilterStatus) => {
     setStatusFilter(status);
+    setCurrentPage(1);
+  };
+
+  const handleMethodFilterChange = (method: MethodFilter) => {
+    setMethodFilter(method);
     setCurrentPage(1);
   };
 
@@ -134,6 +163,23 @@ export default function AdminPayments() {
         <div className="animate-pulse space-y-4">
           <div className="h-8 w-48 bg-muted rounded" />
           <div className="h-64 bg-muted rounded-lg" />
+        </div>
+
+        <div className="flex gap-2 flex-wrap">
+          {methodTabs.map((tab) => (
+            <Button
+              key={tab.value}
+              variant={methodFilter === tab.value ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => handleMethodFilterChange(tab.value)}
+              className="flex-1 sm:flex-none"
+            >
+              <span className="truncate">{tab.label}</span>
+              <Badge variant="secondary" className="ml-2 bg-background/20">
+                {methodCounts[tab.value]}
+              </Badge>
+            </Button>
+          ))}
         </div>
       </AdminLayout>
     );
@@ -243,7 +289,7 @@ export default function AdminPayments() {
           </Table>
         </div>
 
-        {payments && payments.length > 0 && (
+        {filteredPayments.length > 0 && (
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <span>Показывать по:</span>
@@ -260,7 +306,7 @@ export default function AdminPayments() {
                 </SelectContent>
               </Select>
               <span>
-                Показано {((currentPage - 1) * pageSize) + 1}-{Math.min(currentPage * pageSize, payments.length)} из {payments.length}
+                Показано {((currentPage - 1) * pageSize) + 1}-{Math.min(currentPage * pageSize, filteredPayments.length)} из {filteredPayments.length}
               </span>
             </div>
 
