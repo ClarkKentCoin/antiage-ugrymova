@@ -1,0 +1,1 @@
+ALTER TABLE public.subscription_tiers ADD COLUMN show_in_dashboard boolean NOT NULL DEFAULT false;

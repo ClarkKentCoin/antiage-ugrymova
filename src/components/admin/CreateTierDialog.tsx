@@ -44,6 +44,7 @@ export function CreateTierDialog({ open, onOpenChange }: CreateTierDialogProps) 
     price: '',
     is_active: true,
     grace_period_enabled: true,
+    show_in_dashboard: false,
   });
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -60,6 +61,7 @@ export function CreateTierDialog({ open, onOpenChange }: CreateTierDialogProps) 
       price: parseFloat(formData.price),
       is_active: formData.is_active,
       grace_period_enabled: formData.grace_period_enabled,
+      show_in_dashboard: formData.show_in_dashboard,
       interval_unit: formData.interval_unit,
       interval_count: intervalCount,
       billing_timezone: formData.billing_timezone,
@@ -89,6 +91,7 @@ export function CreateTierDialog({ open, onOpenChange }: CreateTierDialogProps) 
           price: '',
           is_active: true,
           grace_period_enabled: true,
+          show_in_dashboard: false,
         });
       },
       onError: (error) => {
@@ -207,6 +210,18 @@ export function CreateTierDialog({ open, onOpenChange }: CreateTierDialogProps) 
               id="grace_period_enabled"
               checked={formData.grace_period_enabled}
               onCheckedChange={(checked) => setFormData({ ...formData, grace_period_enabled: checked })}
+            />
+          </div>
+
+          <div className="flex items-center justify-between">
+            <div>
+              <Label htmlFor="show_in_dashboard">Показывать на дашборде</Label>
+              <p className="text-xs text-muted-foreground">Отображать карточку с этим тарифом в статистике</p>
+            </div>
+            <Switch
+              id="show_in_dashboard"
+              checked={formData.show_in_dashboard}
+              onCheckedChange={(checked) => setFormData({ ...formData, show_in_dashboard: checked })}
             />
           </div>
 
