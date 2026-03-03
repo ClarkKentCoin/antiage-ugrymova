@@ -164,23 +164,6 @@ export default function AdminPayments() {
           <div className="h-8 w-48 bg-muted rounded" />
           <div className="h-64 bg-muted rounded-lg" />
         </div>
-
-        <div className="flex gap-2 flex-wrap">
-          {methodTabs.map((tab) => (
-            <Button
-              key={tab.value}
-              variant={methodFilter === tab.value ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => handleMethodFilterChange(tab.value)}
-              className="flex-1 sm:flex-none"
-            >
-              <span className="truncate">{tab.label}</span>
-              <Badge variant="secondary" className="ml-2 bg-background/20">
-                {methodCounts[tab.value]}
-              </Badge>
-            </Button>
-          ))}
-        </div>
       </AdminLayout>
     );
   }
@@ -211,6 +194,23 @@ export default function AdminPayments() {
               <span className="truncate">{tab.label}</span>
               <Badge variant="secondary" className="ml-2 bg-background/20">
                 {getCountForStatus(tab.value)}
+              </Badge>
+            </Button>
+          ))}
+        </div>
+
+        <div className="flex gap-2 flex-wrap">
+          {methodTabs.map((tab) => (
+            <Button
+              key={tab.value}
+              variant={methodFilter === tab.value ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => handleMethodFilterChange(tab.value)}
+              className="flex-1 sm:flex-none"
+            >
+              <span className="truncate">{tab.label}</span>
+              <Badge variant="secondary" className="ml-2 bg-background/20">
+                {methodCounts[tab.value]}
               </Badge>
             </Button>
           ))}
