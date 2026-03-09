@@ -145,10 +145,10 @@ export default function TelegramApp() {
 
   // Compute set of tier IDs already purchased (for purchase_once_only enforcement)
   const purchasedOnceOnlyTierIds = useMemo(() => {
-    const completedPayments = payments || [];
+    const allPayments = payments || [];
     const ids = new Set<string>();
-    for (const p of completedPayments) {
-      if (p.tier_id) ids.add(p.tier_id);
+    for (const p of allPayments) {
+      if (p.tier_id && p.status === 'completed') ids.add(p.tier_id);
     }
     const onceOnlyIds = new Set<string>();
     for (const t of publicTiers) {
