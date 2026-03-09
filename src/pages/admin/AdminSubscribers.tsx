@@ -123,14 +123,30 @@ export default function AdminSubscribers() {
           ))}
         </div>
 
-        <div className="relative w-full sm:max-w-sm">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Search subscribers..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
-          />
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <div className="relative w-full sm:max-w-sm">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Search subscribers..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+          <Select value={tierFilter} onValueChange={setTierFilter}>
+            <SelectTrigger className="w-full sm:w-[220px]">
+              <Filter className="mr-2 h-4 w-4 text-muted-foreground" />
+              <SelectValue placeholder="Все тарифы" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Все тарифы</SelectItem>
+              {tierOptions.map((tier) => (
+                <SelectItem key={tier.id} value={tier.id} className={tier.isActive ? '' : 'text-muted-foreground'}>
+                  {tier.name}{!tier.isActive ? ' (неактивен)' : ''}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         <SubscriberTable subscribers={filteredSubscribers} />
