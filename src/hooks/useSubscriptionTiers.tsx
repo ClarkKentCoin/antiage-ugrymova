@@ -166,10 +166,11 @@ const ADMIN_ONLY_TIER_NAME = 'добавлен админом';
  * - For authenticated admin: reads directly from DB (unchanged).
  * - For public/Mini App: fetches via get-public-tiers edge function (no anon DB access).
  */
-export function useActiveTiers(options?: { includeAdminOnly?: boolean; publicTenantId?: string | null }) {
+export function useActiveTiers(options?: { includeAdminOnly?: boolean; publicTenantId?: string | null; publicTenantSlug?: string | null }) {
   const { user, tenantId, tenantLoading } = useAuth();
   const includeAdminOnly = options?.includeAdminOnly ?? false;
   const publicTenantId = options?.publicTenantId;
+  const publicTenantSlug = options?.publicTenantSlug ?? null;
 
   const isAdmin = !!user && !!tenantId;
 
