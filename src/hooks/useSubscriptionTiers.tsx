@@ -203,7 +203,7 @@ export function useActiveTiers(options?: { includeAdminOnly?: boolean; publicTen
 
       // Public/Mini App path: use edge function instead of anon DB access
       const { data, error } = await supabase.functions.invoke('get-public-tiers', {
-        body: { tenant_slug: publicTenantId ? undefined : undefined },
+        body: { tenant_slug: publicTenantSlug || undefined },
       });
 
       if (error) {
