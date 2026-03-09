@@ -3,14 +3,12 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { encode as hexEncode } from "https://deno.land/std@0.168.0/encoding/hex.ts";
 import { sendAdminNotification } from "../_shared/adminNotifications.ts";
 import { logUserNotification } from "../_shared/userNotificationLogger.ts";
+import { resolveTenantIdFromSlug, DEFAULT_TENANT_ID } from "../_shared/tenant.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
-
-// Default tenant ID for backward compatibility (production main tenant)
-const DEFAULT_TENANT_ID = Deno.env.get("PUBLIC_TENANT_ID") ?? "6749bded-94d6-4793-9f46-09724da30ab6";
 
 const enc = new TextEncoder();
 const dec = new TextDecoder();
