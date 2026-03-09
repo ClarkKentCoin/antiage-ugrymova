@@ -18,25 +18,6 @@ async function robokassaSignature(message: string): Promise<string> {
     .toUpperCase();
 }
 
-// Resolve tenant ID from slug or use default
-async function resolveTenantId(supabaseAdmin: any, tenantSlug: string | null): Promise<string> {
-  if (!tenantSlug) {
-    return DEFAULT_TENANT_ID;
-  }
-
-  const { data: tenant, error } = await supabaseAdmin
-    .from("tenants")
-    .select("id")
-    .eq("slug", tenantSlug)
-    .maybeSingle();
-
-  if (error || !tenant) {
-    console.log(`[create-robokassa-payment] Tenant not found for slug: ${tenantSlug}, using default`);
-    return DEFAULT_TENANT_ID;
-  }
-
-  return tenant.id;
-}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
