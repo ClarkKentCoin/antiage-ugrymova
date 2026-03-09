@@ -34,6 +34,7 @@ export interface CreateTierInput {
   is_active?: boolean;
   grace_period_enabled?: boolean;
   show_in_dashboard?: boolean;
+  purchase_once_only?: boolean;
   interval_unit: IntervalUnit;
   interval_count: number;
   billing_timezone: string;
