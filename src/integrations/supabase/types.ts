@@ -404,6 +404,7 @@ export type Database = {
           is_active: boolean | null
           name: string
           price: number
+          purchase_once_only: boolean
           show_in_dashboard: boolean
           tenant_id: string | null
           updated_at: string
@@ -420,6 +421,7 @@ export type Database = {
           is_active?: boolean | null
           name: string
           price: number
+          purchase_once_only?: boolean
           show_in_dashboard?: boolean
           tenant_id?: string | null
           updated_at?: string
@@ -436,6 +438,7 @@ export type Database = {
           is_active?: boolean | null
           name?: string
           price?: number
+          purchase_once_only?: boolean
           show_in_dashboard?: boolean
           tenant_id?: string | null
           updated_at?: string

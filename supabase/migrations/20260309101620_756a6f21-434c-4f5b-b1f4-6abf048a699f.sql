@@ -1,0 +1,1 @@
+ALTER TABLE public.subscription_tiers ADD COLUMN purchase_once_only boolean NOT NULL DEFAULT false;
