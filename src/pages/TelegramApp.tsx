@@ -644,6 +644,7 @@ function GracePeriodView({
   onRefetch,
   graceDaysRemaining,
   onDebugTap,
+  purchasedOnceOnlyTierIds = new Set(),
 }: {
   channelInfo: { name: string; description: string } | null;
   tiers: any[];
@@ -652,6 +653,7 @@ function GracePeriodView({
   onRefetch?: () => void;
   graceDaysRemaining: number;
   onDebugTap?: () => void;
+  purchasedOnceOnlyTierIds?: Set<string>;
 }) {
   const [selectedTier, setSelectedTier] = useState<string | null>(null);
   const [autoRenewal, setAutoRenewal] = useState(false);
