@@ -6,7 +6,15 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { useSubscribers } from '@/hooks/useSubscribers';
-import { Plus, Search } from 'lucide-react';
+import { useSubscriptionTiers } from '@/hooks/useSubscriptionTiers';
+import { Plus, Search, Filter } from 'lucide-react';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 type StatusFilter = 'all' | 'active' | 'grace_period' | 'inactive' | 'expired' | 'cancelled';
 
@@ -21,10 +29,23 @@ const filterTabs: { value: StatusFilter; label: string }[] = [
 
 export default function AdminSubscribers() {
   const { data: subscribers, isLoading } = useSubscribers();
+  const { data: allTiers } = useSubscriptionTiers();
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [tierFilter, setTierFilter] = useState<string>('all');
 
+  // Build tier options: active first, then inactive (grey) only if subscribers use them
+  const tierOptions = useMemo(() => {
+    if (!allTiers || !subscribers) return [];
+    const usedTierIds = new Set(subscribers.map(s => s.tier_id).filter(Boolean));
+    const activeTiers = allTiers.filter(t => t.is_active).sort((a, b) => a.name.localeCompare(b.name));
+    const inactiveTiers = allTiers.filter(t => !t.is_active && usedTierIds.has(t.id)).sort((a, b) => a.name.localeCompare(b.name));
+    return [
+      ...activeTiers.map(t => ({ id: t.id, name: t.name, isActive: true })),
+      ...inactiveTiers.map(t => ({ id: t.id, name: t.name, isActive: false })),
+    ];
+  }, [allTiers, subscribers]);
   const statusCounts = useMemo(() => {
     const counts: Record<StatusFilter, number> = {
       all: 0, active: 0, grace_period: 0, inactive: 0, expired: 0, cancelled: 0,
@@ -43,6 +64,9 @@ export default function AdminSubscribers() {
     if (statusFilter !== 'all') {
       list = list.filter(sub => sub.status === statusFilter);
     }
+    if (tierFilter !== 'all') {
+      list = list.filter(sub => sub.tier_id === tierFilter);
+    }
     if (search) {
       const q = search.toLowerCase();
       list = list.filter(sub =>
@@ -55,7 +79,7 @@ export default function AdminSubscribers() {
       );
     }
     return list;
-  }, [subscribers, statusFilter, search]);
+  }, [subscribers, statusFilter, tierFilter, search]);
 
   if (isLoading) {
     return (
@@ -99,14 +123,30 @@ export default function AdminSubscribers() {
           ))}
         </div>
 
-        <div className="relative w-full sm:max-w-sm">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Search subscribers..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
-          />
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <div className="relative w-full sm:max-w-sm">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Search subscribers..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+          <Select value={tierFilter} onValueChange={setTierFilter}>
+            <SelectTrigger className="w-full sm:w-[220px]">
+              <Filter className="mr-2 h-4 w-4 text-muted-foreground" />
+              <SelectValue placeholder="Все тарифы" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Все тарифы</SelectItem>
+              {tierOptions.map((tier) => (
+                <SelectItem key={tier.id} value={tier.id} className={tier.isActive ? '' : 'text-muted-foreground'}>
+                  {tier.name}{!tier.isActive ? ' (неактивен)' : ''}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         <SubscriberTable subscribers={filteredSubscribers} />
