@@ -42,6 +42,7 @@ const statusVariants: Record<string, string> = {
 export function SubscriberTable({ subscribers }: SubscriberTableProps) {
   const [editingSubscriber, setEditingSubscriber] = useState<Subscriber | null>(null);
   const [extendingSubscriber, setExtendingSubscriber] = useState<Subscriber | null>(null);
+  const [messagingSubscriber, setMessagingSubscriber] = useState<Subscriber | null>(null);
   const [sortField, setSortField] = useState<SortField>('subscription_start');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const deleteSubscriber = useDeleteSubscriber();
