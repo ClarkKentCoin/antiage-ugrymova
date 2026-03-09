@@ -63,6 +63,7 @@ export function CreateTierDialog({ open, onOpenChange }: CreateTierDialogProps) 
       is_active: formData.is_active,
       grace_period_enabled: formData.grace_period_enabled,
       show_in_dashboard: formData.show_in_dashboard,
+      purchase_once_only: formData.purchase_once_only,
       interval_unit: formData.interval_unit,
       interval_count: intervalCount,
       billing_timezone: formData.billing_timezone,
