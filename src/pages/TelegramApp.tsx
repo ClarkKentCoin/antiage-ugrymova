@@ -893,6 +893,7 @@ function SubscriptionContent({
   isCancelling = false,
   serverGraceDaysRemaining = null,
   onDebugTap,
+  purchasedOnceOnlyTierIds = new Set(),
 }: {
   subscriber: any; 
   isLoading: boolean;
@@ -910,6 +911,7 @@ function SubscriptionContent({
   isCancelling?: boolean;
   serverGraceDaysRemaining?: number | null;
   onDebugTap?: () => void;
+  purchasedOnceOnlyTierIds?: Set<string>;
 }) {
   const [selectedTier, setSelectedTier] = useState<string | null>(null);
   const [autoRenewal, setAutoRenewal] = useState(false);
