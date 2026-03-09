@@ -72,7 +72,9 @@ export default function TelegramApp() {
     grace_ms_remaining: subscriberResponse.grace_ms_remaining,
   } : null;
   
-  const { data: tiers } = useActiveTiers();
+  const [publicTenantId, setPublicTenantId] = useState<string | null>(null);
+
+  const { data: tiers } = useActiveTiers({ publicTenantId });
   const publicTiers = (tiers ?? []).filter((t) => {
     const name = (t?.name ?? '').trim().toLowerCase();
     const isAdminByName = name === 'добавлен админом';
