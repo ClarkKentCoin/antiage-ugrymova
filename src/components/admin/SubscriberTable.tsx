@@ -409,6 +409,12 @@ export function SubscriberTable({ subscribers }: SubscriberTableProps) {
         open={!!extendingSubscriber}
         onOpenChange={(open) => !open && setExtendingSubscriber(null)}
       />
+
+      <SendMessageDialog
+        subscriber={messagingSubscriber}
+        open={!!messagingSubscriber}
+        onOpenChange={(open) => !open && setMessagingSubscriber(null)}
+      />
     </>
   );
 }
