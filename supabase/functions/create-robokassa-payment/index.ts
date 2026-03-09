@@ -259,6 +259,33 @@ serve(async (req) => {
       );
     }
 
+    // Enforce purchase_once_only: check if subscriber already has a completed payment for this tier
+    if (tier.purchase_once_only) {
+      const { data: existingPayments, error: checkError } = await supabaseAdmin
+        .from("payment_history")
+        .select("id")
+        .eq("subscriber_id", resolvedSubscriberId)
+        .eq("tier_id", tier_id)
+        .eq("tenant_id", tenantId)
+        .eq("status", "completed")
+        .limit(1);
+
+      if (checkError) {
+        console.error("Error checking purchase_once_only:", checkError);
+      }
+
+      if (existingPayments && existingPayments.length > 0) {
+        console.log(`[create-robokassa-payment] Rejected: subscriber ${resolvedSubscriberId} already purchased once-only tier ${tier_id}`);
+        return new Response(
+          JSON.stringify({
+            error: "tier_already_purchased_once",
+            message: "Этот тариф можно купить только один раз. Пожалуйста, выберите другой тариф.",
+          }),
+          { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
+
     // Update auto_renewal based on payment type
     if (is_recurring) {
       // Log consent for recurring payments
