@@ -83,6 +83,8 @@ export default function TelegramApp() {
     const isAdminByShape = t?.price === 0 && (t?.duration_days ?? 0) >= 3650;
     return !(isAdminByName || isAdminByShape);
   });
+
+  
   const [paymentLink, setPaymentLink] = useState<string | null>(null);
   const { toast } = useToast();
 
@@ -140,6 +142,22 @@ export default function TelegramApp() {
   // Fetch payments via edge function with init_data validation
   const telegramUserIdForPayments = user?.id ?? testUserId;
   const { data: payments } = usePaymentHistoryForUser(telegramUserIdForPayments, initData, tenantSlug);
+
+  // Compute set of tier IDs already purchased (for purchase_once_only enforcement)
+  const purchasedOnceOnlyTierIds = useMemo(() => {
+    const completedPayments = payments || [];
+    const ids = new Set<string>();
+    for (const p of completedPayments) {
+      if (p.tier_id) ids.add(p.tier_id);
+    }
+    const onceOnlyIds = new Set<string>();
+    for (const t of publicTiers) {
+      if (t.purchase_once_only && ids.has(t.id)) {
+        onceOnlyIds.add(t.id);
+      }
+    }
+    return onceOnlyIds;
+  }, [payments, publicTiers]);
 
   const daysRemaining = activeSubscriber?.subscription_end
     ? differenceInDays(new Date(activeSubscriber.subscription_end), new Date())
@@ -288,6 +306,7 @@ export default function TelegramApp() {
           isCancelling={isCancelling}
           serverGraceDaysRemaining={null}
           onDebugTap={onDebugTap}
+          purchasedOnceOnlyTierIds={purchasedOnceOnlyTierIds}
         />
         {debugBadgeEnabled && <MiniAppBuildBadge serverDebug={null} />}
       </main>
@@ -346,6 +365,7 @@ export default function TelegramApp() {
         isCancelling={isCancelling}
         serverGraceDaysRemaining={activeDebugInfo?.grace_days_remaining ?? null}
         onDebugTap={onDebugTap}
+        purchasedOnceOnlyTierIds={purchasedOnceOnlyTierIds}
       />
       {debugBadgeEnabled && <MiniAppBuildBadge serverDebug={activeDebugInfo} />}
     </div>
@@ -360,6 +380,7 @@ function NewUserView({
   subscriber,
   onRefetch,
   onDebugTap,
+  purchasedOnceOnlyTierIds = new Set(),
 }: {
   channelInfo: { name: string; description: string } | null;
   tiers: any[];
@@ -367,6 +388,7 @@ function NewUserView({
   subscriber: any;
   onRefetch?: () => void;
   onDebugTap?: () => void;
+  purchasedOnceOnlyTierIds?: Set<string>;
 }) {
   const [selectedTier, setSelectedTier] = useState<string | null>(null);
   const [autoRenewal, setAutoRenewal] = useState(false);
@@ -375,7 +397,10 @@ function NewUserView({
   const { toast } = useToast();
 
   const handleSelectTier = (tierId: string) => {
+    if (purchasedOnceOnlyTierIds.has(tierId)) return;
     setSelectedTier(tierId);
+    // Force disable auto-renewal for purchase_once_only tiers
+    const tier = tiers.find((t: any) => t.id === tierId);
     setAutoRenewal(false);
     setConsentGiven(false);
   };
@@ -432,6 +457,9 @@ function NewUserView({
         ? (() => {
             try {
               const parsed = JSON.parse(err.context.body);
+              if (parsed?.error === 'tier_already_purchased_once' || parsed?.error === 'tier_no_recurring') {
+                return parsed.message;
+              }
               return parsed?.error || parsed?.details;
             } catch {
               return err.context.body;
@@ -476,34 +504,43 @@ function NewUserView({
         </h2>
 
         <div className="grid gap-3">
-          {tiers.map(tier => (
-            <Card 
-              key={tier.id} 
-              className={`cursor-pointer transition-all ${
-                selectedTier === tier.id 
-                  ? 'border-primary ring-2 ring-primary/30 bg-primary/5' 
-                  : 'hover:border-primary/50 hover:shadow-md'
-              }`}
-              onClick={() => handleSelectTier(tier.id)}
-            >
-              <CardContent className="flex items-center justify-between p-4">
-                <div className="flex items-center gap-3">
-                  <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
-                    selectedTier === tier.id ? 'border-primary bg-primary' : 'border-muted-foreground'
-                  }`}>
-                    {selectedTier === tier.id && (
-                      <CheckCircle className="h-4 w-4 text-primary-foreground" />
-                    )}
+          {tiers.map(tier => {
+            const isUsed = purchasedOnceOnlyTierIds.has(tier.id);
+            return (
+              <Card 
+                key={tier.id} 
+                className={`transition-all ${
+                  isUsed
+                    ? 'opacity-50 cursor-not-allowed'
+                    : selectedTier === tier.id 
+                      ? 'border-primary ring-2 ring-primary/30 bg-primary/5 cursor-pointer' 
+                      : 'hover:border-primary/50 hover:shadow-md cursor-pointer'
+                }`}
+                onClick={() => !isUsed && handleSelectTier(tier.id)}
+              >
+                <CardContent className="flex items-center justify-between p-4">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                      isUsed ? 'border-muted-foreground' : selectedTier === tier.id ? 'border-primary bg-primary' : 'border-muted-foreground'
+                    }`}>
+                      {selectedTier === tier.id && !isUsed && (
+                        <CheckCircle className="h-4 w-4 text-primary-foreground" />
+                      )}
+                    </div>
+                    <div>
+                      <p className="font-semibold text-lg">{tier.name}</p>
+                      {isUsed ? (
+                        <p className="text-sm text-destructive font-medium">Уже использован</p>
+                      ) : (
+                        <p className="text-sm text-muted-foreground">{formatDaysRu(tier.duration_days)}</p>
+                      )}
+                    </div>
                   </div>
-                  <div>
-                    <p className="font-semibold text-lg">{tier.name}</p>
-                    <p className="text-sm text-muted-foreground">{formatDaysRu(tier.duration_days)}</p>
-                  </div>
-                </div>
-                <p className="text-xl font-bold">{Number(tier.price).toLocaleString('ru-RU')}₽</p>
-              </CardContent>
-            </Card>
-          ))}
+                  <p className="text-xl font-bold">{Number(tier.price).toLocaleString('ru-RU')}₽</p>
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       </div>
 
@@ -516,7 +553,8 @@ function NewUserView({
               <p className="font-semibold text-lg">{selectedTierData?.name} — {Number(selectedTierData?.price).toLocaleString('ru-RU')}₽</p>
             </div>
 
-            {/* Auto-renewal checkbox */}
+            {/* Auto-renewal checkbox - hidden for purchase_once_only tiers */}
+            {!selectedTierData?.purchase_once_only && (
             <div className="flex items-start space-x-3 p-3 rounded-lg bg-muted/50">
               <Checkbox 
                 id="auto-renewal-new" 
@@ -532,6 +570,7 @@ function NewUserView({
                 </Label>
               </div>
             </div>
+            )}
 
             {/* Info and consent required if auto-renewal is enabled */}
             {autoRenewal && (
@@ -622,6 +661,7 @@ function GracePeriodView({
   onRefetch,
   graceDaysRemaining,
   onDebugTap,
+  purchasedOnceOnlyTierIds = new Set(),
 }: {
   channelInfo: { name: string; description: string } | null;
   tiers: any[];
@@ -630,6 +670,7 @@ function GracePeriodView({
   onRefetch?: () => void;
   graceDaysRemaining: number;
   onDebugTap?: () => void;
+  purchasedOnceOnlyTierIds?: Set<string>;
 }) {
   const [selectedTier, setSelectedTier] = useState<string | null>(null);
   const [autoRenewal, setAutoRenewal] = useState(false);
@@ -638,6 +679,7 @@ function GracePeriodView({
   const { toast } = useToast();
 
   const handleSelectTier = (tierId: string) => {
+    if (purchasedOnceOnlyTierIds.has(tierId)) return;
     setSelectedTier(tierId);
     setAutoRenewal(false);
     setConsentGiven(false);
@@ -674,7 +716,11 @@ function GracePeriodView({
       }
     } catch (error) {
       console.error('Error generating payment link:', error);
-      toast({ title: 'Ошибка', description: 'Не удалось создать ссылку для оплаты', variant: 'destructive' });
+      const err = error as any;
+      const detailsFromContext = typeof err?.context?.body === 'string'
+        ? (() => { try { const p = JSON.parse(err.context.body); return (p?.error === 'tier_already_purchased_once' || p?.error === 'tier_no_recurring') ? p.message : (p?.error || p?.details); } catch { return err.context.body; } })()
+        : null;
+      toast({ title: 'Ошибка', description: detailsFromContext || 'Не удалось создать ссылку для оплаты', variant: 'destructive' });
     } finally {
       setGeneratingLink(false);
     }
@@ -719,34 +765,43 @@ function GracePeriodView({
         </h2>
 
         <div className="grid gap-3">
-          {tiers.map(tier => (
-            <Card 
-              key={tier.id} 
-              className={`cursor-pointer transition-all ${
-                selectedTier === tier.id 
-                  ? 'border-primary ring-2 ring-primary/30 bg-primary/5' 
-                  : 'hover:border-primary/50 hover:shadow-md'
-              }`}
-              onClick={() => handleSelectTier(tier.id)}
-            >
-              <CardContent className="flex items-center justify-between p-4">
-                <div className="flex items-center gap-3">
-                  <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
-                    selectedTier === tier.id ? 'border-primary bg-primary' : 'border-muted-foreground'
-                  }`}>
-                    {selectedTier === tier.id && (
-                      <CheckCircle className="h-4 w-4 text-primary-foreground" />
-                    )}
+          {tiers.map(tier => {
+            const isUsed = purchasedOnceOnlyTierIds.has(tier.id);
+            return (
+              <Card 
+                key={tier.id} 
+                className={`transition-all ${
+                  isUsed
+                    ? 'opacity-50 cursor-not-allowed'
+                    : selectedTier === tier.id 
+                      ? 'border-primary ring-2 ring-primary/30 bg-primary/5 cursor-pointer' 
+                      : 'hover:border-primary/50 hover:shadow-md cursor-pointer'
+                }`}
+                onClick={() => !isUsed && handleSelectTier(tier.id)}
+              >
+                <CardContent className="flex items-center justify-between p-4">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                      isUsed ? 'border-muted-foreground' : selectedTier === tier.id ? 'border-primary bg-primary' : 'border-muted-foreground'
+                    }`}>
+                      {selectedTier === tier.id && !isUsed && (
+                        <CheckCircle className="h-4 w-4 text-primary-foreground" />
+                      )}
+                    </div>
+                    <div>
+                      <p className="font-semibold text-lg">{tier.name}</p>
+                      {isUsed ? (
+                        <p className="text-sm text-destructive font-medium">Уже использован</p>
+                      ) : (
+                        <p className="text-sm text-muted-foreground">{formatDaysRu(tier.duration_days)}</p>
+                      )}
+                    </div>
                   </div>
-                  <div>
-                    <p className="font-semibold text-lg">{tier.name}</p>
-                    <p className="text-sm text-muted-foreground">{formatDaysRu(tier.duration_days)}</p>
-                  </div>
-                </div>
-                <p className="text-xl font-bold">{Number(tier.price).toLocaleString('ru-RU')}₽</p>
-              </CardContent>
-            </Card>
-          ))}
+                  <p className="text-xl font-bold">{Number(tier.price).toLocaleString('ru-RU')}₽</p>
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       </div>
 
@@ -759,7 +814,8 @@ function GracePeriodView({
               <p className="font-semibold text-lg">{selectedTierData?.name} — {Number(selectedTierData?.price).toLocaleString('ru-RU')}₽</p>
             </div>
 
-            {/* Auto-renewal checkbox */}
+            {/* Auto-renewal checkbox - hidden for purchase_once_only tiers */}
+            {!selectedTierData?.purchase_once_only && (
             <div className="flex items-start space-x-3 p-3 rounded-lg bg-muted/50">
               <Checkbox 
                 id="auto-renewal-grace" 
@@ -775,6 +831,7 @@ function GracePeriodView({
                 </Label>
               </div>
             </div>
+            )}
 
             {/* Info and consent required if auto-renewal is enabled */}
             {autoRenewal && (
@@ -873,6 +930,7 @@ function SubscriptionContent({
   isCancelling = false,
   serverGraceDaysRemaining = null,
   onDebugTap,
+  purchasedOnceOnlyTierIds = new Set(),
 }: {
   subscriber: any; 
   isLoading: boolean;
@@ -890,6 +948,7 @@ function SubscriptionContent({
   isCancelling?: boolean;
   serverGraceDaysRemaining?: number | null;
   onDebugTap?: () => void;
+  purchasedOnceOnlyTierIds?: Set<string>;
 }) {
   const [selectedTier, setSelectedTier] = useState<string | null>(null);
   const [autoRenewal, setAutoRenewal] = useState(false);
@@ -929,7 +988,11 @@ function SubscriptionContent({
       }
     } catch (error) {
       console.error('Error generating payment link:', error);
-      toast({ title: 'Ошибка', description: 'Не удалось создать ссылку для оплаты', variant: 'destructive' });
+      const err = error as any;
+      const detailsFromContext = typeof err?.context?.body === 'string'
+        ? (() => { try { const p = JSON.parse(err.context.body); return (p?.error === 'tier_already_purchased_once' || p?.error === 'tier_no_recurring') ? p.message : (p?.error || p?.details); } catch { return err.context.body; } })()
+        : null;
+      toast({ title: 'Ошибка', description: detailsFromContext || 'Не удалось создать ссылку для оплаты', variant: 'destructive' });
     } finally {
       setGeneratingLink(false);
     }
@@ -1019,6 +1082,7 @@ function SubscriptionContent({
         onRefetch={onRefetch}
         graceDaysRemaining={graceDaysRemaining}
         onDebugTap={onDebugTap}
+        purchasedOnceOnlyTierIds={purchasedOnceOnlyTierIds}
       />
     );
   }
@@ -1033,6 +1097,7 @@ function SubscriptionContent({
         subscriber={subscriber}
         onRefetch={onRefetch}
         onDebugTap={onDebugTap}
+        purchasedOnceOnlyTierIds={purchasedOnceOnlyTierIds}
       />
     );
   }
@@ -1174,26 +1239,40 @@ function SubscriptionContent({
             Выберите тариф для продления подписки:
           </p>
           
-          {tiers.map(tier => (
-            <Card 
-              key={tier.id} 
-              className={`cursor-pointer transition-colors ${selectedTier === tier.id ? 'border-primary ring-2 ring-primary/20' : 'hover:border-primary/50'}`}
-              onClick={() => setSelectedTier(tier.id)}
-            >
-              <CardContent className="flex items-center justify-between p-4">
-                <div>
-                  <p className="font-medium">{tier.name}</p>
-                  <p className="text-sm text-muted-foreground">{formatDaysRu(tier.duration_days)}</p>
-                </div>
-                <p className="text-lg font-bold">{tier.price}₽</p>
-              </CardContent>
-            </Card>
-          ))}
+          {tiers.map(tier => {
+            const isUsed = purchasedOnceOnlyTierIds.has(tier.id);
+            return (
+              <Card 
+                key={tier.id} 
+                className={`transition-colors ${
+                  isUsed
+                    ? 'opacity-50 cursor-not-allowed'
+                    : selectedTier === tier.id 
+                      ? 'border-primary ring-2 ring-primary/20 cursor-pointer' 
+                      : 'hover:border-primary/50 cursor-pointer'
+                }`}
+                onClick={() => !isUsed && setSelectedTier(tier.id)}
+              >
+                <CardContent className="flex items-center justify-between p-4">
+                  <div>
+                    <p className="font-medium">{tier.name}</p>
+                    {isUsed ? (
+                      <p className="text-sm text-destructive font-medium">Уже использован</p>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">{formatDaysRu(tier.duration_days)}</p>
+                    )}
+                  </div>
+                  <p className="text-lg font-bold">{tier.price}₽</p>
+                </CardContent>
+              </Card>
+            );
+          })}
 
           {selectedTier && (
             <Card className="border-primary/20 bg-primary/5">
               <CardContent className="pt-4 space-y-4">
-                {/* Auto-renewal checkbox */}
+                {/* Auto-renewal checkbox - hidden for purchase_once_only tiers */}
+                {!tiers.find((t: any) => t.id === selectedTier)?.purchase_once_only && (
                 <div className="flex items-start space-x-3">
                   <Checkbox 
                     id="auto-renewal" 
@@ -1209,6 +1288,7 @@ function SubscriptionContent({
                     </Label>
                   </div>
                 </div>
+                )}
 
                 {/* Consent required if auto-renewal is enabled */}
                 {autoRenewal && (

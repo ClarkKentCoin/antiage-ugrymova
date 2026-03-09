@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Pencil, Trash2, ShieldCheck, ShieldOff } from 'lucide-react';
+import { Pencil, Trash2, ShieldCheck, ShieldOff, Ban } from 'lucide-react';
 import { SubscriptionTier, useDeleteTier, formatDuration } from '@/hooks/useSubscriptionTiers';
 import { EditTierDialog } from './EditTierDialog';
 
@@ -41,6 +41,11 @@ export function TierCard({ tier }: TierCardProps) {
             ) : (
               <Badge variant="outline" className="text-xs gap-1 text-muted-foreground">
                 <ShieldOff className="h-3 w-3" /> Без грейса
+              </Badge>
+            )}
+            {tier.purchase_once_only && (
+              <Badge variant="outline" className="text-xs gap-1 text-warning">
+                <Ban className="h-3 w-3" /> Только 1 раз
               </Badge>
             )}
           </div>

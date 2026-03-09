@@ -52,6 +52,7 @@ export function EditTierDialog({ tier, open, onOpenChange }: EditTierDialogProps
     is_active: true,
     grace_period_enabled: true,
     show_in_dashboard: false,
+    purchase_once_only: false,
   });
 
   useEffect(() => {
@@ -80,6 +81,7 @@ export function EditTierDialog({ tier, open, onOpenChange }: EditTierDialogProps
         is_active: tier.is_active,
         grace_period_enabled: tier.grace_period_enabled ?? true,
         show_in_dashboard: tier.show_in_dashboard ?? false,
+        purchase_once_only: tier.purchase_once_only ?? false,
       });
     }
   }, [tier]);
@@ -108,6 +110,7 @@ export function EditTierDialog({ tier, open, onOpenChange }: EditTierDialogProps
       is_active: formData.is_active,
       grace_period_enabled: formData.grace_period_enabled,
       show_in_dashboard: formData.show_in_dashboard,
+      purchase_once_only: formData.purchase_once_only,
       interval_unit: formData.interval_unit,
       interval_count: intervalCount,
       billing_timezone: formData.billing_timezone,
@@ -256,6 +259,18 @@ export function EditTierDialog({ tier, open, onOpenChange }: EditTierDialogProps
               id="show_in_dashboard"
               checked={formData.show_in_dashboard}
               onCheckedChange={(checked) => setFormData({ ...formData, show_in_dashboard: checked })}
+            />
+          </div>
+
+          <div className="flex items-center justify-between">
+            <div>
+              <Label htmlFor="purchase_once_only">Можно купить только 1 раз</Label>
+              <p className="text-xs text-muted-foreground">Если включено, один и тот же подписчик сможет купить этот тариф только один раз</p>
+            </div>
+            <Switch
+              id="purchase_once_only"
+              checked={formData.purchase_once_only}
+              onCheckedChange={(checked) => setFormData({ ...formData, purchase_once_only: checked })}
             />
           </div>
 
