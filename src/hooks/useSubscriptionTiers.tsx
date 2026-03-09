@@ -125,6 +125,10 @@ export function formatDuration(tier: SubscriptionTier): string {
   return `${count} ${getPlural(count, unit)}`;
 }
 
+/**
+ * Admin-only hook: reads tiers directly from DB with tenant scoping via RLS/auth.
+ * NOT used for public/Mini App flows.
+ */
 export function useSubscriptionTiers() {
   const { user, tenantId, tenantLoading } = useAuth();
 
@@ -157,29 +161,61 @@ export function useSubscriptionTiers() {
 // Admin-only tier name (hidden from MiniApp by default)
 const ADMIN_ONLY_TIER_NAME = 'добавлен админом';
 
+/**
+ * Public/Mini App active tiers hook.
+ * - For authenticated admin: reads directly from DB (unchanged).
+ * - For public/Mini App: fetches via get-public-tiers edge function (no anon DB access).
+ */
 export function useActiveTiers(options?: { includeAdminOnly?: boolean; publicTenantId?: string | null }) {
   const { user, tenantId, tenantLoading } = useAuth();
   const includeAdminOnly = options?.includeAdminOnly ?? false;
   const publicTenantId = options?.publicTenantId;
 
-  // For authenticated admin: use their tenant. For public/MiniApp: use explicit public tenant or default.
-  const effectiveTenantId = user && tenantId
+  const isAdmin = !!user && !!tenantId;
+
+  // For authenticated admin: use their tenant directly from DB
+  // For public/MiniApp: use edge function
+  const effectiveTenantId = isAdmin
     ? tenantId
     : (publicTenantId || DEFAULT_PUBLIC_TENANT_ID);
 
   return useQuery({
-    queryKey: ['subscription_tiers', 'active', effectiveTenantId, { includeAdminOnly }],
+    queryKey: ['subscription_tiers', 'active', effectiveTenantId, { includeAdminOnly, isAdmin }],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('subscription_tiers')
-        .select('*')
-        .eq('is_active', true)
-        .eq('tenant_id', effectiveTenantId)
-        .order('price', { ascending: true });
+      if (isAdmin) {
+        // Admin path: direct DB read (unchanged)
+        const { data, error } = await supabase
+          .from('subscription_tiers')
+          .select('*')
+          .eq('is_active', true)
+          .eq('tenant_id', tenantId)
+          .order('price', { ascending: true });
 
-      if (error) throw error;
+        if (error) throw error;
 
-      let tiers = data as SubscriptionTier[];
+        let tiers = data as SubscriptionTier[];
+        if (!includeAdminOnly) {
+          tiers = tiers.filter(t => t.name.toLowerCase() !== ADMIN_ONLY_TIER_NAME);
+        }
+        return tiers;
+      }
+
+      // Public/Mini App path: use edge function instead of anon DB access
+      const { data, error } = await supabase.functions.invoke('get-public-tiers', {
+        body: { tenant_slug: publicTenantId ? undefined : undefined },
+      });
+
+      if (error) {
+        console.error('[useActiveTiers] Edge function error:', error);
+        throw error;
+      }
+
+      if (data?.error) {
+        console.error('[useActiveTiers] API error:', data.error);
+        throw new Error(data.error);
+      }
+
+      let tiers = (data?.tiers ?? []) as SubscriptionTier[];
 
       // Filter out admin-only tiers for MiniApp
       if (!includeAdminOnly) {
@@ -188,8 +224,7 @@ export function useActiveTiers(options?: { includeAdminOnly?: boolean; publicTen
 
       return tiers;
     },
-    // Don't query until tenant is loaded for authenticated users
-    enabled: user ? (!tenantLoading && !!tenantId) : !!effectiveTenantId,
+    enabled: isAdmin ? (!tenantLoading && !!tenantId) : true,
   });
 }
 
