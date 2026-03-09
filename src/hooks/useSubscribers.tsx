@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/hooks/useAuth';
 
 export interface Subscriber {
   id: string;
@@ -47,12 +48,12 @@ export interface CreateSubscriberInput {
 }
 
 export function useSubscribers() {
+  const { tenantId, tenantLoading } = useAuth();
+
   return useQuery({
-    queryKey: ['subscribers'],
+    queryKey: ['subscribers', tenantId],
     queryFn: async () => {
-      // Use INNER join with payment_history to only get subscribers
-      // who have at least one completed payment (manual or robokassa)
-      const { data, error } = await supabase
+      let query = supabase
         .from('subscribers')
         .select(`
           *,
@@ -69,9 +70,16 @@ export function useSubscribers() {
         .eq('payment_history.status', 'completed')
         .order('created_at', { ascending: false });
 
+      if (tenantId) {
+        query = query.eq('tenant_id', tenantId);
+      }
+
+      const { data, error } = await query;
+
       if (error) throw error;
       return data as Subscriber[];
     },
+    enabled: !tenantLoading && !!tenantId,
   });
 }
 
@@ -178,13 +186,19 @@ export function useSubscriber(telegramUserId: number | null, initData?: string |
 export function useCreateSubscriber() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { tenantId } = useAuth();
 
   return useMutation({
     mutationFn: async (input: CreateSubscriberInput) => {
-      // Check if subscriber already exists
+      if (!tenantId) {
+        throw new Error('Контекст тенанта не найден. Перезагрузите страницу.');
+      }
+
+      // Check if subscriber already exists within this tenant
       const { data: existingSubscriber } = await supabase
         .from('subscribers')
         .select('id, subscription_start')
+        .eq('tenant_id', tenantId)
         .eq('telegram_user_id', input.telegram_user_id)
         .maybeSingle();
 
@@ -218,7 +232,7 @@ export function useCreateSubscriber() {
         subscriber = updatedSubscriber;
         wasUpdated = true;
       } else {
-        // Insert new subscriber
+        // Insert new subscriber with explicit tenant_id
         const { data: newSubscriber, error: insertError } = await supabase
           .from('subscribers')
           .insert({
@@ -230,6 +244,7 @@ export function useCreateSubscriber() {
             subscription_start: input.subscription_start,
             subscription_end: input.subscription_end,
             status: input.status || 'active',
+            tenant_id: tenantId,
           })
           .select()
           .single();
@@ -248,6 +263,7 @@ export function useCreateSubscriber() {
             amount: input.amount,
             payment_method: 'manual',
             payment_note: input.payment_note,
+            tenant_id: tenantId,
           });
 
         if (paymentError) throw paymentError;
@@ -359,7 +375,6 @@ export function useUpdateSubscriber() {
 
           if (fnError) {
             console.error('Status change edge function error:', fnError);
-            // Don't throw - the update succeeded, just log the notification failure
           }
         } catch (e) {
           console.error('Failed to trigger status change actions:', e);

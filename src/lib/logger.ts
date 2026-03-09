@@ -17,6 +17,7 @@ export interface LogEventParams {
   telegram_user_id?: number | null;
   tier_id?: string | null;
   request_id?: string | null;
+  tenant_id?: string | null;
   message?: string | null;
   payload?: Record<string, any>;
 }
@@ -33,6 +34,7 @@ export async function logEvent({
   telegram_user_id = null,
   tier_id = null,
   request_id = null,
+  tenant_id = null,
   message = null,
   payload = {},
 }: LogEventParams): Promise<void> {
@@ -65,6 +67,7 @@ export async function logEvent({
         request_id,
         message,
         payload,
+        ...(tenant_id ? { tenant_id } : {}),
       });
 
     if (error) {

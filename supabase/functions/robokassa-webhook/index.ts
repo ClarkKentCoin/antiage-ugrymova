@@ -415,6 +415,7 @@ serve(async (req) => {
 
         await sendAdminNotification({
           supabaseAdmin,
+          tenantId,
           eventType: "PAYMENT_SUCCESS",
           subscriber: {
             id: fullSubscriber?.id ?? shpSubscriberId,
