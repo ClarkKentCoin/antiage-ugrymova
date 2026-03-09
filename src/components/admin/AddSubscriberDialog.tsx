@@ -34,7 +34,7 @@ interface AddSubscriberDialogProps {
 
 export function AddSubscriberDialog({ open, onOpenChange }: AddSubscriberDialogProps) {
   const { toast } = useToast();
-  const { tenantId } = useAuth();
+  const { tenantId, tenantSlug } = useAuth();
   const { data: tiers } = useSubscriptionTiers();
   const createSubscriber = useCreateSubscriber();
 
