@@ -155,6 +155,10 @@ export function useCreatePayment() {
 
   return useMutation({
     mutationFn: async (input: CreatePaymentInput) => {
+      if (!tenantId) {
+        throw new Error('Контекст тенанта не найден. Перезагрузите страницу.');
+      }
+
       const { data, error } = await supabase
         .from('payment_history')
         .insert({
