@@ -37,6 +37,7 @@ export interface AdminNotificationSubscriber {
 
 export interface SendAdminNotificationOptions {
   supabaseAdmin: SupabaseClient;
+  tenantId: string;
   eventType: AdminNotificationEventType;
   subscriber: AdminNotificationSubscriber;
   plan?: string | null;
@@ -167,16 +168,21 @@ async function logToSystem(
   level: "info" | "warn" | "error",
   eventType: string,
   message: string,
-  payload: Record<string, unknown>
+  payload: Record<string, unknown>,
+  tenantId?: string
 ): Promise<void> {
   try {
-    await supabaseAdmin.from("system_logs").insert({
+    const insertData: Record<string, unknown> = {
       level,
       event_type: eventType,
       source: "admin_notifications",
       message,
       payload,
-    });
+    };
+    if (tenantId) {
+      insertData.tenant_id = tenantId;
+    }
+    await supabaseAdmin.from("system_logs").insert(insertData);
   } catch {
     // Silently ignore logging errors
   }
@@ -191,21 +197,23 @@ async function logToSystem(
 export async function sendAdminNotification(
   opts: SendAdminNotificationOptions
 ): Promise<void> {
-  const { supabaseAdmin, eventType, subscriber, source } = opts;
+  const { supabaseAdmin, tenantId, eventType, subscriber, source } = opts;
 
   try {
-    // 1. Fetch admin settings
+    // 1. Fetch admin settings for this tenant
     const { data: settings, error: settingsError } = await supabaseAdmin
       .from("admin_settings")
       .select(
         "telegram_bot_token, telegram_admin_notifications_enabled, telegram_admin_notifications_channel_id"
       )
+      .eq("tenant_id", tenantId)
+      .order("created_at", { ascending: false })
       .limit(1)
       .single();
 
     if (settingsError || !settings) {
       await logToSystem(supabaseAdmin, "warn", "telegram.admin_notification_failed", 
-        "Failed to fetch admin settings", { error: settingsError?.message, source });
+        "Failed to fetch admin settings", { error: settingsError?.message, source, tenantId }, tenantId);
       return;
     }
 
@@ -216,7 +224,7 @@ export async function sendAdminNotification(
 
     if (!settings.telegram_bot_token || !settings.telegram_admin_notifications_channel_id) {
       await logToSystem(supabaseAdmin, "warn", "telegram.admin_notification_failed",
-        "Missing bot token or channel ID", { source });
+        "Missing bot token or channel ID", { source, tenantId }, tenantId);
       return;
     }
 
@@ -252,7 +260,7 @@ export async function sendAdminNotification(
       }
       // Other error - log but continue (non-critical)
       await logToSystem(supabaseAdmin, "warn", "telegram.admin_notification_dedupe_error",
-        "Deduplication insert failed", { error: dedupeError.message, eventType, source });
+        "Deduplication insert failed", { error: dedupeError.message, eventType, source }, tenantId);
       // Continue anyway - better to send duplicate than miss notification
     }
 
@@ -280,7 +288,7 @@ export async function sendAdminNotification(
           source,
           subscriberId: subscriber.id,
           telegramError: telegramResult,
-        });
+        }, tenantId);
       return;
     }
 
@@ -291,7 +299,7 @@ export async function sendAdminNotification(
         source,
         subscriberId: subscriber.id,
         channelId,
-      });
+      }, tenantId);
 
   } catch (error) {
     // Catch-all: never throw, just log
@@ -302,7 +310,7 @@ export async function sendAdminNotification(
           source,
           subscriberId: subscriber?.id,
           error: error instanceof Error ? error.message : String(error),
-        });
+        }, tenantId);
     } catch {
       // Even logging failed - silently ignore
     }

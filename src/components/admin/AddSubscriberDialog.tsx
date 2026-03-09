@@ -20,6 +20,7 @@ import {
 } from '@/components/ui/select';
 import { useSubscriptionTiers, formatDuration } from '@/hooks/useSubscriptionTiers';
 import { useCreateSubscriber } from '@/hooks/useSubscribers';
+import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Copy, ExternalLink } from 'lucide-react';
@@ -33,6 +34,7 @@ interface AddSubscriberDialogProps {
 
 export function AddSubscriberDialog({ open, onOpenChange }: AddSubscriberDialogProps) {
   const { toast } = useToast();
+  const { tenantId } = useAuth();
   const { data: tiers } = useSubscriptionTiers();
   const createSubscriber = useCreateSubscriber();
 
@@ -71,9 +73,12 @@ export function AddSubscriberDialog({ open, onOpenChange }: AddSubscriberDialogP
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
+    if (!tenantId) {
+      toast({ title: 'Ошибка: контекст тенанта не найден', variant: 'destructive' });
+      return;
+    }
+
     if (formData.payment_method === 'robokassa') {
-      // For Robokassa, we just create the subscriber with inactive status
-      // Payment will activate them
       createSubscriber.mutate({
         telegram_user_id: parseInt(formData.telegram_user_id),
         telegram_username: formData.telegram_username || undefined,
@@ -83,7 +88,6 @@ export function AddSubscriberDialog({ open, onOpenChange }: AddSubscriberDialogP
         status: 'inactive',
       }, {
         onSuccess: (data) => {
-          // Generate payment link after creating subscriber
           generatePaymentLink(data.id);
         },
       });
@@ -115,6 +119,7 @@ export function AddSubscriberDialog({ open, onOpenChange }: AddSubscriberDialogP
           telegram_user_id: parseInt(formData.telegram_user_id),
           tier_id: formData.tier_id,
           request_id: requestId,
+          tenant_id: tenantId,
           message: 'Admin added subscriber manually',
           payload: {
             subscription_start: nowISO,
@@ -133,6 +138,7 @@ export function AddSubscriberDialog({ open, onOpenChange }: AddSubscriberDialogP
           source: 'admin_ui',
           telegram_user_id: parseInt(formData.telegram_user_id),
           request_id: requestId,
+          tenant_id: tenantId,
           message: 'Failed to add subscriber',
           payload: { error: error.message },
         });
@@ -151,25 +157,30 @@ export function AddSubscriberDialog({ open, onOpenChange }: AddSubscriberDialogP
       return;
     }
 
+    if (!tenantId) {
+      toast({ title: 'Ошибка: контекст тенанта не найден', variant: 'destructive' });
+      return;
+    }
+
     setIsGeneratingLink(true);
     setPaymentUrl(null);
 
     try {
-      // If we don't have a subscriber ID, we need to create one first or use an existing one
       let subId = subscriberId;
       
       if (!subId) {
-        // Check if subscriber exists
+        // Check if subscriber exists within this tenant
         const { data: existingSubscriber } = await supabase
           .from('subscribers')
           .select('id')
+          .eq('tenant_id', tenantId)
           .eq('telegram_user_id', parseInt(formData.telegram_user_id))
           .maybeSingle();
 
         if (existingSubscriber) {
           subId = existingSubscriber.id;
         } else {
-          // Create a new subscriber with inactive status
+          // Create a new subscriber with inactive status, explicit tenant_id
           const { data: newSubscriber, error } = await supabase
             .from('subscribers')
             .insert({
@@ -181,6 +192,7 @@ export function AddSubscriberDialog({ open, onOpenChange }: AddSubscriberDialogP
               status: 'inactive',
               auto_renewal: formData.auto_renewal,
               subscriber_payment_method: formData.auto_renewal ? 'robokassa_recurring' : 'robokassa_single',
+              tenant_id: tenantId,
             })
             .select()
             .single();
@@ -299,7 +311,6 @@ export function AddSubscriberDialog({ open, onOpenChange }: AddSubscriberDialogP
                   (newTier.name || '').trim().toLowerCase() === 'добавлен админом' ||
                   (newTier.price === 0 && (newTier.duration_days ?? 0) >= 3650)
                 );
-                // Force manual payment for admin-only tier
                 setFormData({ 
                   ...formData, 
                   tier_id: value,

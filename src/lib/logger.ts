@@ -17,6 +17,7 @@ export interface LogEventParams {
   telegram_user_id?: number | null;
   tier_id?: string | null;
   request_id?: string | null;
+  tenant_id?: string | null;
   message?: string | null;
   payload?: Record<string, any>;
 }
@@ -33,6 +34,7 @@ export async function logEvent({
   telegram_user_id = null,
   tier_id = null,
   request_id = null,
+  tenant_id = null,
   message = null,
   payload = {},
 }: LogEventParams): Promise<void> {
@@ -53,19 +55,25 @@ export async function logEvent({
       }
     }
 
+    const insertData: Record<string, unknown> = {
+      level,
+      event_type,
+      source,
+      subscriber_id,
+      telegram_user_id,
+      tier_id,
+      request_id,
+      message,
+      payload,
+    };
+
+    if (tenant_id) {
+      insertData.tenant_id = tenant_id;
+    }
+
     const { error } = await supabase
       .from('system_logs')
-      .insert({
-        level,
-        event_type,
-        source,
-        subscriber_id,
-        telegram_user_id,
-        tier_id,
-        request_id,
-        message,
-        payload,
-      });
+      .insert(insertData);
 
     if (error) {
       console.warn('[logger] Failed to log event:', error.message);

@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/hooks/useAuth';
 
 export type PaymentStatus = 'pending' | 'completed' | 'failed';
 
@@ -74,8 +75,10 @@ export function usePaymentHistoryForUser(
 // Hook for admin panel - direct DB query (requires admin RLS)
 export function usePaymentHistory(options: UsePaymentHistoryOptions = {}) {
   const { subscriberId, status } = options;
+  const { tenantId, tenantLoading } = useAuth();
+
   return useQuery({
-    queryKey: ['payment_history', subscriberId, status],
+    queryKey: ['payment_history', tenantId, subscriberId, status],
     queryFn: async () => {
       let query = supabase
         .from('payment_history')
@@ -93,6 +96,10 @@ export function usePaymentHistory(options: UsePaymentHistoryOptions = {}) {
         `)
         .order('created_at', { ascending: false });
       
+      if (tenantId) {
+        query = query.eq('tenant_id', tenantId);
+      }
+
       if (status) {
         query = query.eq('status', status);
       }
@@ -106,16 +113,25 @@ export function usePaymentHistory(options: UsePaymentHistoryOptions = {}) {
       if (error) throw error;
       return data as PaymentRecord[];
     },
+    enabled: !tenantLoading && !!tenantId,
   });
 }
 
 export function usePaymentCounts() {
+  const { tenantId, tenantLoading } = useAuth();
+
   return useQuery({
-    queryKey: ['payment_counts'],
+    queryKey: ['payment_counts', tenantId],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from('payment_history')
         .select('status');
+
+      if (tenantId) {
+        query = query.eq('tenant_id', tenantId);
+      }
+
+      const { data, error } = await query;
       
       if (error) throw error;
       
@@ -128,12 +144,14 @@ export function usePaymentCounts() {
       
       return counts;
     },
+    enabled: !tenantLoading && !!tenantId,
   });
 }
 
 export function useCreatePayment() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { tenantId } = useAuth();
 
   return useMutation({
     mutationFn: async (input: CreatePaymentInput) => {
@@ -142,6 +160,7 @@ export function useCreatePayment() {
         .insert({
           ...input,
           payment_method: input.payment_method || 'manual',
+          tenant_id: tenantId,
         })
         .select()
         .single();
