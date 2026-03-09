@@ -634,10 +634,16 @@ function NewUserView({
               </>
             )}
 
+            {isSelectedTierUsed && (
+              <p className="text-sm text-center text-muted-foreground">
+                Тариф «{selectedTierData?.name}» уже был использован. Пожалуйста, выберите другой тариф.
+              </p>
+            )}
+
             <Button 
               className="w-full" 
               size="lg"
-              disabled={generatingLink || (autoRenewal && !consentGiven)}
+              disabled={generatingLink || isSelectedTierUsed || (autoRenewal && !consentGiven)}
               onClick={handlePayment}
             >
               {generatingLink ? (
