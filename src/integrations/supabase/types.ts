@@ -266,6 +266,66 @@ export type Database = {
           },
         ]
       }
+      subscriber_messages: {
+        Row: {
+          created_at: string
+          direction: string
+          error_message: string | null
+          id: string
+          message_text: string
+          parse_mode: string | null
+          sent_by_user_id: string
+          status: string
+          subscriber_id: string
+          telegram_message_id: number | null
+          telegram_user_id: number
+          tenant_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          direction?: string
+          error_message?: string | null
+          id?: string
+          message_text: string
+          parse_mode?: string | null
+          sent_by_user_id: string
+          status?: string
+          subscriber_id: string
+          telegram_message_id?: number | null
+          telegram_user_id: number
+          tenant_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          direction?: string
+          error_message?: string | null
+          id?: string
+          message_text?: string
+          parse_mode?: string | null
+          sent_by_user_id?: string
+          status?: string
+          subscriber_id?: string
+          telegram_message_id?: number | null
+          telegram_user_id?: number
+          tenant_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subscriber_messages_subscriber_id_fkey"
+            columns: ["subscriber_id"]
+            isOneToOne: false
+            referencedRelation: "subscribers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subscriber_messages_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       subscribers: {
         Row: {
           auto_renewal: boolean | null
