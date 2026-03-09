@@ -43,8 +43,29 @@ serve(async (req) => {
       );
     }
 
-    // Resolve tenant ID from slug (or use default)
-    const tenantId = await resolveTenantId(supabaseAdmin, tenant_slug);
+    // Resolve tenant:
+    // - Explicit slug provided → resolve, reject if invalid
+    // - No slug + admin auth → resolve from auth (admin's own tenant)
+    // - No slug + no auth → default production tenant
+    let tenantId: string;
+    if (tenant_slug) {
+      const resolved = await resolveTenantIdFromSlug(supabaseAdmin, tenant_slug);
+      if (resolved.source === "default") {
+        return new Response(
+          JSON.stringify({ error: "invalid_tenant" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+      tenantId = resolved.tenantId;
+    } else {
+      // For admin requests, resolve from auth header; for MiniApp without slug, use default
+      const resolved = await resolveTenantFromRequest({
+        req,
+        supabaseAdmin,
+        body: {}, // no slug to resolve from body
+      });
+      tenantId = resolved.tenantId;
+    }
     console.log(`[create-robokassa-payment] Resolved tenant_id: ${tenantId} from slug: ${tenant_slug || 'null'}`);
 
     // Check if this is a request from Telegram mini app (has telegram_user_id) or from admin panel
