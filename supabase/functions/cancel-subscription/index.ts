@@ -380,6 +380,7 @@ serve(async (req) => {
       // Send admin notification
       await sendAdminNotification({
         supabaseAdmin,
+        tenantId,
         eventType: "SUBSCRIPTION_CANCELLED",
         subscriber: {
           id: subscriber.id,
