@@ -64,6 +64,9 @@ export default function AdminSubscribers() {
     if (statusFilter !== 'all') {
       list = list.filter(sub => sub.status === statusFilter);
     }
+    if (tierFilter !== 'all') {
+      list = list.filter(sub => sub.tier_id === tierFilter);
+    }
     if (search) {
       const q = search.toLowerCase();
       list = list.filter(sub =>
@@ -76,7 +79,7 @@ export default function AdminSubscribers() {
       );
     }
     return list;
-  }, [subscribers, statusFilter, search]);
+  }, [subscribers, statusFilter, tierFilter, search]);
 
   if (isLoading) {
     return (
