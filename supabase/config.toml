@@ -41,3 +41,6 @@ verify_jwt = false
 
 [functions.notify-expiring-single-subscriptions]
 verify_jwt = false
+
+[functions.send-custom-telegram-message]
+verify_jwt = false

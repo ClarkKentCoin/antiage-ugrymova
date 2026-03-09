@@ -17,11 +17,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger 
 } from '@/components/ui/dropdown-menu';
-import { MoreHorizontal, Pencil, Trash2, Calendar, Send, UserMinus, CheckCircle, Loader2, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { MoreHorizontal, Pencil, Trash2, Calendar, Send, UserMinus, CheckCircle, Loader2, ArrowUpDown, ArrowUp, ArrowDown, MessageSquare } from 'lucide-react';
 import { Subscriber, useDeleteSubscriber } from '@/hooks/useSubscribers';
 import { useSendInvite, useKickUser, useCheckMembership } from '@/hooks/useTelegramChannel';
 import { EditSubscriberDialog } from './EditSubscriberDialog';
 import { ExtendSubscriptionDialog } from './ExtendSubscriptionDialog';
+import { SendMessageDialog } from './SendMessageDialog';
 
 type SortField = 'user' | 'created_at' | 'plan' | 'status' | 'subscription_end' | 'subscription_start';
 type SortDirection = 'asc' | 'desc';
@@ -41,6 +42,7 @@ const statusVariants: Record<string, string> = {
 export function SubscriberTable({ subscribers }: SubscriberTableProps) {
   const [editingSubscriber, setEditingSubscriber] = useState<Subscriber | null>(null);
   const [extendingSubscriber, setExtendingSubscriber] = useState<Subscriber | null>(null);
+  const [messagingSubscriber, setMessagingSubscriber] = useState<Subscriber | null>(null);
   const [sortField, setSortField] = useState<SortField>('subscription_start');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const deleteSubscriber = useDeleteSubscriber();
@@ -364,6 +366,10 @@ export function SubscriberTable({ subscribers }: SubscriberTableProps) {
                             )}
                             Удалить из канала
                           </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => setMessagingSubscriber(subscriber)}>
+                            <MessageSquare className="mr-2 h-4 w-4" />
+                            Отправить сообщение
+                          </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem onClick={() => setEditingSubscriber(subscriber)}>
                             <Pencil className="mr-2 h-4 w-4" />
@@ -402,6 +408,12 @@ export function SubscriberTable({ subscribers }: SubscriberTableProps) {
         subscriber={extendingSubscriber}
         open={!!extendingSubscriber}
         onOpenChange={(open) => !open && setExtendingSubscriber(null)}
+      />
+
+      <SendMessageDialog
+        subscriber={messagingSubscriber}
+        open={!!messagingSubscriber}
+        onOpenChange={(open) => !open && setMessagingSubscriber(null)}
       />
     </>
   );
