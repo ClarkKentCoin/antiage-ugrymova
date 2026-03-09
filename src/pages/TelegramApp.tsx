@@ -1235,26 +1235,40 @@ function SubscriptionContent({
             Выберите тариф для продления подписки:
           </p>
           
-          {tiers.map(tier => (
-            <Card 
-              key={tier.id} 
-              className={`cursor-pointer transition-colors ${selectedTier === tier.id ? 'border-primary ring-2 ring-primary/20' : 'hover:border-primary/50'}`}
-              onClick={() => setSelectedTier(tier.id)}
-            >
-              <CardContent className="flex items-center justify-between p-4">
-                <div>
-                  <p className="font-medium">{tier.name}</p>
-                  <p className="text-sm text-muted-foreground">{formatDaysRu(tier.duration_days)}</p>
-                </div>
-                <p className="text-lg font-bold">{tier.price}₽</p>
-              </CardContent>
-            </Card>
-          ))}
+          {tiers.map(tier => {
+            const isUsed = purchasedOnceOnlyTierIds.has(tier.id);
+            return (
+              <Card 
+                key={tier.id} 
+                className={`transition-colors ${
+                  isUsed
+                    ? 'opacity-50 cursor-not-allowed'
+                    : selectedTier === tier.id 
+                      ? 'border-primary ring-2 ring-primary/20 cursor-pointer' 
+                      : 'hover:border-primary/50 cursor-pointer'
+                }`}
+                onClick={() => !isUsed && setSelectedTier(tier.id)}
+              >
+                <CardContent className="flex items-center justify-between p-4">
+                  <div>
+                    <p className="font-medium">{tier.name}</p>
+                    {isUsed ? (
+                      <p className="text-sm text-destructive font-medium">Уже использован</p>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">{formatDaysRu(tier.duration_days)}</p>
+                    )}
+                  </div>
+                  <p className="text-lg font-bold">{tier.price}₽</p>
+                </CardContent>
+              </Card>
+            );
+          })}
 
           {selectedTier && (
             <Card className="border-primary/20 bg-primary/5">
               <CardContent className="pt-4 space-y-4">
-                {/* Auto-renewal checkbox */}
+                {/* Auto-renewal checkbox - hidden for purchase_once_only tiers */}
+                {!tiers.find((t: any) => t.id === selectedTier)?.purchase_once_only && (
                 <div className="flex items-start space-x-3">
                   <Checkbox 
                     id="auto-renewal" 
@@ -1270,6 +1284,7 @@ function SubscriptionContent({
                     </Label>
                   </div>
                 </div>
+                )}
 
                 {/* Consent required if auto-renewal is enabled */}
                 {autoRenewal && (
