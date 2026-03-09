@@ -197,23 +197,29 @@ async function logToSystem(
 export async function sendAdminNotification(
   opts: SendAdminNotificationOptions
 ): Promise<void> {
-  const { supabaseAdmin, tenantId, eventType, subscriber, source } = opts;
+  const { supabaseAdmin, eventType, subscriber, source } = opts;
+  const tenantId = opts.tenantId ?? null;
 
   try {
-    // 1. Fetch admin settings for this tenant
-    const { data: settings, error: settingsError } = await supabaseAdmin
+    // 1. Fetch admin settings - tenant-scoped if tenantId available, fallback to global
+    let settingsQuery = supabaseAdmin
       .from("admin_settings")
       .select(
         "telegram_bot_token, telegram_admin_notifications_enabled, telegram_admin_notifications_channel_id"
-      )
-      .eq("tenant_id", tenantId)
+      );
+
+    if (tenantId) {
+      settingsQuery = settingsQuery.eq("tenant_id", tenantId);
+    }
+
+    const { data: settings, error: settingsError } = await settingsQuery
       .order("created_at", { ascending: false })
       .limit(1)
       .single();
 
     if (settingsError || !settings) {
       await logToSystem(supabaseAdmin, "warn", "telegram.admin_notification_failed", 
-        "Failed to fetch admin settings", { error: settingsError?.message, source, tenantId }, tenantId);
+        "Failed to fetch admin settings", { error: settingsError?.message, source, tenantId }, tenantId ?? undefined);
       return;
     }
 
