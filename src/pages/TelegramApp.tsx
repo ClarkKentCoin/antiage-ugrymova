@@ -18,11 +18,7 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { formatDaysRu } from '@/lib/textFormatters';
 import { MiniAppBuildBadge } from '@/components/telegram/MiniAppBuildBadge';
-
-// Extract tenant slug from URL for multi-tenant MiniApp support
-const getTenantSlug = (): string | null => {
-  return new URLSearchParams(window.location.search).get('t');
-};
+import { getPublicTenantSlug } from '@/lib/publicTenant';
 import {
   AlertDialog,
   AlertDialogAction,
