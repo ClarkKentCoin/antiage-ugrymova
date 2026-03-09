@@ -84,22 +84,7 @@ export default function TelegramApp() {
     return !(isAdminByName || isAdminByShape);
   });
 
-  // Compute set of tier IDs already purchased (for purchase_once_only enforcement)
-  const purchasedOnceOnlyTierIds = useMemo(() => {
-    const completedPayments = payments || [];
-    const ids = new Set<string>();
-    for (const p of completedPayments) {
-      if (p.tier_id) ids.add(p.tier_id);
-    }
-    // Only keep IDs for tiers that have purchase_once_only = true
-    const onceOnlyIds = new Set<string>();
-    for (const t of publicTiers) {
-      if (t.purchase_once_only && ids.has(t.id)) {
-        onceOnlyIds.add(t.id);
-      }
-    }
-    return onceOnlyIds;
-  }, [payments, publicTiers]);
+  
   const [paymentLink, setPaymentLink] = useState<string | null>(null);
   const { toast } = useToast();
 
