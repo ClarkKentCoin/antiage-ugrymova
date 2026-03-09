@@ -716,7 +716,11 @@ function GracePeriodView({
       }
     } catch (error) {
       console.error('Error generating payment link:', error);
-      toast({ title: 'Ошибка', description: 'Не удалось создать ссылку для оплаты', variant: 'destructive' });
+      const err = error as any;
+      const detailsFromContext = typeof err?.context?.body === 'string'
+        ? (() => { try { const p = JSON.parse(err.context.body); return (p?.error === 'tier_already_purchased_once' || p?.error === 'tier_no_recurring') ? p.message : (p?.error || p?.details); } catch { return err.context.body; } })()
+        : null;
+      toast({ title: 'Ошибка', description: detailsFromContext || 'Не удалось создать ссылку для оплаты', variant: 'destructive' });
     } finally {
       setGeneratingLink(false);
     }
