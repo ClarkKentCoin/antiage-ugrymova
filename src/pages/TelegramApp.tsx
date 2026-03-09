@@ -457,6 +457,9 @@ function NewUserView({
         ? (() => {
             try {
               const parsed = JSON.parse(err.context.body);
+              if (parsed?.error === 'tier_already_purchased_once' || parsed?.error === 'tier_no_recurring') {
+                return parsed.message;
+              }
               return parsed?.error || parsed?.details;
             } catch {
               return err.context.body;
