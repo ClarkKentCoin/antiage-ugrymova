@@ -219,7 +219,7 @@ serve(async (req) => {
     // Get tier information for this tenant
     const { data: tier, error: tierError } = await supabaseAdmin
       .from("subscription_tiers")
-      .select("name, price")
+      .select("name, price, purchase_once_only")
       .eq("id", tier_id)
       .eq("tenant_id", tenantId)
       .single();
@@ -229,6 +229,18 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({ error: "Subscription tier not found" }),
         { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Block auto-renewal for purchase_once_only tiers
+    if (tier.purchase_once_only && is_recurring) {
+      console.log(`[create-robokassa-payment] Rejected is_recurring=true for purchase_once_only tier ${tier_id}`);
+      return new Response(
+        JSON.stringify({
+          error: "tier_no_recurring",
+          message: "Автопродление недоступно для этого тарифа.",
+        }),
+        { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
