@@ -1,13 +1,11 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { resolveTenantIdFromSlug, resolveTenantFromRequest, DEFAULT_TENANT_ID } from "../_shared/tenant.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
-
-// Default tenant ID for backward compatibility (production main tenant)
-const DEFAULT_TENANT_ID = Deno.env.get("PUBLIC_TENANT_ID") ?? "6749bded-94d6-4793-9f46-09724da30ab6";
 
 // Robokassa signatures: SignatureValue uses SHA256 (Password#1) when configured in merchant settings
 async function robokassaSignature(message: string): Promise<string> {
