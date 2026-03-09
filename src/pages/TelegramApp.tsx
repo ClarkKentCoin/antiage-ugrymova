@@ -397,7 +397,10 @@ function NewUserView({
   const { toast } = useToast();
 
   const handleSelectTier = (tierId: string) => {
+    if (purchasedOnceOnlyTierIds.has(tierId)) return;
     setSelectedTier(tierId);
+    // Force disable auto-renewal for purchase_once_only tiers
+    const tier = tiers.find((t: any) => t.id === tierId);
     setAutoRenewal(false);
     setConsentGiven(false);
   };
