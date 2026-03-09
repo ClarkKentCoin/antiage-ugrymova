@@ -37,7 +37,7 @@ export interface AdminNotificationSubscriber {
 
 export interface SendAdminNotificationOptions {
   supabaseAdmin: SupabaseClient;
-  tenantId: string;
+  tenantId?: string | null;
   eventType: AdminNotificationEventType;
   subscriber: AdminNotificationSubscriber;
   plan?: string | null;
