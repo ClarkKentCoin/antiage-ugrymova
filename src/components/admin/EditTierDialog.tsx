@@ -52,6 +52,7 @@ export function EditTierDialog({ tier, open, onOpenChange }: EditTierDialogProps
     is_active: true,
     grace_period_enabled: true,
     show_in_dashboard: false,
+    purchase_once_only: false,
   });
 
   useEffect(() => {
