@@ -1021,10 +1021,22 @@ function SubscriptionContent({
     } catch (error) {
       console.error('Error generating payment link:', error);
       const err = error as any;
-      const detailsFromContext = typeof err?.context?.body === 'string'
-        ? (() => { try { const p = JSON.parse(err.context.body); return (p?.error === 'tier_already_purchased_once' || p?.error === 'tier_no_recurring') ? p.message : (p?.error || p?.details); } catch { return err.context.body; } })()
-        : null;
-      toast({ title: 'Ошибка', description: detailsFromContext || 'Не удалось создать ссылку для оплаты', variant: 'destructive' });
+      let errorCode: string | null = null;
+      let errorMessage: string | null = null;
+      if (typeof err?.context?.body === 'string') {
+        try { const p = JSON.parse(err.context.body); errorCode = p?.error ?? null; errorMessage = p?.message ?? null; } catch {}
+      }
+      if (errorCode === 'tier_already_purchased_once') {
+        const tierName = tiers.find(t => t.id === selectedTier)?.name;
+        toast({
+          title: 'Тариф уже использован',
+          description: tierName
+            ? `Тариф «${tierName}» уже был использован. Пожалуйста, выберите другой тариф.`
+            : 'Этот тариф можно купить только один раз. Пожалуйста, выберите другой тариф.',
+        });
+      } else {
+        toast({ title: 'Ошибка', description: errorMessage || 'Не удалось создать ссылку для оплаты', variant: 'destructive' });
+      }
     } finally {
       setGeneratingLink(false);
     }
