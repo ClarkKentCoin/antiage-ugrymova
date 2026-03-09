@@ -1251,7 +1251,12 @@ function SubscriptionContent({
                       ? 'border-primary ring-2 ring-primary/20 cursor-pointer' 
                       : 'hover:border-primary/50 cursor-pointer'
                 }`}
-                onClick={() => !isUsed && setSelectedTier(tier.id)}
+                onClick={() => {
+                  if (isUsed) return;
+                  setSelectedTier(tier.id);
+                  setAutoRenewal(false);
+                  setConsentGiven(false);
+                }}
               >
                 <CardContent className="flex items-center justify-between p-4">
                   <div>
