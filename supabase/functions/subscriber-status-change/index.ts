@@ -21,10 +21,7 @@ const INVITE_LINK_EXPIRY_SECONDS = 600; // 10 minutes
 // Handles backward compatibility: "{days} дней" → "{days} {days_word}"
 function replaceVariables(template: string, variables: Record<string, string>): string {
   let result = template;
-  
-  // Backward compatibility: replace "{days} дней" patterns with proper pluralization
   result = result.replace(/\{days\}\s*дней/g, `{days} {days_word}`);
-  
   for (const [key, value] of Object.entries(variables)) {
     result = result.replace(new RegExp(`\\{${key}\\}`, "g"), value);
   }
@@ -85,7 +82,6 @@ async function revokeOldInviteLinks(
   channelId: string,
   subscriberId: string
 ): Promise<void> {
-  // Get all non-revoked links for this subscriber
   const { data: oldLinks, error } = await supabaseAdmin
     .from("invite_links")
     .select("id, invite_link")
@@ -104,7 +100,6 @@ async function revokeOldInviteLinks(
   console.log(`Revoking ${oldLinks.length} old invite links for subscriber ${subscriberId}`);
 
   for (const link of oldLinks) {
-    // Revoke the link in Telegram
     const revokeResult = await callTelegramApi(botToken, "revokeChatInviteLink", {
       chat_id: channelId,
       invite_link: link.invite_link,
@@ -114,7 +109,6 @@ async function revokeOldInviteLinks(
       console.log(`Could not revoke link (may be expired): ${revokeResult.description}`);
     }
 
-    // Mark as revoked in database
     await supabaseAdmin
       .from("invite_links")
       .update({ revoked: true, revoked_at: new Date().toISOString() })
@@ -132,11 +126,10 @@ async function createAndSaveInviteLink(
   const expireDate = Math.floor(Date.now() / 1000) + INVITE_LINK_EXPIRY_SECONDS;
   const expiresAt = new Date(Date.now() + INVITE_LINK_EXPIRY_SECONDS * 1000).toISOString();
 
-  // Create invite link with expiration
   const inviteResult = await callTelegramApi(botToken, "createChatInviteLink", {
     chat_id: channelId,
     expire_date: expireDate,
-    member_limit: 1, // Also keep member_limit as additional protection
+    member_limit: 1,
     creates_join_request: false,
   });
 
@@ -147,7 +140,6 @@ async function createAndSaveInviteLink(
     return { success: false, error: inviteResult.description || "Failed to create invite link" };
   }
 
-  // Save the link to database
   const { error: insertError } = await supabaseAdmin
     .from("invite_links")
     .insert({
@@ -159,7 +151,6 @@ async function createAndSaveInviteLink(
 
   if (insertError) {
     console.error("Error saving invite link to database:", insertError.message);
-    // Continue anyway - the link was created successfully
   }
 
   return { success: true, invite_link: inviteResult.result.invite_link };
@@ -186,7 +177,6 @@ serve(async (req) => {
       );
     }
 
-    // Create a client with the user's token to verify their identity
     const supabaseUser = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_ANON_KEY") ?? "",
@@ -197,7 +187,6 @@ serve(async (req) => {
       }
     );
 
-    // Verify the user's token
     const { data: { user }, error: authError } = await supabaseUser.auth.getUser();
 
     if (authError || !user) {
@@ -224,6 +213,16 @@ serve(async (req) => {
       );
     }
 
+    // Resolve admin's tenant
+    const { data: tenantData } = await supabaseAdmin
+      .from("tenants")
+      .select("id")
+      .eq("owner_id", user.id)
+      .maybeSingle();
+
+    const tenantId = tenantData?.id || null;
+    console.log(`[subscriber-status-change] Resolved tenant_id=${tenantId} for admin user=${user.id}`);
+
     const body = await req.json();
     const {
       action,
@@ -239,14 +238,20 @@ serve(async (req) => {
     console.log(`Processing action: ${action}, subscriber: ${subscriber_id}, telegram_user: ${telegram_user_id}`);
     console.log(`Status change: ${old_status} -> ${new_status}`);
 
-    // Get admin settings
-    const { data: settings, error: settingsError } = await supabaseAdmin
+    // Get admin settings scoped to tenant
+    let settingsQuery = supabaseAdmin
       .from("admin_settings")
       .select(
         `telegram_bot_token, telegram_channel_id, grace_period_days, channel_name,
          notification_payment_success, notification_grace_period_warning, 
          notification_subscription_expired`
-      )
+      );
+
+    if (tenantId) {
+      settingsQuery = settingsQuery.eq("tenant_id", tenantId);
+    }
+
+    const { data: settings, error: settingsError } = await settingsQuery
       .limit(1)
       .maybeSingle();
 
@@ -262,7 +267,6 @@ serve(async (req) => {
     const channelName = settings.channel_name || "Канал";
     const gracePeriodDays = settings.grace_period_days || 0;
 
-    // Format channel ID
     let channelId = settings.telegram_channel_id?.toString() || "";
     if (channelId && !channelId.startsWith("-100") && channelId.startsWith("-")) {
       channelId = "-100" + channelId.substring(1);
@@ -286,10 +290,8 @@ serve(async (req) => {
         console.log(`Kicking user ${telegram_user_id} due to status change to ${new_status}`);
 
         if (channelId && subscriber_id) {
-          // First revoke all old invite links so user can't rejoin with them
           await revokeOldInviteLinks(supabaseAdmin, botToken, channelId, subscriber_id);
 
-          // Step 1: Ban user (removes from channel)
           const banResult = await callTelegramApi(botToken, "banChatMember", {
             chat_id: channelId,
             user_id: telegram_user_id,
@@ -297,10 +299,8 @@ serve(async (req) => {
           });
 
           if (banResult.ok) {
-            // User is now banned and will remain banned until reactivation
             console.log(`[BAN] User ${telegram_user_id} banned from channel (status: ${new_status})`);
 
-            // Update is_in_channel
             await supabaseAdmin
               .from("subscribers")
               .update({ is_in_channel: false })
@@ -314,7 +314,6 @@ serve(async (req) => {
           }
         }
 
-        // Send subscription expired notification
         const template =
           settings.notification_subscription_expired || DEFAULT_SUBSCRIPTION_EXPIRED;
         const message = replaceVariables(template, {
@@ -327,7 +326,6 @@ serve(async (req) => {
           parse_mode: "HTML",
         });
 
-        // Log user notification
         await logUserNotification({
           supabaseAdmin,
           source: "subscriber-status-change",
@@ -339,9 +337,9 @@ serve(async (req) => {
           textPreview: message,
         });
 
-        // Send admin notification
         await sendAdminNotification({
           supabaseAdmin,
+          tenantId,
           eventType: "SUBSCRIPTION_ENDED",
           subscriber: {
             id: subscriber_id,
@@ -379,7 +377,6 @@ serve(async (req) => {
           parse_mode: "HTML",
         });
 
-        // Log user notification
         await logUserNotification({
           supabaseAdmin,
           source: "subscriber-status-change",
@@ -392,9 +389,9 @@ serve(async (req) => {
           textPreview: message,
         });
 
-        // Send admin notification
         await sendAdminNotification({
           supabaseAdmin,
+          tenantId,
           eventType: "GRACE_STARTED",
           subscriber: {
             id: subscriber_id,
@@ -415,8 +412,6 @@ serve(async (req) => {
       if (new_status === "active" && old_status !== "active") {
         console.log(`Sending renewal notification and invite to ${telegram_user_id}`);
 
-        // IMPORTANT: Read fresh subscription_end from DB to ensure we have the correct date
-        // (the passed subscription_end might be stale if caller computed it before DB was updated)
         let freshSubscriptionEnd = subscription_end;
         if (subscriber_id) {
           const { data: freshSubscriber } = await supabaseAdmin
@@ -431,7 +426,6 @@ serve(async (req) => {
           }
         }
 
-        // Format expiry date
         let expiresDate = "—";
         if (freshSubscriptionEnd) {
           const endDate = new Date(freshSubscriptionEnd);
@@ -442,7 +436,6 @@ serve(async (req) => {
           });
         }
 
-        // Send renewal notification
         const template = DEFAULT_SUBSCRIPTION_RENEWED;
         const message = replaceVariables(template, {
           channel_name: channelName,
@@ -455,7 +448,6 @@ serve(async (req) => {
           parse_mode: "HTML",
         });
 
-        // Log user notification
         await logUserNotification({
           supabaseAdmin,
           source: "subscriber-status-change",
@@ -468,9 +460,9 @@ serve(async (req) => {
           textPreview: message,
         });
 
-        // Send admin notification
         await sendAdminNotification({
           supabaseAdmin,
+          tenantId,
           eventType: "SUBSCRIPTION_RENEWED",
           subscriber: {
             id: subscriber_id,
@@ -537,7 +529,6 @@ serve(async (req) => {
     if (action === "new_subscriber") {
       console.log(`New subscriber added: ${telegram_user_id}`);
 
-      // Format expiry date
       let expiresDate = "—";
       if (subscription_end) {
         const endDate = new Date(subscription_end);
@@ -548,7 +539,6 @@ serve(async (req) => {
         });
       }
 
-      // Send payment success notification
       const template =
         settings.notification_payment_success || DEFAULT_PAYMENT_SUCCESS;
       const message = replaceVariables(template, {
@@ -563,7 +553,6 @@ serve(async (req) => {
         parse_mode: "HTML",
       });
 
-      // Log user notification
       await logUserNotification({
         supabaseAdmin,
         source: "subscriber-status-change",
@@ -576,9 +565,9 @@ serve(async (req) => {
         textPreview: message,
       });
 
-      // Send admin notification for new subscriber
       await sendAdminNotification({
         supabaseAdmin,
+        tenantId,
         eventType: "PAYMENT_SUCCESS",
         subscriber: {
           id: subscriber_id,
@@ -604,7 +593,7 @@ serve(async (req) => {
 
     console.log("Action completed:", results);
 
-    // Log to system_logs
+    // Log to system_logs with tenant_id
     try {
       if (action === "status_change") {
         if (results.kicked) {
@@ -614,6 +603,7 @@ serve(async (req) => {
             source: "edge_fn",
             subscriber_id: subscriber_id,
             telegram_user_id: telegram_user_id ? Number(telegram_user_id) : null,
+            tenant_id: tenantId,
             message: `User banned due to status change: ${old_status} -> ${new_status}`,
             payload: { channel_id: channelId, old_status, new_status },
           });
@@ -625,6 +615,7 @@ serve(async (req) => {
             source: "edge_fn",
             subscriber_id: subscriber_id,
             telegram_user_id: telegram_user_id ? Number(telegram_user_id) : null,
+            tenant_id: tenantId,
             message: "Invite link sent after reactivation",
             payload: { channel_id: channelId, invite_link: results.invite_link },
           });
