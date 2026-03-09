@@ -814,7 +814,8 @@ function GracePeriodView({
               <p className="font-semibold text-lg">{selectedTierData?.name} — {Number(selectedTierData?.price).toLocaleString('ru-RU')}₽</p>
             </div>
 
-            {/* Auto-renewal checkbox */}
+            {/* Auto-renewal checkbox - hidden for purchase_once_only tiers */}
+            {!selectedTierData?.purchase_once_only && (
             <div className="flex items-start space-x-3 p-3 rounded-lg bg-muted/50">
               <Checkbox 
                 id="auto-renewal-grace" 
@@ -830,6 +831,7 @@ function GracePeriodView({
                 </Label>
               </div>
             </div>
+            )}
 
             {/* Info and consent required if auto-renewal is enabled */}
             {autoRenewal && (
