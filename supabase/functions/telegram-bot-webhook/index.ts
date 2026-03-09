@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
+import { resolveTenantIdFromSlug, DEFAULT_TENANT_ID } from "../_shared/tenant.ts";
 
 interface TelegramUpdate {
   update_id: number;
@@ -40,15 +41,14 @@ async function callTelegramApi(botToken: string, method: string, params: Record<
 }
 
 serve(async (req) => {
-  const { method, pathname } = { method: req.method, pathname: new URL(req.url).pathname };
-  console.log("[telegram-bot-webhook] hit", { method, pathname });
+  const reqUrl = new URL(req.url);
+  const method = req.method;
+  console.log("[telegram-bot-webhook] hit", { method, pathname: reqUrl.pathname });
 
-  // Handle CORS preflight FIRST
   if (method === "OPTIONS") {
     return new Response("ok", { status: 200, headers: corsHeaders });
   }
 
-  // Only accept POST requests from Telegram
   if (method !== "POST") {
     console.log(`[telegram-bot-webhook] Rejected ${method} request - only POST allowed`);
     return new Response(
@@ -71,7 +71,7 @@ serve(async (req) => {
     }
     console.log("[telegram-bot-webhook] Secret token verified");
   } else {
-    console.warn("[telegram-bot-webhook] WARNING: No TELEGRAM_WEBHOOK_SECRET configured, accepting request without verification");
+    console.warn("[telegram-bot-webhook] WARNING: No TELEGRAM_WEBHOOK_SECRET configured");
   }
 
   try {
@@ -80,16 +80,39 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     );
 
-    // Get admin settings (order by created_at desc to get the latest)
+    // --- Resolve tenant from ?t=<slug> query param ---
+    const tenantSlugParam = reqUrl.searchParams.get("t");
+    let tenantId: string;
+    let tenantSlug: string | null = null;
+
+    if (tenantSlugParam) {
+      const resolved = await resolveTenantIdFromSlug(supabaseAdmin, tenantSlugParam);
+      if (resolved.source === "default") {
+        // Explicit slug provided but not found — fail safely
+        console.error(`[telegram-bot-webhook] Invalid tenant slug: "${tenantSlugParam}"`);
+        return new Response(
+          JSON.stringify({ ok: false, error: "invalid_tenant" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      tenantId = resolved.tenantId;
+      tenantSlug = resolved.tenantSlug;
+      console.log(`[telegram-bot-webhook] Resolved tenant from slug: id=${tenantId}, slug=${tenantSlug}`);
+    } else {
+      // No slug — backward-compatible fallback to main production tenant
+      tenantId = DEFAULT_TENANT_ID;
+      console.log(`[telegram-bot-webhook] No tenant slug, using default: ${tenantId}`);
+    }
+
+    // --- Load admin_settings for resolved tenant only ---
     const { data: settings, error: settingsError } = await supabaseAdmin
       .from("admin_settings")
       .select("telegram_bot_token, welcome_message_text, welcome_message_image_url, welcome_message_button_text, welcome_message_button_url")
-      .order("created_at", { ascending: false })
-      .limit(1)
+      .eq("tenant_id", tenantId)
       .maybeSingle();
 
     if (settingsError || !settings?.telegram_bot_token) {
-      console.error("[telegram-bot-webhook] Settings error:", settingsError);
+      console.error("[telegram-bot-webhook] Settings error or no bot token for tenant:", tenantId, settingsError);
       return new Response(
         JSON.stringify({ ok: false, error: "Bot not configured" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -100,18 +123,22 @@ serve(async (req) => {
     const update: TelegramUpdate = await req.json();
     
     const messageText = (update.message?.text ?? '').trim();
-    console.log(`[telegram-bot-webhook] Received update_id: ${update.update_id}, text: "${messageText.substring(0, 80)}"`);
+    console.log(`[telegram-bot-webhook] tenant=${tenantId} update_id=${update.update_id} text="${messageText.substring(0, 80)}"`);
 
-    // Handle /start command (including /start@botname and /start payload)
+    // Handle /start command
     if (messageText.startsWith("/start")) {
       const chatId = update.message!.chat.id;
       const userId = update.message!.from.id;
       
-      console.log(`[telegram-bot-webhook] Recognized /start, chat_id: ${chatId}, user_id: ${userId}`);
+      console.log(`[telegram-bot-webhook] /start chat_id=${chatId} user_id=${userId} tenant=${tenantId}`);
 
-      // Get button URL from settings or use default Mini App URL
-      const defaultMiniAppUrl = Deno.env.get("SUPABASE_URL")?.replace('.supabase.co', '.lovable.app') || 
-                        `https://zmewfhnaycjuvpjxkiin.lovable.app/telegram`;
+      // Build default Mini App URL with tenant context
+      const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+      const baseMiniAppUrl = supabaseUrl.replace('.supabase.co', '.lovable.app');
+      const defaultMiniAppUrl = tenantSlug
+        ? `${baseMiniAppUrl}/telegram?t=${encodeURIComponent(tenantSlug)}`
+        : `${baseMiniAppUrl}/telegram`;
+
       const buttonUrl = settings.welcome_message_button_url || defaultMiniAppUrl;
 
       const welcomeText = settings.welcome_message_text || 
@@ -120,7 +147,6 @@ serve(async (req) => {
       const buttonText = settings.welcome_message_button_text || "Подробнее";
       const imageUrl = settings.welcome_message_image_url;
 
-      // Determine if URL is a web_app or regular URL
       const isWebApp = buttonUrl.includes('/telegram') || buttonUrl.includes('t.me/') && buttonUrl.includes('/app');
       
       const inlineKeyboard = {
@@ -134,7 +160,6 @@ serve(async (req) => {
       let result: TelegramResponse;
 
       if (imageUrl) {
-        // Send photo with caption
         result = await callTelegramApi(botToken, "sendPhoto", {
           chat_id: chatId,
           photo: imageUrl,
@@ -143,7 +168,6 @@ serve(async (req) => {
           reply_markup: inlineKeyboard,
         });
 
-        // If photo fails, fall back to text message
         if (!result.ok) {
           console.log("[telegram-bot-webhook] Photo send failed, falling back to text:", result.description);
           result = await callTelegramApi(botToken, "sendMessage", {
@@ -154,7 +178,6 @@ serve(async (req) => {
           });
         }
       } else {
-        // Send text message only
         result = await callTelegramApi(botToken, "sendMessage", {
           chat_id: chatId,
           text: welcomeText,
@@ -163,7 +186,7 @@ serve(async (req) => {
         });
       }
 
-      console.log(`[telegram-bot-webhook] Telegram send result: ok=${result.ok}, description=${result.description || 'none'}`);
+      console.log(`[telegram-bot-webhook] send result: ok=${result.ok}, description=${result.description || 'none'}`);
 
       return new Response(
         JSON.stringify({ ok: true }),
@@ -171,7 +194,6 @@ serve(async (req) => {
       );
     }
 
-    // Return ok for other updates
     return new Response(
       JSON.stringify({ ok: true }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }

@@ -26,12 +26,10 @@ serve(async (req) => {
   const { method, pathname } = { method: req.method, pathname: new URL(req.url).pathname };
   console.log("[set-telegram-webhook] hit", { method, pathname });
 
-  // Handle CORS preflight FIRST
   if (method === "OPTIONS") {
     return new Response("ok", { status: 200, headers: corsHeaders });
   }
 
-  // Only allow POST
   if (method !== "POST") {
     return new Response(
       JSON.stringify({ ok: false, description: "Method not allowed" }),
@@ -45,19 +43,18 @@ serve(async (req) => {
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 
     if (!supabaseUrl || !anonKey || !serviceKey) {
-      console.error("[set-telegram-webhook] missing backend env (SUPABASE_URL/ANON/SERVICE)");
+      console.error("[set-telegram-webhook] missing backend env");
       return new Response(JSON.stringify({ ok: false, description: "Server misconfigured" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Parse request body to check for reset flag
     let body: Record<string, unknown> = {};
     try {
       body = await req.json();
     } catch {
-      // Body is optional, continue with empty object
+      // Body is optional
     }
     const resetMode = body.reset === true;
     console.log("[set-telegram-webhook] resetMode:", resetMode);
@@ -104,20 +101,46 @@ serve(async (req) => {
       console.error("[set-telegram-webhook] TELEGRAM_WEBHOOK_SECRET is not set");
       return new Response(
         JSON.stringify({ ok: false, description: "TELEGRAM_WEBHOOK_SECRET is not configured" }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
     const supabaseAdmin = createClient(supabaseUrl, serviceKey);
 
+    // --- Tenant resolution: find tenant owned by authenticated admin ---
+    const { data: tenantData, error: tenantError } = await supabaseAdmin
+      .from("tenants")
+      .select("id, slug")
+      .eq("owner_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (tenantError) {
+      console.error("[set-telegram-webhook] tenant lookup error:", tenantError);
+      return new Response(JSON.stringify({ ok: false, description: "Tenant lookup failed" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (!tenantData) {
+      console.error(`[set-telegram-webhook] no tenant found for user ${userId}`);
+      return new Response(JSON.stringify({ ok: false, description: "Tenant not found for this admin" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const tenantId = tenantData.id;
+    const tenantSlug = tenantData.slug;
+    console.log(`[set-telegram-webhook] resolved tenant_id=${tenantId}, slug=${tenantSlug}`);
+
+    // --- Load admin_settings for this tenant only ---
     const { data: settings, error: settingsError } = await supabaseAdmin
       .from("admin_settings")
       .select("telegram_bot_token")
-      .order("created_at", { ascending: false })
-      .limit(1)
+      .eq("tenant_id", tenantId)
       .maybeSingle();
 
     if (settingsError) {
@@ -136,11 +159,13 @@ serve(async (req) => {
     }
 
     const botToken = settings.telegram_bot_token;
-    const webhookUrl = `${supabaseUrl}/functions/v1/telegram-bot-webhook`;
+
+    // --- Build tenant-specific webhook URL with ?t=<slug> ---
+    const webhookUrl = `${supabaseUrl}/functions/v1/telegram-bot-webhook?t=${encodeURIComponent(tenantSlug)}`;
+    console.log(`[set-telegram-webhook] webhook URL: ${webhookUrl}`);
 
     let deleteResult: TelegramResponse | null = null;
 
-    // If reset mode, first delete the webhook
     if (resetMode) {
       console.log("[set-telegram-webhook] calling deleteWebhook with drop_pending_updates=true");
       deleteResult = await callTelegramApi(botToken, "deleteWebhook", {
@@ -151,7 +176,6 @@ serve(async (req) => {
       );
     }
 
-    // Set the webhook
     console.log(`[set-telegram-webhook] setting webhook url=${webhookUrl}`);
     const setResult = await callTelegramApi(botToken, "setWebhook", {
       url: webhookUrl,
@@ -167,13 +191,14 @@ serve(async (req) => {
       ok: setResult.ok,
       reset: resetMode,
       setResult,
+      tenant_slug: tenantSlug,
+      webhook_url: webhookUrl,
     };
 
     if (deleteResult !== null) {
       responseBody.deleteResult = deleteResult;
     }
 
-    // If reset mode, add description about both operations
     if (resetMode) {
       responseBody.description = setResult.ok
         ? "Webhook reset successfully"
