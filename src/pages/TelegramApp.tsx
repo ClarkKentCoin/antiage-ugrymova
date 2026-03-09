@@ -306,6 +306,7 @@ export default function TelegramApp() {
           isCancelling={isCancelling}
           serverGraceDaysRemaining={null}
           onDebugTap={onDebugTap}
+          purchasedOnceOnlyTierIds={purchasedOnceOnlyTierIds}
         />
         {debugBadgeEnabled && <MiniAppBuildBadge serverDebug={null} />}
       </main>
