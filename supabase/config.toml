@@ -44,3 +44,6 @@ verify_jwt = false
 
 [functions.send-custom-telegram-message]
 verify_jwt = false
+
+[functions.get-public-app-config]
+verify_jwt = false

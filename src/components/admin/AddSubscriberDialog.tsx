@@ -208,6 +208,7 @@ export function AddSubscriberDialog({ open, onOpenChange }: AddSubscriberDialogP
           subscriber_id: subId,
           tier_id: formData.tier_id,
           is_recurring: formData.auto_renewal,
+          tenant_slug: tenantSlug,
         },
       });
 

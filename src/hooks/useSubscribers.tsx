@@ -100,9 +100,9 @@ export interface SubscriberStatusResponse {
   };
 }
 
-export function useSubscriber(telegramUserId: number | null, initData?: string | null, tenantSlug?: string | null) {
+export function useSubscriber(telegramUserId: number | null, initData?: string | null, tenantSlug?: string | null, publicTenantId?: string | null) {
   return useQuery({
-    queryKey: ['subscriber', telegramUserId, initData ? 'telegram' : 'direct', tenantSlug],
+    queryKey: ['subscriber', telegramUserId, initData ? 'telegram' : 'direct', tenantSlug, publicTenantId],
     queryFn: async (): Promise<SubscriberStatusResponse | null> => {
       if (telegramUserId == null) return null;
 
@@ -147,7 +147,7 @@ export function useSubscriber(telegramUserId: number | null, initData?: string |
       }
 
       // Fallback for dev/test flows (no Telegram initData available)
-      const { data, error } = await supabase
+      let query = supabase
         .from('subscribers')
         .select(`
           *,
@@ -161,8 +161,14 @@ export function useSubscriber(telegramUserId: number | null, initData?: string |
             billing_timezone
           )
         `)
-        .eq('telegram_user_id', telegramUserId)
-        .maybeSingle();
+        .eq('telegram_user_id', telegramUserId);
+
+      // Add tenant filtering when resolved public tenant is known
+      if (publicTenantId) {
+        query = query.eq('tenant_id', publicTenantId);
+      }
+
+      const { data, error } = await query.maybeSingle();
 
       if (error) throw error;
       

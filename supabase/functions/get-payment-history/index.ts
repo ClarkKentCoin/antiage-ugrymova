@@ -107,8 +107,20 @@ serve(async (req) => {
       );
     }
 
-    // Resolve tenant ID from slug (or use default)
-    const tenantId = await resolveTenantId(supabaseAdmin, tenant_slug);
+    // Resolve tenant - reject explicit invalid slugs
+    let tenantId: string;
+    if (tenant_slug) {
+      const resolved = await resolveTenantIdFromSlug(supabaseAdmin, tenant_slug);
+      if (resolved.source === "default") {
+        return new Response(
+          JSON.stringify({ error: "invalid_tenant" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+      tenantId = resolved.tenantId;
+    } else {
+      tenantId = DEFAULT_TENANT_ID;
+    }
     console.log(`[get-payment-history] Resolved tenant_id: ${tenantId} from slug: ${tenant_slug || 'null'}`);
 
     // Get settings for this specific tenant

@@ -244,11 +244,12 @@ serve(async (req) => {
       );
     }
 
-    // Verify subscriber exists
+    // Verify subscriber exists and belongs to this tenant
     const { data: subscriber, error: subscriberError } = await supabaseAdmin
       .from("subscribers")
       .select("id, telegram_user_id, telegram_username")
       .eq("id", resolvedSubscriberId)
+      .eq("tenant_id", tenantId)
       .single();
 
     if (subscriberError || !subscriber) {

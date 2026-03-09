@@ -157,42 +157,39 @@ export function useSubscriptionTiers() {
 // Admin-only tier name (hidden from MiniApp by default)
 const ADMIN_ONLY_TIER_NAME = 'добавлен админом';
 
-export function useActiveTiers(options?: { includeAdminOnly?: boolean }) {
+export function useActiveTiers(options?: { includeAdminOnly?: boolean; publicTenantId?: string | null }) {
   const { user, tenantId, tenantLoading } = useAuth();
   const includeAdminOnly = options?.includeAdminOnly ?? false;
-  
+  const publicTenantId = options?.publicTenantId;
+
+  // For authenticated admin: use their tenant. For public/MiniApp: use explicit public tenant or default.
+  const effectiveTenantId = user && tenantId
+    ? tenantId
+    : (publicTenantId || DEFAULT_PUBLIC_TENANT_ID);
+
   return useQuery({
-    queryKey: ['subscription_tiers', 'active', user ? tenantId : DEFAULT_PUBLIC_TENANT_ID, { includeAdminOnly }],
+    queryKey: ['subscription_tiers', 'active', effectiveTenantId, { includeAdminOnly }],
     queryFn: async () => {
-      let query = supabase
+      const { data, error } = await supabase
         .from('subscription_tiers')
         .select('*')
         .eq('is_active', true)
+        .eq('tenant_id', effectiveTenantId)
         .order('price', { ascending: true });
-      
-      // For authenticated users (admin UI), filter by tenant
-      if (user && tenantId) {
-        query = query.eq('tenant_id', tenantId);
-      } else {
-        // For public/MiniApp, lock to default production tenant
-        query = query.eq('tenant_id', DEFAULT_PUBLIC_TENANT_ID);
-      }
-      
-      const { data, error } = await query;
-      
+
       if (error) throw error;
-      
+
       let tiers = data as SubscriptionTier[];
-      
+
       // Filter out admin-only tiers for MiniApp
       if (!includeAdminOnly) {
         tiers = tiers.filter(t => t.name.toLowerCase() !== ADMIN_ONLY_TIER_NAME);
       }
-      
+
       return tiers;
     },
     // Don't query until tenant is loaded for authenticated users
-    enabled: !user || (!tenantLoading && !!tenantId),
+    enabled: user ? (!tenantLoading && !!tenantId) : !!effectiveTenantId,
   });
 }
 
