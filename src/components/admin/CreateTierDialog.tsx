@@ -45,6 +45,7 @@ export function CreateTierDialog({ open, onOpenChange }: CreateTierDialogProps) 
     is_active: true,
     grace_period_enabled: true,
     show_in_dashboard: false,
+    purchase_once_only: false,
   });
 
   const handleSubmit = (e: React.FormEvent) => {
