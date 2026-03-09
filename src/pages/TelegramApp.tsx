@@ -1056,6 +1056,7 @@ function SubscriptionContent({
         subscriber={subscriber}
         onRefetch={onRefetch}
         onDebugTap={onDebugTap}
+        purchasedOnceOnlyTierIds={purchasedOnceOnlyTierIds}
       />
     );
   }
