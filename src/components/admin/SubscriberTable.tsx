@@ -17,11 +17,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger 
 } from '@/components/ui/dropdown-menu';
-import { MoreHorizontal, Pencil, Trash2, Calendar, Send, UserMinus, CheckCircle, Loader2, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { MoreHorizontal, Pencil, Trash2, Calendar, Send, UserMinus, CheckCircle, Loader2, ArrowUpDown, ArrowUp, ArrowDown, MessageSquare } from 'lucide-react';
 import { Subscriber, useDeleteSubscriber } from '@/hooks/useSubscribers';
 import { useSendInvite, useKickUser, useCheckMembership } from '@/hooks/useTelegramChannel';
 import { EditSubscriberDialog } from './EditSubscriberDialog';
 import { ExtendSubscriptionDialog } from './ExtendSubscriptionDialog';
+import { SendMessageDialog } from './SendMessageDialog';
 
 type SortField = 'user' | 'created_at' | 'plan' | 'status' | 'subscription_end' | 'subscription_start';
 type SortDirection = 'asc' | 'desc';
