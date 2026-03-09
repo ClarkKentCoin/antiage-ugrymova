@@ -21,6 +21,7 @@ export interface SubscriptionTier {
   billing_timezone: string | null;
   grace_period_enabled: boolean;
   show_in_dashboard: boolean;
+  purchase_once_only: boolean;
   created_at: string;
   updated_at: string;
 }
