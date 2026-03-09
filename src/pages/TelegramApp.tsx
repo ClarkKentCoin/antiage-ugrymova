@@ -1374,24 +1374,37 @@ function SubscriptionContent({
                   </div>
                 )}
 
-                <Button 
-                  className="w-full" 
-                  size="lg"
-                  disabled={generatingLink || (autoRenewal && !consentGiven)}
-                  onClick={handleGeneratePaymentLink}
-                >
-                  {generatingLink ? (
+                {(() => {
+                  const isUsedInExtend = selectedTier ? purchasedOnceOnlyTierIds.has(selectedTier) : false;
+                  const extendTierName = tiers.find(t => t.id === selectedTier)?.name;
+                  return (
                     <>
-                      <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                      Создание ссылки...
+                      {isUsedInExtend && (
+                        <p className="text-sm text-center text-muted-foreground">
+                          Тариф «{extendTierName}» уже был использован. Пожалуйста, выберите другой тариф.
+                        </p>
+                      )}
+                      <Button 
+                        className="w-full" 
+                        size="lg"
+                        disabled={generatingLink || isUsedInExtend || (autoRenewal && !consentGiven)}
+                        onClick={handleGeneratePaymentLink}
+                      >
+                        {generatingLink ? (
+                          <>
+                            <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                            Создание ссылки...
+                          </>
+                        ) : (
+                          <>
+                            <CreditCard className="mr-2 h-4 w-4" />
+                            Оплатить через Robokassa
+                          </>
+                        )}
+                      </Button>
                     </>
-                  ) : (
-                    <>
-                      <CreditCard className="mr-2 h-4 w-4" />
-                      Оплатить через Robokassa
-                    </>
-                  )}
-                </Button>
+                  );
+                })()}
               </CardContent>
             </Card>
           )}
