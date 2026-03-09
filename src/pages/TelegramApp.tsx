@@ -74,7 +74,7 @@ export default function TelegramApp() {
   
   const [publicTenantId, setPublicTenantId] = useState<string | null>(null);
 
-  const { data: tiers } = useActiveTiers({ publicTenantId });
+  const { data: tiers } = useActiveTiers({ publicTenantId, publicTenantSlug: tenantSlug });
   const publicTiers = (tiers ?? []).filter((t) => {
     const name = (t?.name ?? '').trim().toLowerCase();
     const isAdminByName = name === 'добавлен админом';

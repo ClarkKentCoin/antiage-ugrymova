@@ -47,3 +47,6 @@ verify_jwt = false
 
 [functions.get-public-app-config]
 verify_jwt = false
+
+[functions.get-public-tiers]
+verify_jwt = false
