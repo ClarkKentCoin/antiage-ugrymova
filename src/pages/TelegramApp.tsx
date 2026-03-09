@@ -50,7 +50,7 @@ export default function TelegramApp() {
   const initData = webApp?.initData ?? null;
   
   // Get tenant slug from URL (for multi-tenant support)
-  const tenantSlug = useMemo(() => getTenantSlug(), []);
+  const tenantSlug = useMemo(() => getPublicTenantSlug(), []);
 
   // Debug badge toggle (7 taps on logo to enable/disable)
   const { isEnabled: debugBadgeEnabled, handleTap: handleDebugTap } = useDebugBadgeToggle();
