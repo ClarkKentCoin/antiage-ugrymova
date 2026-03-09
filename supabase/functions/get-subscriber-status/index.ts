@@ -2,12 +2,10 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { encode as hexEncode } from "https://deno.land/std@0.168.0/encoding/hex.ts";
 import { corsHeaders } from "../_shared/cors.ts";
+import { resolveTenantIdFromSlug, DEFAULT_TENANT_ID } from "../_shared/tenant.ts";
 
 // Debug version to track deployed code
-const FUNCTION_VERSION = "2026-02-05_01:cors-fix";
-
-// Default tenant ID for backward compatibility (production main tenant)
-const DEFAULT_TENANT_ID = Deno.env.get("PUBLIC_TENANT_ID") ?? "6749bded-94d6-4793-9f46-09724da30ab6";
+const FUNCTION_VERSION = "2026-03-09_01:shared-tenant";
 
 const MS_PER_DAY = 1000 * 60 * 60 * 24;
 
