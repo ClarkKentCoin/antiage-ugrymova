@@ -366,6 +366,10 @@ export function SubscriberTable({ subscribers }: SubscriberTableProps) {
                             )}
                             Удалить из канала
                           </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => setMessagingSubscriber(subscriber)}>
+                            <MessageSquare className="mr-2 h-4 w-4" />
+                            Отправить сообщение
+                          </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem onClick={() => setEditingSubscriber(subscriber)}>
                             <Pencil className="mr-2 h-4 w-4" />
