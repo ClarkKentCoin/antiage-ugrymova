@@ -102,25 +102,6 @@ async function isValidInitData(initData: string, botToken: string): Promise<{ ok
   }
 }
 
-// Resolve tenant ID from slug or use default
-async function resolveTenantId(supabaseAdmin: any, tenantSlug: string | null): Promise<string> {
-  if (!tenantSlug) {
-    return DEFAULT_TENANT_ID;
-  }
-
-  const { data: tenant, error } = await supabaseAdmin
-    .from("tenants")
-    .select("id")
-    .eq("slug", tenantSlug)
-    .maybeSingle();
-
-  if (error || !tenant) {
-    console.log(`[cancel-subscription] Tenant not found for slug: ${tenantSlug}, using default`);
-    return DEFAULT_TENANT_ID;
-  }
-
-  return tenant.id;
-}
 
 // Call Telegram API
 async function callTelegramApi(
