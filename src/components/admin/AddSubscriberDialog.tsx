@@ -34,7 +34,7 @@ interface AddSubscriberDialogProps {
 
 export function AddSubscriberDialog({ open, onOpenChange }: AddSubscriberDialogProps) {
   const { toast } = useToast();
-  const { tenantId } = useAuth();
+  const { tenantId, tenantSlug } = useAuth();
   const { data: tiers } = useSubscriptionTiers();
   const createSubscriber = useCreateSubscriber();
 
@@ -208,6 +208,7 @@ export function AddSubscriberDialog({ open, onOpenChange }: AddSubscriberDialogP
           subscriber_id: subId,
           tier_id: formData.tier_id,
           is_recurring: formData.auto_renewal,
+          tenant_slug: tenantSlug,
         },
       });
 

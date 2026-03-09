@@ -18,11 +18,7 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { formatDaysRu } from '@/lib/textFormatters';
 import { MiniAppBuildBadge } from '@/components/telegram/MiniAppBuildBadge';
-
-// Extract tenant slug from URL for multi-tenant MiniApp support
-const getTenantSlug = (): string | null => {
-  return new URLSearchParams(window.location.search).get('t');
-};
+import { getPublicTenantSlug } from '@/lib/publicTenant';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -54,7 +50,7 @@ export default function TelegramApp() {
   const initData = webApp?.initData ?? null;
   
   // Get tenant slug from URL (for multi-tenant support)
-  const tenantSlug = useMemo(() => getTenantSlug(), []);
+  const tenantSlug = useMemo(() => getPublicTenantSlug(), []);
 
   // Debug badge toggle (7 taps on logo to enable/disable)
   const { isEnabled: debugBadgeEnabled, handleTap: handleDebugTap } = useDebugBadgeToggle();
@@ -76,7 +72,9 @@ export default function TelegramApp() {
     grace_ms_remaining: subscriberResponse.grace_ms_remaining,
   } : null;
   
-  const { data: tiers } = useActiveTiers();
+  const [publicTenantId, setPublicTenantId] = useState<string | null>(null);
+
+  const { data: tiers } = useActiveTiers({ publicTenantId });
   const publicTiers = (tiers ?? []).filter((t) => {
     const name = (t?.name ?? '').trim().toLowerCase();
     const isAdminByName = name === 'добавлен админом';
@@ -104,34 +102,51 @@ export default function TelegramApp() {
   const [channelInfo, setChannelInfo] = useState<{ name: string; description: string } | null>(null);
   const [gracePeriodDays, setGracePeriodDays] = useState<number | null>(null);
 
-  // Fetch settings from admin_settings
+  // Fetch public tenant config via safe edge function (no direct admin_settings read)
   useEffect(() => {
-    async function fetchSettings() {
-      const { data } = await supabase
-        .from('admin_settings')
-        .select('payment_link, channel_name, channel_description, grace_period_days')
-        .limit(1)
-        .maybeSingle();
-      if (data) {
-        setPaymentLink((data as any).payment_link);
-        setChannelInfo({
-          name: (data as any).channel_name || 'АНТИЭЙДЖ ЛАБ',
-          description:
-            (data as any).channel_description ||
-            'Закрытый Telegram-канал для женщин: мотивация, рецепты, научные подходы к антиэйджу. Всё для энергии и молодости в одном месте.',
+    async function fetchPublicConfig() {
+      try {
+        const { data, error } = await supabase.functions.invoke('get-public-app-config', {
+          body: { tenant_slug: tenantSlug },
         });
-        setGracePeriodDays((data as any).grace_period_days ?? 0);
-        console.log('[TelegramApp] Loaded grace_period_days:', (data as any).grace_period_days);
-      } else {
+
+        if (error) {
+          console.error('[TelegramApp] Failed to load public config:', error);
+          setGracePeriodDays(0);
+          return;
+        }
+
+        if (data?.error === 'invalid_tenant') {
+          console.error('[TelegramApp] Invalid tenant slug:', tenantSlug);
+          setGracePeriodDays(0);
+          return;
+        }
+
+        if (data) {
+          setPublicTenantId(data.tenant_id || null);
+          setPaymentLink(data.payment_link || null);
+          setChannelInfo({
+            name: data.channel_name || 'АНТИЭЙДЖ ЛАБ',
+            description:
+              data.channel_description ||
+              'Закрытый Telegram-канал для женщин: мотивация, рецепты, научные подходы к антиэйджу. Всё для энергии и молодости в одном месте.',
+          });
+          setGracePeriodDays(data.grace_period_days ?? 0);
+          console.log('[TelegramApp] Loaded public config:', { tenant_id: data.tenant_id, grace_period_days: data.grace_period_days });
+        } else {
+          setGracePeriodDays(0);
+        }
+      } catch (err) {
+        console.error('[TelegramApp] Error loading public config:', err);
         setGracePeriodDays(0);
       }
     }
-    fetchSettings();
-  }, []);
+    fetchPublicConfig();
+  }, [tenantSlug]);
 
   // For testing outside Telegram (DEV or ?test=1)
   const [testUserId, setTestUserId] = useState<number | null>(null);
-  const { data: testSubscriberResponse, isLoading: loadingTestSubscriber, refetch: refetchTestSubscriber } = useSubscriber(testUserId);
+  const { data: testSubscriberResponse, isLoading: loadingTestSubscriber, refetch: refetchTestSubscriber } = useSubscriber(testUserId, null, null, publicTenantId);
   const testSubscriber = testSubscriberResponse?.subscriber ?? null;
 
   const activeSubscriber = user ? subscriber : testSubscriber;
@@ -430,7 +445,7 @@ function NewUserView({
         ip_address: null,
         user_agent: navigator.userAgent,
         telegram_user_id: telegramUserId,
-        tenant_slug: getTenantSlug(),
+        tenant_slug: getPublicTenantSlug(),
       };
 
       // Optional: if subscriber exists (например, в тестовом режиме), передадим его
@@ -716,7 +731,7 @@ function GracePeriodView({
           ip_address: null,
           user_agent: navigator.userAgent,
           telegram_user_id: telegramUserId,
-          tenant_slug: getTenantSlug(),
+          tenant_slug: getPublicTenantSlug(),
         },
       });
 
@@ -1008,7 +1023,7 @@ function SubscriptionContent({
           ip_address: null,
           user_agent: navigator.userAgent,
           telegram_user_id: telegramUserId,
-          tenant_slug: getTenantSlug(),
+          tenant_slug: getPublicTenantSlug(),
         },
       });
 

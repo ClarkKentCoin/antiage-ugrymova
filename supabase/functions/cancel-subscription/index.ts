@@ -3,14 +3,12 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { encode as hexEncode } from "https://deno.land/std@0.168.0/encoding/hex.ts";
 import { sendAdminNotification } from "../_shared/adminNotifications.ts";
 import { logUserNotification } from "../_shared/userNotificationLogger.ts";
+import { resolveTenantIdFromSlug, DEFAULT_TENANT_ID } from "../_shared/tenant.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
-
-// Default tenant ID for backward compatibility (production main tenant)
-const DEFAULT_TENANT_ID = Deno.env.get("PUBLIC_TENANT_ID") ?? "6749bded-94d6-4793-9f46-09724da30ab6";
 
 const enc = new TextEncoder();
 const dec = new TextDecoder();
@@ -104,25 +102,6 @@ async function isValidInitData(initData: string, botToken: string): Promise<{ ok
   }
 }
 
-// Resolve tenant ID from slug or use default
-async function resolveTenantId(supabaseAdmin: any, tenantSlug: string | null): Promise<string> {
-  if (!tenantSlug) {
-    return DEFAULT_TENANT_ID;
-  }
-
-  const { data: tenant, error } = await supabaseAdmin
-    .from("tenants")
-    .select("id")
-    .eq("slug", tenantSlug)
-    .maybeSingle();
-
-  if (error || !tenant) {
-    console.log(`[cancel-subscription] Tenant not found for slug: ${tenantSlug}, using default`);
-    return DEFAULT_TENANT_ID;
-  }
-
-  return tenant.id;
-}
 
 // Call Telegram API
 async function callTelegramApi(
@@ -221,8 +200,20 @@ serve(async (req) => {
       );
     }
 
-    // Resolve tenant ID from slug (or use default)
-    const tenantId = await resolveTenantId(supabaseAdmin, tenant_slug);
+    // Resolve tenant - reject explicit invalid slugs
+    let tenantId: string;
+    if (tenant_slug) {
+      const resolved = await resolveTenantIdFromSlug(supabaseAdmin, tenant_slug);
+      if (resolved.source === "default") {
+        return new Response(
+          JSON.stringify({ error: "invalid_tenant" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+      tenantId = resolved.tenantId;
+    } else {
+      tenantId = DEFAULT_TENANT_ID;
+    }
     console.log(`[cancel-subscription] Resolved tenant_id: ${tenantId} from slug: ${tenant_slug || 'null'}`);
 
     // Get bot token from admin settings for this tenant

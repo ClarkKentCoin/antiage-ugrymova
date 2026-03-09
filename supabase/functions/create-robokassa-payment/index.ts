@@ -1,13 +1,11 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { resolveTenantIdFromSlug, resolveTenantFromRequest, DEFAULT_TENANT_ID } from "../_shared/tenant.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
-
-// Default tenant ID for backward compatibility (production main tenant)
-const DEFAULT_TENANT_ID = Deno.env.get("PUBLIC_TENANT_ID") ?? "6749bded-94d6-4793-9f46-09724da30ab6";
 
 // Robokassa signatures: SignatureValue uses SHA256 (Password#1) when configured in merchant settings
 async function robokassaSignature(message: string): Promise<string> {
@@ -20,25 +18,6 @@ async function robokassaSignature(message: string): Promise<string> {
     .toUpperCase();
 }
 
-// Resolve tenant ID from slug or use default
-async function resolveTenantId(supabaseAdmin: any, tenantSlug: string | null): Promise<string> {
-  if (!tenantSlug) {
-    return DEFAULT_TENANT_ID;
-  }
-
-  const { data: tenant, error } = await supabaseAdmin
-    .from("tenants")
-    .select("id")
-    .eq("slug", tenantSlug)
-    .maybeSingle();
-
-  if (error || !tenant) {
-    console.log(`[create-robokassa-payment] Tenant not found for slug: ${tenantSlug}, using default`);
-    return DEFAULT_TENANT_ID;
-  }
-
-  return tenant.id;
-}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -64,8 +43,29 @@ serve(async (req) => {
       );
     }
 
-    // Resolve tenant ID from slug (or use default)
-    const tenantId = await resolveTenantId(supabaseAdmin, tenant_slug);
+    // Resolve tenant:
+    // - Explicit slug provided → resolve, reject if invalid
+    // - No slug + admin auth → resolve from auth (admin's own tenant)
+    // - No slug + no auth → default production tenant
+    let tenantId: string;
+    if (tenant_slug) {
+      const resolved = await resolveTenantIdFromSlug(supabaseAdmin, tenant_slug);
+      if (resolved.source === "default") {
+        return new Response(
+          JSON.stringify({ error: "invalid_tenant" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+      tenantId = resolved.tenantId;
+    } else {
+      // For admin requests, resolve from auth header; for MiniApp without slug, use default
+      const resolved = await resolveTenantFromRequest({
+        req,
+        supabaseAdmin,
+        body: {}, // no slug to resolve from body
+      });
+      tenantId = resolved.tenantId;
+    }
     console.log(`[create-robokassa-payment] Resolved tenant_id: ${tenantId} from slug: ${tenant_slug || 'null'}`);
 
     // Check if this is a request from Telegram mini app (has telegram_user_id) or from admin panel
@@ -244,11 +244,12 @@ serve(async (req) => {
       );
     }
 
-    // Verify subscriber exists
+    // Verify subscriber exists and belongs to this tenant
     const { data: subscriber, error: subscriberError } = await supabaseAdmin
       .from("subscribers")
       .select("id, telegram_user_id, telegram_username")
       .eq("id", resolvedSubscriberId)
+      .eq("tenant_id", tenantId)
       .single();
 
     if (subscriberError || !subscriber) {
