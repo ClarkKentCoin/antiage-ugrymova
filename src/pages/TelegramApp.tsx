@@ -1041,6 +1041,7 @@ function SubscriptionContent({
         onRefetch={onRefetch}
         graceDaysRemaining={graceDaysRemaining}
         onDebugTap={onDebugTap}
+        purchasedOnceOnlyTierIds={purchasedOnceOnlyTierIds}
       />
     );
   }
