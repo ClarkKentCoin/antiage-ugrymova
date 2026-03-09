@@ -169,7 +169,7 @@ async function logToSystem(
   eventType: string,
   message: string,
   payload: Record<string, unknown>,
-  tenantId?: string
+  tenantId?: string | null
 ): Promise<void> {
   try {
     const insertData: Record<string, unknown> = {
