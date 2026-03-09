@@ -55,25 +55,20 @@ export async function logEvent({
       }
     }
 
-    const insertData: Record<string, unknown> = {
-      level,
-      event_type,
-      source,
-      subscriber_id,
-      telegram_user_id,
-      tier_id,
-      request_id,
-      message,
-      payload,
-    };
-
-    if (tenant_id) {
-      insertData.tenant_id = tenant_id;
-    }
-
     const { error } = await supabase
       .from('system_logs')
-      .insert(insertData);
+      .insert({
+        level,
+        event_type,
+        source,
+        subscriber_id,
+        telegram_user_id,
+        tier_id,
+        request_id,
+        message,
+        payload,
+        ...(tenant_id ? { tenant_id } : {}),
+      });
 
     if (error) {
       console.warn('[logger] Failed to log event:', error.message);
