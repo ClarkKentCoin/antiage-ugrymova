@@ -81,6 +81,7 @@ export function EditTierDialog({ tier, open, onOpenChange }: EditTierDialogProps
         is_active: tier.is_active,
         grace_period_enabled: tier.grace_period_enabled ?? true,
         show_in_dashboard: tier.show_in_dashboard ?? false,
+        purchase_once_only: tier.purchase_once_only ?? false,
       });
     }
   }, [tier]);
