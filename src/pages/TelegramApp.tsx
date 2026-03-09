@@ -143,6 +143,22 @@ export default function TelegramApp() {
   const telegramUserIdForPayments = user?.id ?? testUserId;
   const { data: payments } = usePaymentHistoryForUser(telegramUserIdForPayments, initData, tenantSlug);
 
+  // Compute set of tier IDs already purchased (for purchase_once_only enforcement)
+  const purchasedOnceOnlyTierIds = useMemo(() => {
+    const completedPayments = payments || [];
+    const ids = new Set<string>();
+    for (const p of completedPayments) {
+      if (p.tier_id) ids.add(p.tier_id);
+    }
+    const onceOnlyIds = new Set<string>();
+    for (const t of publicTiers) {
+      if (t.purchase_once_only && ids.has(t.id)) {
+        onceOnlyIds.add(t.id);
+      }
+    }
+    return onceOnlyIds;
+  }, [payments, publicTiers]);
+
   const daysRemaining = activeSubscriber?.subscription_end
     ? differenceInDays(new Date(activeSubscriber.subscription_end), new Date())
     : null;
