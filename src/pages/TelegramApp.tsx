@@ -504,34 +504,43 @@ function NewUserView({
         </h2>
 
         <div className="grid gap-3">
-          {tiers.map(tier => (
-            <Card 
-              key={tier.id} 
-              className={`cursor-pointer transition-all ${
-                selectedTier === tier.id 
-                  ? 'border-primary ring-2 ring-primary/30 bg-primary/5' 
-                  : 'hover:border-primary/50 hover:shadow-md'
-              }`}
-              onClick={() => handleSelectTier(tier.id)}
-            >
-              <CardContent className="flex items-center justify-between p-4">
-                <div className="flex items-center gap-3">
-                  <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
-                    selectedTier === tier.id ? 'border-primary bg-primary' : 'border-muted-foreground'
-                  }`}>
-                    {selectedTier === tier.id && (
-                      <CheckCircle className="h-4 w-4 text-primary-foreground" />
-                    )}
+          {tiers.map(tier => {
+            const isUsed = purchasedOnceOnlyTierIds.has(tier.id);
+            return (
+              <Card 
+                key={tier.id} 
+                className={`transition-all ${
+                  isUsed
+                    ? 'opacity-50 cursor-not-allowed'
+                    : selectedTier === tier.id 
+                      ? 'border-primary ring-2 ring-primary/30 bg-primary/5 cursor-pointer' 
+                      : 'hover:border-primary/50 hover:shadow-md cursor-pointer'
+                }`}
+                onClick={() => !isUsed && handleSelectTier(tier.id)}
+              >
+                <CardContent className="flex items-center justify-between p-4">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                      isUsed ? 'border-muted-foreground' : selectedTier === tier.id ? 'border-primary bg-primary' : 'border-muted-foreground'
+                    }`}>
+                      {selectedTier === tier.id && !isUsed && (
+                        <CheckCircle className="h-4 w-4 text-primary-foreground" />
+                      )}
+                    </div>
+                    <div>
+                      <p className="font-semibold text-lg">{tier.name}</p>
+                      {isUsed ? (
+                        <p className="text-sm text-destructive font-medium">Уже использован</p>
+                      ) : (
+                        <p className="text-sm text-muted-foreground">{formatDaysRu(tier.duration_days)}</p>
+                      )}
+                    </div>
                   </div>
-                  <div>
-                    <p className="font-semibold text-lg">{tier.name}</p>
-                    <p className="text-sm text-muted-foreground">{formatDaysRu(tier.duration_days)}</p>
-                  </div>
-                </div>
-                <p className="text-xl font-bold">{Number(tier.price).toLocaleString('ru-RU')}₽</p>
-              </CardContent>
-            </Card>
-          ))}
+                  <p className="text-xl font-bold">{Number(tier.price).toLocaleString('ru-RU')}₽</p>
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       </div>
 
