@@ -262,6 +262,18 @@ export function EditTierDialog({ tier, open, onOpenChange }: EditTierDialogProps
             />
           </div>
 
+          <div className="flex items-center justify-between">
+            <div>
+              <Label htmlFor="purchase_once_only">Можно купить только 1 раз</Label>
+              <p className="text-xs text-muted-foreground">Если включено, один и тот же подписчик сможет купить этот тариф только один раз</p>
+            </div>
+            <Switch
+              id="purchase_once_only"
+              checked={formData.purchase_once_only}
+              onCheckedChange={(checked) => setFormData({ ...formData, purchase_once_only: checked })}
+            />
+          </div>
+
           <div className="flex justify-end gap-3 pt-4">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Отмена

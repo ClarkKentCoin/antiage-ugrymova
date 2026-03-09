@@ -43,6 +43,11 @@ export function TierCard({ tier }: TierCardProps) {
                 <ShieldOff className="h-3 w-3" /> Без грейса
               </Badge>
             )}
+            {tier.purchase_once_only && (
+              <Badge variant="outline" className="text-xs gap-1 text-warning">
+                <Ban className="h-3 w-3" /> Только 1 раз
+              </Badge>
+            )}
           </div>
         </CardHeader>
         <CardContent>
