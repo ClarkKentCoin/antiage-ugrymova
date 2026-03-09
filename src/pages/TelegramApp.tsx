@@ -679,6 +679,7 @@ function GracePeriodView({
   const { toast } = useToast();
 
   const handleSelectTier = (tierId: string) => {
+    if (purchasedOnceOnlyTierIds.has(tierId)) return;
     setSelectedTier(tierId);
     setAutoRenewal(false);
     setConsentGiven(false);
