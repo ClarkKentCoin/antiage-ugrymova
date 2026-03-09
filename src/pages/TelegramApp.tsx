@@ -1023,7 +1023,7 @@ function SubscriptionContent({
           ip_address: null,
           user_agent: navigator.userAgent,
           telegram_user_id: telegramUserId,
-          tenant_slug: getTenantSlug(),
+          tenant_slug: getPublicTenantSlug(),
         },
       });
 
