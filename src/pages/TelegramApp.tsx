@@ -453,31 +453,38 @@ function NewUserView({
       console.error('Error generating payment link:', error);
 
       const err = error as any;
-      const detailsFromContext = typeof err?.context?.body === 'string'
-        ? (() => {
-            try {
-              const parsed = JSON.parse(err.context.body);
-              if (parsed?.error === 'tier_already_purchased_once' || parsed?.error === 'tier_no_recurring') {
-                return parsed.message;
-              }
-              return parsed?.error || parsed?.details;
-            } catch {
-              return err.context.body;
-            }
-          })()
-        : null;
+      let errorCode: string | null = null;
+      let errorMessage: string | null = null;
+      if (typeof err?.context?.body === 'string') {
+        try {
+          const parsed = JSON.parse(err.context.body);
+          errorCode = parsed?.error ?? null;
+          errorMessage = parsed?.message ?? null;
+        } catch {}
+      }
 
-      toast({
-        title: 'Ошибка',
-        description: detailsFromContext || err?.message || 'Не удалось создать ссылку для оплаты',
-        variant: 'destructive',
-      });
+      if (errorCode === 'tier_already_purchased_once') {
+        const tierName = tiers.find(t => t.id === selectedTier)?.name;
+        toast({
+          title: 'Тариф уже использован',
+          description: tierName
+            ? `Тариф «${tierName}» уже был использован. Пожалуйста, выберите другой тариф.`
+            : 'Этот тариф можно купить только один раз. Пожалуйста, выберите другой тариф.',
+        });
+      } else {
+        toast({
+          title: 'Ошибка',
+          description: errorMessage || err?.message || 'Не удалось создать ссылку для оплаты',
+          variant: 'destructive',
+        });
+      }
     } finally {
       setGeneratingLink(false);
     }
   };
 
   const selectedTierData = tiers.find(t => t.id === selectedTier);
+  const isSelectedTierUsed = selectedTier ? purchasedOnceOnlyTierIds.has(selectedTier) : false;
 
   return (
     <div className="p-4 space-y-6">
