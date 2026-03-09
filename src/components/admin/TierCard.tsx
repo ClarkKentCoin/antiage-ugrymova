@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Pencil, Trash2, ShieldCheck, ShieldOff } from 'lucide-react';
+import { Pencil, Trash2, ShieldCheck, ShieldOff, Ban } from 'lucide-react';
 import { SubscriptionTier, useDeleteTier, formatDuration } from '@/hooks/useSubscriptionTiers';
 import { EditTierDialog } from './EditTierDialog';
 
