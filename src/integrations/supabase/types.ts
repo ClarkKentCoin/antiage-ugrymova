@@ -14,6 +14,84 @@ export type Database = {
   }
   public: {
     Tables: {
+      _backup_mt_step1_invite_links: {
+        Row: {
+          created_at: string | null
+          expires_at: string | null
+          id: string | null
+          invite_link: string | null
+          revoked: boolean | null
+          revoked_at: string | null
+          subscriber_id: string | null
+          tenant_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          expires_at?: string | null
+          id?: string | null
+          invite_link?: string | null
+          revoked?: boolean | null
+          revoked_at?: string | null
+          subscriber_id?: string | null
+          tenant_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          expires_at?: string | null
+          id?: string | null
+          invite_link?: string | null
+          revoked?: boolean | null
+          revoked_at?: string | null
+          subscriber_id?: string | null
+          tenant_id?: string | null
+        }
+        Relationships: []
+      }
+      _backup_mt_step1_system_logs: {
+        Row: {
+          created_at: string | null
+          event_type: string | null
+          id: string | null
+          level: string | null
+          message: string | null
+          payload: Json | null
+          request_id: string | null
+          source: string | null
+          subscriber_id: string | null
+          telegram_user_id: number | null
+          tenant_id: string | null
+          tier_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          event_type?: string | null
+          id?: string | null
+          level?: string | null
+          message?: string | null
+          payload?: Json | null
+          request_id?: string | null
+          source?: string | null
+          subscriber_id?: string | null
+          telegram_user_id?: number | null
+          tenant_id?: string | null
+          tier_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          event_type?: string | null
+          id?: string | null
+          level?: string | null
+          message?: string | null
+          payload?: Json | null
+          request_id?: string | null
+          source?: string | null
+          subscriber_id?: string | null
+          telegram_user_id?: number | null
+          tenant_id?: string | null
+          tier_id?: string | null
+        }
+        Relationships: []
+      }
       admin_notification_log: {
         Row: {
           created_at: string
@@ -142,7 +220,7 @@ export type Database = {
           {
             foreignKeyName: "admin_settings_tenant_id_fkey"
             columns: ["tenant_id"]
-            isOneToOne: false
+            isOneToOne: true
             referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
@@ -503,7 +581,15 @@ export type Database = {
           tenant_id?: string | null
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "subscription_tiers_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       system_logs: {
         Row: {
@@ -554,6 +640,13 @@ export type Database = {
             columns: ["subscriber_id"]
             isOneToOne: false
             referencedRelation: "subscribers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "system_logs_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
           {
