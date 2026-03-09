@@ -146,7 +146,7 @@ export default function TelegramApp() {
 
   // For testing outside Telegram (DEV or ?test=1)
   const [testUserId, setTestUserId] = useState<number | null>(null);
-  const { data: testSubscriberResponse, isLoading: loadingTestSubscriber, refetch: refetchTestSubscriber } = useSubscriber(testUserId);
+  const { data: testSubscriberResponse, isLoading: loadingTestSubscriber, refetch: refetchTestSubscriber } = useSubscriber(testUserId, null, null, publicTenantId);
   const testSubscriber = testSubscriberResponse?.subscriber ?? null;
 
   const activeSubscriber = user ? subscriber : testSubscriber;
