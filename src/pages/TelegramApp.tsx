@@ -453,31 +453,38 @@ function NewUserView({
       console.error('Error generating payment link:', error);
 
       const err = error as any;
-      const detailsFromContext = typeof err?.context?.body === 'string'
-        ? (() => {
-            try {
-              const parsed = JSON.parse(err.context.body);
-              if (parsed?.error === 'tier_already_purchased_once' || parsed?.error === 'tier_no_recurring') {
-                return parsed.message;
-              }
-              return parsed?.error || parsed?.details;
-            } catch {
-              return err.context.body;
-            }
-          })()
-        : null;
+      let errorCode: string | null = null;
+      let errorMessage: string | null = null;
+      if (typeof err?.context?.body === 'string') {
+        try {
+          const parsed = JSON.parse(err.context.body);
+          errorCode = parsed?.error ?? null;
+          errorMessage = parsed?.message ?? null;
+        } catch {}
+      }
 
-      toast({
-        title: 'Ошибка',
-        description: detailsFromContext || err?.message || 'Не удалось создать ссылку для оплаты',
-        variant: 'destructive',
-      });
+      if (errorCode === 'tier_already_purchased_once') {
+        const tierName = tiers.find(t => t.id === selectedTier)?.name;
+        toast({
+          title: 'Тариф уже использован',
+          description: tierName
+            ? `Тариф «${tierName}» уже был использован. Пожалуйста, выберите другой тариф.`
+            : 'Этот тариф можно купить только один раз. Пожалуйста, выберите другой тариф.',
+        });
+      } else {
+        toast({
+          title: 'Ошибка',
+          description: errorMessage || err?.message || 'Не удалось создать ссылку для оплаты',
+          variant: 'destructive',
+        });
+      }
     } finally {
       setGeneratingLink(false);
     }
   };
 
   const selectedTierData = tiers.find(t => t.id === selectedTier);
+  const isSelectedTierUsed = selectedTier ? purchasedOnceOnlyTierIds.has(selectedTier) : false;
 
   return (
     <div className="p-4 space-y-6">
@@ -627,10 +634,16 @@ function NewUserView({
               </>
             )}
 
+            {isSelectedTierUsed && (
+              <p className="text-sm text-center text-muted-foreground">
+                Тариф «{selectedTierData?.name}» уже был использован. Пожалуйста, выберите другой тариф.
+              </p>
+            )}
+
             <Button 
               className="w-full" 
               size="lg"
-              disabled={generatingLink || (autoRenewal && !consentGiven)}
+              disabled={generatingLink || isSelectedTierUsed || (autoRenewal && !consentGiven)}
               onClick={handlePayment}
             >
               {generatingLink ? (
@@ -717,16 +730,29 @@ function GracePeriodView({
     } catch (error) {
       console.error('Error generating payment link:', error);
       const err = error as any;
-      const detailsFromContext = typeof err?.context?.body === 'string'
-        ? (() => { try { const p = JSON.parse(err.context.body); return (p?.error === 'tier_already_purchased_once' || p?.error === 'tier_no_recurring') ? p.message : (p?.error || p?.details); } catch { return err.context.body; } })()
-        : null;
-      toast({ title: 'Ошибка', description: detailsFromContext || 'Не удалось создать ссылку для оплаты', variant: 'destructive' });
+      let errorCode: string | null = null;
+      let errorMessage: string | null = null;
+      if (typeof err?.context?.body === 'string') {
+        try { const p = JSON.parse(err.context.body); errorCode = p?.error ?? null; errorMessage = p?.message ?? null; } catch {}
+      }
+      if (errorCode === 'tier_already_purchased_once') {
+        const tierName = tiers.find(t => t.id === selectedTier)?.name;
+        toast({
+          title: 'Тариф уже использован',
+          description: tierName
+            ? `Тариф «${tierName}» уже был использован. Пожалуйста, выберите другой тариф.`
+            : 'Этот тариф можно купить только один раз. Пожалуйста, выберите другой тариф.',
+        });
+      } else {
+        toast({ title: 'Ошибка', description: errorMessage || 'Не удалось создать ссылку для оплаты', variant: 'destructive' });
+      }
     } finally {
       setGeneratingLink(false);
     }
   };
 
   const selectedTierData = tiers.find(t => t.id === selectedTier);
+  const isSelectedTierUsed = selectedTier ? purchasedOnceOnlyTierIds.has(selectedTier) : false;
 
   return (
     <div className="p-4 space-y-6">
@@ -888,10 +914,16 @@ function GracePeriodView({
               </>
             )}
 
+            {isSelectedTierUsed && (
+              <p className="text-sm text-center text-muted-foreground">
+                Тариф «{selectedTierData?.name}» уже был использован. Пожалуйста, выберите другой тариф.
+              </p>
+            )}
+
             <Button 
               className="w-full" 
               size="lg"
-              disabled={generatingLink || (autoRenewal && !consentGiven)}
+              disabled={generatingLink || isSelectedTierUsed || (autoRenewal && !consentGiven)}
               onClick={handlePayment}
             >
               {generatingLink ? (
@@ -989,10 +1021,22 @@ function SubscriptionContent({
     } catch (error) {
       console.error('Error generating payment link:', error);
       const err = error as any;
-      const detailsFromContext = typeof err?.context?.body === 'string'
-        ? (() => { try { const p = JSON.parse(err.context.body); return (p?.error === 'tier_already_purchased_once' || p?.error === 'tier_no_recurring') ? p.message : (p?.error || p?.details); } catch { return err.context.body; } })()
-        : null;
-      toast({ title: 'Ошибка', description: detailsFromContext || 'Не удалось создать ссылку для оплаты', variant: 'destructive' });
+      let errorCode: string | null = null;
+      let errorMessage: string | null = null;
+      if (typeof err?.context?.body === 'string') {
+        try { const p = JSON.parse(err.context.body); errorCode = p?.error ?? null; errorMessage = p?.message ?? null; } catch {}
+      }
+      if (errorCode === 'tier_already_purchased_once') {
+        const tierName = tiers.find(t => t.id === selectedTier)?.name;
+        toast({
+          title: 'Тариф уже использован',
+          description: tierName
+            ? `Тариф «${tierName}» уже был использован. Пожалуйста, выберите другой тариф.`
+            : 'Этот тариф можно купить только один раз. Пожалуйста, выберите другой тариф.',
+        });
+      } else {
+        toast({ title: 'Ошибка', description: errorMessage || 'Не удалось создать ссылку для оплаты', variant: 'destructive' });
+      }
     } finally {
       setGeneratingLink(false);
     }
@@ -1330,24 +1374,37 @@ function SubscriptionContent({
                   </div>
                 )}
 
-                <Button 
-                  className="w-full" 
-                  size="lg"
-                  disabled={generatingLink || (autoRenewal && !consentGiven)}
-                  onClick={handleGeneratePaymentLink}
-                >
-                  {generatingLink ? (
+                {(() => {
+                  const isUsedInExtend = selectedTier ? purchasedOnceOnlyTierIds.has(selectedTier) : false;
+                  const extendTierName = tiers.find(t => t.id === selectedTier)?.name;
+                  return (
                     <>
-                      <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                      Создание ссылки...
+                      {isUsedInExtend && (
+                        <p className="text-sm text-center text-muted-foreground">
+                          Тариф «{extendTierName}» уже был использован. Пожалуйста, выберите другой тариф.
+                        </p>
+                      )}
+                      <Button 
+                        className="w-full" 
+                        size="lg"
+                        disabled={generatingLink || isUsedInExtend || (autoRenewal && !consentGiven)}
+                        onClick={handleGeneratePaymentLink}
+                      >
+                        {generatingLink ? (
+                          <>
+                            <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                            Создание ссылки...
+                          </>
+                        ) : (
+                          <>
+                            <CreditCard className="mr-2 h-4 w-4" />
+                            Оплатить через Robokassa
+                          </>
+                        )}
+                      </Button>
                     </>
-                  ) : (
-                    <>
-                      <CreditCard className="mr-2 h-4 w-4" />
-                      Оплатить через Robokassa
-                    </>
-                  )}
-                </Button>
+                  );
+                })()}
               </CardContent>
             </Card>
           )}
