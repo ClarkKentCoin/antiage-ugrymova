@@ -400,6 +400,7 @@ function NewUserView({
   onRefetch,
   onDebugTap,
   purchasedOnceOnlyTierIds = new Set(),
+  logoUrl,
 }: {
   channelInfo: { name: string; description: string } | null;
   tiers: any[];
@@ -408,6 +409,7 @@ function NewUserView({
   onRefetch?: () => void;
   onDebugTap?: () => void;
   purchasedOnceOnlyTierIds?: Set<string>;
+  logoUrl?: string | null;
 }) {
   const [selectedTier, setSelectedTier] = useState<string | null>(null);
   const [autoRenewal, setAutoRenewal] = useState(false);
