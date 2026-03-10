@@ -205,6 +205,9 @@ export default function AdminSettings() {
         notification_subscription_expiring_single: settings.notification_subscription_expiring_single || null,
         telegram_admin_notifications_enabled: settings.telegram_admin_notifications_enabled,
         telegram_admin_notifications_channel_id: settings.telegram_admin_notifications_channel_id || null,
+        channel_name: settings.channel_name || null,
+        channel_description: settings.channel_description || null,
+        logo_url: settings.logo_url || null,
       };
 
       let error;
