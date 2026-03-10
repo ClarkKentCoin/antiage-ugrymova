@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
-import { DEFAULT_TENANT_ID, requireAdminSettingsForTenant } from "../_shared/tenant.ts";
+import { resolveTenantFromRequest, requireAdminSettingsForTenant } from "../_shared/tenant.ts";
 
 interface TelegramResponse {
   ok: boolean;
