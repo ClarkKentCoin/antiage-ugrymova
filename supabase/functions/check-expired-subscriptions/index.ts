@@ -267,9 +267,9 @@ serve(async (req) => {
               console.error(`[check-expired] Failed to ban user ${subscriber.telegram_user_id}:`, banResult.description);
               globalResults.errors++;
             }
-          } else {
-            // Move to grace period
-            console.log(`[check-expired] Attempting to move user ${subscriber.telegram_user_id} to grace period`);
+          } else if (effectiveGraceDays > 0) {
+            // Move to grace period (only if tier allows grace AND tenant has grace days)
+            console.log(`[check-expired] Attempting to move user ${subscriber.telegram_user_id} to grace period (tierGraceEnabled=${tierGraceEnabled}, graceDays=${effectiveGraceDays})`);
 
             const { data: updated, error: updateError } = await supabaseAdmin
               .from("subscribers")
