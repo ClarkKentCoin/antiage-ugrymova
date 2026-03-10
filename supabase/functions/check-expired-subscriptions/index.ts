@@ -179,12 +179,14 @@ serve(async (req) => {
       for (const subscriber of expiredSubscribers || []) {
         try {
           const subscriptionEnd = new Date(subscriber.subscription_end);
+          const tierGraceEnabled = subscriber.subscription_tiers?.grace_period_enabled === true;
+          const effectiveGraceDays = (tierGraceEnabled && gracePeriodDays > 0) ? gracePeriodDays : 0;
           const graceEndDate = new Date(subscriptionEnd);
-          graceEndDate.setDate(graceEndDate.getDate() + gracePeriodDays);
+          graceEndDate.setDate(graceEndDate.getDate() + effectiveGraceDays);
 
           if (now >= graceEndDate) {
-            // Grace period has ended or no grace period - ban user permanently
-            console.log(`[check-expired] Banning user ${subscriber.telegram_user_id} - grace period ended`);
+            // Grace period has ended, no grace period, or tier grace disabled - ban user permanently
+            console.log(`[check-expired] Banning user ${subscriber.telegram_user_id} - grace ended or no grace (tierGraceEnabled=${tierGraceEnabled}, effectiveGraceDays=${effectiveGraceDays})`);
 
             const { data: updated, error: updateError } = await supabaseAdmin
               .from("subscribers")
