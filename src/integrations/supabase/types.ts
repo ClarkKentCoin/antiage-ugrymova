@@ -704,6 +704,24 @@ export type Database = {
     Functions: {
       current_tenant_id: { Args: never; Returns: string }
       default_admin_id: { Args: never; Returns: string }
+      ensure_admin_bootstrap: {
+        Args: { p_user_id: string }
+        Returns: {
+          created_settings: boolean
+          created_tenant: boolean
+          tenant_id: string
+          tenant_slug: string
+        }[]
+      }
+      ensure_current_admin_bootstrap: {
+        Args: never
+        Returns: {
+          created_settings: boolean
+          created_tenant: boolean
+          tenant_id: string
+          tenant_slug: string
+        }[]
+      }
       generate_tenant_slug: { Args: never; Returns: string }
       has_role: {
         Args: {
