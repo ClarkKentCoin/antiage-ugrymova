@@ -1153,6 +1153,7 @@ function SubscriptionContent({
         onDebugTap={onDebugTap}
         purchasedOnceOnlyTierIds={purchasedOnceOnlyTierIds}
         logoUrl={logoUrl}
+      />
     );
   }
 
