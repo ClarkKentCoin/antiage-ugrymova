@@ -51,6 +51,7 @@ export default function AdminSettings() {
   const [copiedBotWebhook, setCopiedBotWebhook] = useState(false);
   const [copiedMiniAppUrl, setCopiedMiniAppUrl] = useState(false);
   const [copiedTenantSlug, setCopiedTenantSlug] = useState(false);
+  const [canonicalBase, setCanonicalBase] = useState<string | null>(null);
   const [settings, setSettings] = useState<AdminSettingsData>({
     telegram_bot_token: '',
     telegram_channel_id: '',
