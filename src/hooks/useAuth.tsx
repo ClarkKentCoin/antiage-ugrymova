@@ -10,6 +10,7 @@ interface AuthContextType {
   tenantId: string | null;
   tenantSlug: string | null;
   tenantLoading: boolean;
+  bootstrapFailed: boolean;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signUp: (email: string, password: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
@@ -25,9 +26,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [tenantId, setTenantId] = useState<string | null>(null);
   const [tenantSlug, setTenantSlug] = useState<string | null>(null);
   const [tenantLoading, setTenantLoading] = useState(true);
+  const [bootstrapFailed, setBootstrapFailed] = useState(false);
 
-  const loadTenantContext = async (userId: string) => {
-    setTenantLoading(true);
+  const loadTenantContext = async (userId: string): Promise<boolean> => {
     try {
       const { data, error } = await supabase
         .from('tenants')
@@ -41,22 +42,66 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.warn('Error loading tenant context:', error);
         setTenantId(null);
         setTenantSlug(null);
+        return false;
       } else if (data) {
         setTenantId(data.id);
         setTenantSlug(data.slug);
         console.debug('Tenant context loaded', { tenantId: data.id, tenantSlug: data.slug, userId });
+        return true;
       } else {
         console.warn('No tenant found for user:', userId);
         setTenantId(null);
         setTenantSlug(null);
+        return false;
       }
     } catch (error) {
       console.warn('Exception loading tenant context:', error);
       setTenantId(null);
       setTenantSlug(null);
+      return false;
+    }
+  };
+
+  const handleAdminBootstrap = async (userId: string) => {
+    setTenantLoading(true);
+    setBootstrapFailed(false);
+
+    const found = await loadTenantContext(userId);
+    if (found) {
+      setTenantLoading(false);
+      return;
+    }
+
+    // Admin but no tenant — attempt self-heal bootstrap
+    console.debug('[bootstrap] Admin detected without tenant, calling ensure_current_admin_bootstrap');
+    try {
+      const { data, error } = await supabase.rpc('ensure_current_admin_bootstrap');
+      if (error) {
+        console.error('[bootstrap] RPC error:', error);
+        setBootstrapFailed(true);
+        setTenantLoading(false);
+        return;
+      }
+      console.debug('[bootstrap] RPC result:', data);
+
+      // Reload tenant context after bootstrap
+      const reloaded = await loadTenantContext(userId);
+      console.debug('[bootstrap] Tenant reload result:', reloaded ? 'success' : 'still missing');
+      if (!reloaded) {
+        setBootstrapFailed(true);
+      }
+    } catch (err) {
+      console.error('[bootstrap] Exception:', err);
+      setBootstrapFailed(true);
     } finally {
       setTenantLoading(false);
     }
+  };
+
+  const handleNonAdminTenant = async (userId: string) => {
+    setTenantLoading(true);
+    await loadTenantContext(userId);
+    setTenantLoading(false);
   };
 
   useEffect(() => {
@@ -65,7 +110,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(session?.user ?? null);
       if (session?.user) {
         checkAdminRole(session.user.id);
-        loadTenantContext(session.user.id);
       } else {
         setIsLoading(false);
         setTenantLoading(false);
@@ -77,13 +121,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(session?.user ?? null);
       if (session?.user) {
         checkAdminRole(session.user.id);
-        loadTenantContext(session.user.id);
       } else {
         setIsAdmin(false);
         setIsLoading(false);
         setTenantId(null);
         setTenantSlug(null);
         setTenantLoading(false);
+        setBootstrapFailed(false);
       }
     });
 
@@ -99,10 +143,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .eq('role', 'admin')
         .maybeSingle();
       
-      setIsAdmin(!!data && !error);
+      const adminResult = !!data && !error;
+      setIsAdmin(adminResult);
+
+      if (adminResult) {
+        console.debug('[auth] Admin role confirmed for', userId);
+        await handleAdminBootstrap(userId);
+      } else {
+        await handleNonAdminTenant(userId);
+      }
     } catch (error) {
       console.error('Error checking admin role:', error);
       setIsAdmin(false);
+      setTenantLoading(false);
     } finally {
       setIsLoading(false);
     }
@@ -123,7 +176,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, session, isAdmin, isLoading, tenantId, tenantSlug, tenantLoading, signIn, signUp, signOut }}>
+    <AuthContext.Provider value={{ user, session, isAdmin, isLoading, tenantId, tenantSlug, tenantLoading, bootstrapFailed, signIn, signUp, signOut }}>
       {children}
     </AuthContext.Provider>
   );
