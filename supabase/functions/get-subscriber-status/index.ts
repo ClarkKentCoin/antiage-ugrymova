@@ -182,7 +182,7 @@ serve(async (req) => {
         `id, telegram_user_id, telegram_username, first_name, last_name, phone_number,
          status, subscription_start, subscription_end, auto_renewal, tier_id, is_in_channel,
          created_at, updated_at, subscriber_payment_method,
-         subscription_tiers ( id, name, price, duration_days )`,
+         subscription_tiers ( id, name, price, duration_days, grace_period_enabled )`,
       )
       .eq("telegram_user_id", Number(telegram_user_id))
       .eq("tenant_id", tenantId)
@@ -196,7 +196,7 @@ serve(async (req) => {
       );
     }
 
-    // Calculate grace period info if subscriber exists and is in grace period
+    // Calculate grace period info only when tier actually allows grace
     let graceDaysRemaining: number | null = null;
     let graceEndAt: string | null = null;
     let graceMsRemaining: number | null = null;
@@ -204,17 +204,18 @@ serve(async (req) => {
     const serverNow = new Date();
     const serverNowMs = serverNow.getTime();
     const expiresAtRaw = subscriber?.subscription_end ?? null;
+    const tierGraceEnabled = subscriber?.subscription_tiers?.grace_period_enabled === true;
 
-    if (subscriber?.subscription_end && (subscriber.status === "grace_period" || subscriber.status === "past_due")) {
+    if (subscriber?.subscription_end && tierGraceEnabled && gracePeriodDays > 0 &&
+        (subscriber.status === "grace_period" || subscriber.status === "past_due")) {
       const subscriptionEnd = new Date(subscriber.subscription_end).getTime();
       const graceEndMs = subscriptionEnd + (gracePeriodDays * MS_PER_DAY);
       
-      // Use Math.ceil to ensure we show "1 day" at the start, not "0 days"
       graceMsRemaining = graceEndMs - serverNowMs;
       graceDaysRemaining = Math.max(0, Math.ceil(graceMsRemaining / MS_PER_DAY));
       graceEndAt = new Date(graceEndMs).toISOString();
       
-      console.log(`[get-subscriber-status] Grace period: subscriptionEnd=${subscriber.subscription_end}, gracePeriodDays=${gracePeriodDays}, graceDaysRemaining=${graceDaysRemaining}, graceMsRemaining=${graceMsRemaining}`);
+      console.log(`[get-subscriber-status] Grace period: subscriptionEnd=${subscriber.subscription_end}, gracePeriodDays=${gracePeriodDays}, graceDaysRemaining=${graceDaysRemaining}, tierGraceEnabled=${tierGraceEnabled}`);
     }
 
     console.log("Returning subscriber:", subscriber?.id, subscriber?.status, { tenant_id_used: tenantId, tenant_slug_used: tenant_slug || null, function_version: FUNCTION_VERSION });

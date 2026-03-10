@@ -358,54 +358,70 @@ serve(async (req) => {
         }
       }
 
-      // Status changed to grace_period - send warning
+      // Status changed to grace_period - send warning only if tier allows grace
       if (new_status === "grace_period" && old_status !== "grace_period") {
-        console.log(`Sending grace period warning to ${telegram_user_id}`);
+        // Load subscriber's tier to check grace_period_enabled
+        let tierGraceEnabled = true; // default to true for backward compat
+        if (subscriber_id) {
+          const { data: subData } = await supabaseAdmin
+            .from("subscribers")
+            .select("subscription_tiers ( grace_period_enabled )")
+            .eq("id", subscriber_id)
+            .maybeSingle();
+          tierGraceEnabled = subData?.subscription_tiers?.grace_period_enabled === true;
+        }
 
-        const template =
-          settings.notification_grace_period_warning || DEFAULT_GRACE_PERIOD_WARNING;
-        const message = replaceVariables(template, {
-          channel_name: channelName,
-          days: String(gracePeriodDays),
-          days_word: getDayWordRu(gracePeriodDays),
-          days_label: formatDaysRu(gracePeriodDays),
-        });
+        if (tierGraceEnabled && gracePeriodDays > 0) {
+          console.log(`Sending grace period warning to ${telegram_user_id}`);
 
-        const msgResult = await callTelegramApi(botToken, "sendMessage", {
-          chat_id: telegram_user_id,
-          text: message,
-          parse_mode: "HTML",
-        });
+          const template =
+            settings.notification_grace_period_warning || DEFAULT_GRACE_PERIOD_WARNING;
+          const message = replaceVariables(template, {
+            channel_name: channelName,
+            days: String(gracePeriodDays),
+            days_word: getDayWordRu(gracePeriodDays),
+            days_label: formatDaysRu(gracePeriodDays),
+          });
 
-        await logUserNotification({
-          supabaseAdmin,
-          source: "subscriber-status-change",
-          notificationKey: "grace_warning",
-          subscriberId: subscriber_id,
-          telegramUserId: telegram_user_id,
-          days: gracePeriodDays,
-          telegramOk: msgResult.ok,
-          telegramError: msgResult.ok ? null : msgResult.description,
-          textPreview: message,
-        });
+          const msgResult = await callTelegramApi(botToken, "sendMessage", {
+            chat_id: telegram_user_id,
+            text: message,
+            parse_mode: "HTML",
+          });
 
-        await sendAdminNotification({
-          supabaseAdmin,
-          tenantId,
-          eventType: "GRACE_STARTED",
-          subscriber: {
-            id: subscriber_id,
-            name: null,
-            username: null,
-            telegram_user_id: telegram_user_id,
-            email: null,
-          },
-          status: new_status,
-          subscriptionEndISO: subscription_end,
-          source: "subscriber-status-change",
-        });
+          await logUserNotification({
+            supabaseAdmin,
+            source: "subscriber-status-change",
+            notificationKey: "grace_warning",
+            subscriberId: subscriber_id,
+            telegramUserId: telegram_user_id,
+            days: gracePeriodDays,
+            telegramOk: msgResult.ok,
+            telegramError: msgResult.ok ? null : msgResult.description,
+            textPreview: message,
+          });
 
-        results.notification_sent = msgResult.ok;
+          await sendAdminNotification({
+            supabaseAdmin,
+            tenantId,
+            eventType: "GRACE_STARTED",
+            subscriber: {
+              id: subscriber_id,
+              name: null,
+              username: null,
+              telegram_user_id: telegram_user_id,
+              email: null,
+            },
+            status: new_status,
+            subscriptionEndISO: subscription_end,
+            source: "subscriber-status-change",
+          });
+
+          results.notification_sent = msgResult.ok;
+        } else {
+          console.log(`[subscriber-status-change] Skipping grace notification for ${telegram_user_id} - tier grace disabled or gracePeriodDays=0`);
+          results.notification_sent = false;
+        }
       }
 
       // Status changed to active (renewal/reactivation) - send notification + invite
