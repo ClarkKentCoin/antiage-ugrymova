@@ -136,8 +136,8 @@ serve(async (req) => {
       const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
       const baseMiniAppUrl = supabaseUrl.replace('.supabase.co', '.lovable.app');
       const defaultMiniAppUrl = tenantSlug
-        ? `${baseMiniAppUrl}/telegram?t=${encodeURIComponent(tenantSlug)}`
-        : `${baseMiniAppUrl}/telegram`;
+        ? `${baseMiniAppUrl}/telegram-app?t=${encodeURIComponent(tenantSlug)}`
+        : `${baseMiniAppUrl}/telegram-app`;
 
       const buttonUrl = settings.welcome_message_button_url || defaultMiniAppUrl;
 
