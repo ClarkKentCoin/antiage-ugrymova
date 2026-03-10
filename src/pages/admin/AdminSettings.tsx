@@ -338,6 +338,114 @@ export default function AdminSettings() {
         </div>
 
         <div className="grid gap-6 max-w-2xl">
+          {/* Mini App Branding */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Брендинг Mini App</CardTitle>
+              <CardDescription>Название канала, описание и логотип для Telegram Mini App</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="channel_name">Название канала</Label>
+                <Input
+                  id="channel_name"
+                  placeholder="АНТИЭЙДЖ ЛАБ"
+                  value={settings.channel_name || ''}
+                  onChange={(e) => setSettings({ ...settings, channel_name: e.target.value })}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="channel_description">Описание канала</Label>
+                <Textarea
+                  id="channel_description"
+                  placeholder="Закрытый Telegram-канал…"
+                  value={settings.channel_description || ''}
+                  onChange={(e) => setSettings({ ...settings, channel_description: e.target.value })}
+                  rows={3}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Логотип</Label>
+                <div className="flex items-start gap-4">
+                  <img
+                    src={settings.logo_url || logoFallback}
+                    alt="Логотип"
+                    className="w-24 h-24 object-contain rounded border bg-muted p-1"
+                  />
+                  <div className="space-y-2 flex-1">
+                    <input
+                      ref={logoInputRef}
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp"
+                      className="hidden"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file || !tenantId) return;
+                        if (file.size > 2 * 1024 * 1024) {
+                          toast({ title: 'Файл слишком большой (макс. 2 МБ)', variant: 'destructive' });
+                          return;
+                        }
+                        const ext = file.name.split('.').pop()?.toLowerCase() || 'png';
+                        if (!['png', 'jpg', 'jpeg', 'webp'].includes(ext)) {
+                          toast({ title: 'Допустимые форматы: png, jpg, webp', variant: 'destructive' });
+                          return;
+                        }
+                        setIsUploadingLogo(true);
+                        try {
+                          const path = `${tenantId}/logo-${Date.now()}.${ext}`;
+                          const { error: uploadError } = await supabase.storage
+                            .from('branding-assets')
+                            .upload(path, file, { upsert: false });
+                          if (uploadError) throw uploadError;
+                          const { data: urlData } = supabase.storage
+                            .from('branding-assets')
+                            .getPublicUrl(path);
+                          setSettings({ ...settings, logo_url: urlData.publicUrl });
+                          toast({ title: 'Логотип загружен' });
+                        } catch (err) {
+                          console.error('Logo upload error:', err);
+                          toast({ title: 'Ошибка загрузки логотипа', variant: 'destructive' });
+                        } finally {
+                          setIsUploadingLogo(false);
+                          if (logoInputRef.current) logoInputRef.current.value = '';
+                        }
+                      }}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={isUploadingLogo}
+                      onClick={() => logoInputRef.current?.click()}
+                    >
+                      {isUploadingLogo ? (
+                        <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Загрузка…</>
+                      ) : (
+                        <><Upload className="mr-2 h-4 w-4" />Загрузить логотип</>
+                      )}
+                    </Button>
+                    {settings.logo_url && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setSettings({ ...settings, logo_url: null });
+                          toast({ title: 'Логотип сброшен на стандартный (сохраните настройки)' });
+                        }}
+                      >
+                        <X className="mr-2 h-4 w-4" />Сбросить на стандартный
+                      </Button>
+                    )}
+                    <p className="text-xs text-muted-foreground">PNG, JPG или WebP, макс. 2 МБ</p>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
           {/* Telegram Settings */}
           <Card>
             <CardHeader>
