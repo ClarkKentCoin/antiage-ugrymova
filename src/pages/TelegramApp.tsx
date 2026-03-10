@@ -1167,7 +1167,7 @@ function SubscriptionContent({
         onRefetch={onRefetch}
         onDebugTap={onDebugTap}
         purchasedOnceOnlyTierIds={purchasedOnceOnlyTierIds}
-      />
+        logoUrl={logoUrl}
     );
   }
 
