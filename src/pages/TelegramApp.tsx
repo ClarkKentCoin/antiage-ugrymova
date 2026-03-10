@@ -793,7 +793,7 @@ function GracePeriodView({
           className="flex items-center justify-center mx-auto mb-2 cursor-pointer select-none"
           onClick={onDebugTap}
         >
-          <img src={logoUrl || logoUgrymova} alt="Logo" className="max-w-[160px] h-auto" />
+          <img src={resolveLogoSrc(logoUrl)} alt="Logo" className="max-w-[160px] h-auto" />
         </div>
       </div>
 
