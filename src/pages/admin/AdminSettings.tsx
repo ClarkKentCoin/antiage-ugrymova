@@ -10,7 +10,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { Loader2, Copy, Check } from 'lucide-react';
-import { getCanonicalAppBaseUrl } from '@/lib/appConfig';
+
 
 interface AdminSettingsData {
   telegram_bot_token: string | null;
@@ -51,6 +51,7 @@ export default function AdminSettings() {
   const [copiedBotWebhook, setCopiedBotWebhook] = useState(false);
   const [copiedMiniAppUrl, setCopiedMiniAppUrl] = useState(false);
   const [copiedTenantSlug, setCopiedTenantSlug] = useState(false);
+  const [canonicalBase, setCanonicalBase] = useState<string | null>(null);
   const [settings, setSettings] = useState<AdminSettingsData>({
     telegram_bot_token: '',
     telegram_channel_id: '',
@@ -80,10 +81,21 @@ export default function AdminSettings() {
   // Generate default webhook URLs
   const defaultWebhookUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/robokassa-webhook`;
   const botWebhookUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/telegram-bot-webhook`;
-  const canonicalBase = getCanonicalAppBaseUrl();
-  const miniAppUrl = tenantSlug
+  const miniAppUrl = (canonicalBase && tenantSlug)
     ? `${canonicalBase}/telegram-app?t=${encodeURIComponent(tenantSlug)}`
     : null;
+
+  // Fetch canonical base URL from backend
+  useEffect(() => {
+    if (!tenantSlug) return;
+    supabase.functions.invoke('get-public-app-config', {
+      body: { tenant_slug: tenantSlug },
+    }).then(({ data }) => {
+      if (data?.canonical_base_url) {
+        setCanonicalBase(data.canonical_base_url);
+      }
+    }).catch(err => console.warn('Failed to fetch canonical base URL:', err));
+  }, [tenantSlug]);
 
   useEffect(() => {
     if (!tenantLoading) {

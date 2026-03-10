@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 import { resolveTenantIdFromSlug, DEFAULT_TENANT_ID } from "../_shared/tenant.ts";
+import { getCanonicalAppBaseUrl } from "../_shared/appConfig.ts";
 
 /**
  * Public config endpoint — returns ONLY safe non-sensitive tenant settings
@@ -62,6 +63,7 @@ serve(async (req) => {
         channel_description: settings?.channel_description ?? null,
         grace_period_days: settings?.grace_period_days ?? 0,
         payment_link: settings?.payment_link ?? null,
+        canonical_base_url: getCanonicalAppBaseUrl(),
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
