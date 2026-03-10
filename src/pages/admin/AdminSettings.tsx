@@ -41,7 +41,7 @@ interface AdminSettingsData {
 
 export default function AdminSettings() {
   const { toast } = useToast();
-  const { tenantId, tenantLoading } = useAuth();
+  const { tenantId, tenantSlug, tenantLoading } = useAuth();
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isSettingBotWebhook, setIsSettingBotWebhook] = useState(false);
