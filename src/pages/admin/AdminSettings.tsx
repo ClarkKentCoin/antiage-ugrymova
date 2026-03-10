@@ -10,6 +10,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { Loader2, Copy, Check } from 'lucide-react';
+import { getCanonicalAppBaseUrl } from '@/lib/appConfig';
 
 interface AdminSettingsData {
   telegram_bot_token: string | null;
