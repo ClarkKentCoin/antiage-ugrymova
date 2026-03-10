@@ -39,6 +39,10 @@ interface AdminSettingsData {
   // Admin notifications
   telegram_admin_notifications_enabled: boolean;
   telegram_admin_notifications_channel_id: string;
+  // Branding
+  channel_name: string | null;
+  channel_description: string | null;
+  logo_url: string | null;
 }
 
 export default function AdminSettings() {
