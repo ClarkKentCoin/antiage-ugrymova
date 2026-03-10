@@ -154,6 +154,9 @@ export default function AdminSettings() {
           notification_subscription_expiring_single: (data as any).notification_subscription_expiring_single || '',
           telegram_admin_notifications_enabled: (data as any).telegram_admin_notifications_enabled ?? false,
           telegram_admin_notifications_channel_id: (data as any).telegram_admin_notifications_channel_id || '',
+          channel_name: (data as any).channel_name || '',
+          channel_description: (data as any).channel_description || '',
+          logo_url: (data as any).logo_url || null,
         });
       }
     } catch (error) {
