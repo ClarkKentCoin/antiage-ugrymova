@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
-import { DEFAULT_TENANT_ID, requireAdminSettingsForTenant } from "../_shared/tenant.ts";
+import { resolveTenantFromRequest, requireAdminSettingsForTenant } from "../_shared/tenant.ts";
 
 interface TelegramResponse {
   ok: boolean;
@@ -211,19 +211,52 @@ serve(async (req) => {
     const telegram_user_id = tgUserId ?? tgUserIdCamel;
     const subscriber_id = subId ?? subIdCamel;
 
-    // Resolve tenant (optional - defaults to first admin's settings)
-    let tenantId = DEFAULT_TENANT_ID;
-    if (tenantSlug) {
-      const { data: tenantData } = await supabaseAdmin
-        .from("tenants")
-        .select("id")
-        .eq("slug", tenantSlug)
+    // Resolve tenant using shared helper — never silently fall back for admin actions
+    const tenantResult = await resolveTenantFromRequest({ req, supabaseAdmin, body });
+    console.log(`[telegram-channel] Tenant resolved: id=${tenantResult.tenantId}, slug=${tenantResult.tenantSlug}, source=${tenantResult.source}`);
+
+    if (tenantResult.source === "default") {
+      console.error("[telegram-channel] Tenant context could not be resolved — refusing to fall back to default for admin action");
+      return new Response(
+        JSON.stringify({ ok: false, error: "Tenant context could not be resolved. Please reload the page." }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const tenantId = tenantResult.tenantId;
+
+    // Subscriber tenant safety check
+    if (subscriber_id) {
+      const { data: subData, error: subError } = await supabaseAdmin
+        .from("subscribers")
+        .select("id, tenant_id, telegram_user_id, is_in_channel")
+        .eq("id", subscriber_id)
         .maybeSingle();
-      if (tenantData?.id) {
-        tenantId = tenantData.id;
+
+      if (subError || !subData) {
+        console.error(`[telegram-channel] Subscriber ${subscriber_id} not found`);
+        return new Response(
+          JSON.stringify({ ok: false, error: "Subscriber not found" }),
+          { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      if (subData.tenant_id !== tenantId) {
+        console.error(`[telegram-channel] Subscriber tenant mismatch: subscriber.tenant_id=${subData.tenant_id}, resolved=${tenantId}`);
+        return new Response(
+          JSON.stringify({ ok: false, error: "Subscriber does not belong to this tenant" }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      if (telegram_user_id && Number(telegram_user_id) !== subData.telegram_user_id) {
+        console.error(`[telegram-channel] telegram_user_id mismatch: param=${telegram_user_id}, subscriber=${subData.telegram_user_id}`);
+        return new Response(
+          JSON.stringify({ ok: false, error: "telegram_user_id does not match subscriber" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
       }
     }
-    console.log(`[telegram-channel] Using tenant_id: ${tenantId}`);
 
     // Get admin settings for bot token and channel ID for this tenant
     let settings: any;
