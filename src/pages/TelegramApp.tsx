@@ -45,6 +45,13 @@ const openPaymentUrl = (url: string) => {
   window.location.href = url;
 };
 
+/** Cache-busting for custom logos from storage CDN. Local fallback is never modified. */
+function resolveLogoSrc(logoUrl: string | null | undefined): string {
+  if (!logoUrl) return logoUgrymova;
+  const sep = logoUrl.includes('?') ? '&' : '?';
+  return `${logoUrl}${sep}cb=${encodeURIComponent(logoUrl)}`;
+}
+
 export default function TelegramApp() {
   const { isReady, isTelegramWebApp, user, showConfirm, hapticFeedback, webApp } = useTelegramWebApp();
   const initData = webApp?.initData ?? null;
@@ -126,7 +133,8 @@ export default function TelegramApp() {
         if (data) {
           setPublicTenantId(data.tenant_id || null);
           setPaymentLink(data.payment_link || null);
-          setLogoUrl(data.logo_url || null);
+          const rawLogoUrl = data.logo_url || null;
+          setLogoUrl(rawLogoUrl);
           setChannelInfo({
             name: data.channel_name || 'АНТИЭЙДЖ ЛАБ',
             description:
@@ -134,7 +142,7 @@ export default function TelegramApp() {
               'Закрытый Telegram-канал для женщин: мотивация, рецепты, научные подходы к антиэйджу. Всё для энергии и молодости в одном месте.',
           });
           setGracePeriodDays(data.grace_period_days ?? 0);
-          console.log('[TelegramApp] Loaded public config:', { tenant_id: data.tenant_id, grace_period_days: data.grace_period_days });
+          console.log('[TelegramApp] Loaded public config:', { tenant_id: data.tenant_id, grace_period_days: data.grace_period_days, logo_url: rawLogoUrl });
         } else {
           setGracePeriodDays(0);
         }
@@ -515,7 +523,7 @@ function NewUserView({
           className="flex items-center justify-center mx-auto mb-4 cursor-pointer select-none"
           onClick={onDebugTap}
         >
-          <img src={logoUrl || logoUgrymova} alt="Logo" className="max-w-[200px] h-auto" />
+          <img src={resolveLogoSrc(logoUrl)} alt="Logo" className="max-w-[200px] h-auto" />
         </div>
         <h1 className="text-2xl font-bold mb-3">
           🌟 {channelInfo?.name || 'АНТИЭЙДЖ ЛАБ'}
@@ -785,7 +793,7 @@ function GracePeriodView({
           className="flex items-center justify-center mx-auto mb-2 cursor-pointer select-none"
           onClick={onDebugTap}
         >
-          <img src={logoUrl || logoUgrymova} alt="Logo" className="max-w-[160px] h-auto" />
+          <img src={resolveLogoSrc(logoUrl)} alt="Logo" className="max-w-[160px] h-auto" />
         </div>
       </div>
 
@@ -1186,7 +1194,7 @@ function SubscriptionContent({
           className="flex items-center justify-center mx-auto mb-4 cursor-pointer select-none"
           onClick={onDebugTap}
         >
-          <img src={logoUrl || logoUgrymova} alt="Logo" className="max-w-[200px] h-auto" />
+          <img src={resolveLogoSrc(logoUrl)} alt="Logo" className="max-w-[200px] h-auto" />
         </div>
         <h2 className="text-2xl font-bold mb-2">
           🌟 {channelInfo?.name || 'АНТИЭЙДЖ ЛАБ'}
