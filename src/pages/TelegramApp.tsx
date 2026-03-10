@@ -1152,7 +1152,7 @@ function SubscriptionContent({
         graceDaysRemaining={graceDaysRemaining}
         onDebugTap={onDebugTap}
         purchasedOnceOnlyTierIds={purchasedOnceOnlyTierIds}
-      />
+        logoUrl={logoUrl}
     );
   }
 
