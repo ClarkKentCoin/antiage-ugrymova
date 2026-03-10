@@ -126,6 +126,7 @@ export default function TelegramApp() {
         if (data) {
           setPublicTenantId(data.tenant_id || null);
           setPaymentLink(data.payment_link || null);
+          setLogoUrl(data.logo_url || null);
           setChannelInfo({
             name: data.channel_name || 'АНТИЭЙДЖ ЛАБ',
             description:
