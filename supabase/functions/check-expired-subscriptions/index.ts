@@ -350,11 +350,16 @@ serve(async (req) => {
       for (const subscriber of gracePeriodSubscribers || []) {
         try {
           const subscriptionEnd = new Date(subscriber.subscription_end);
+          const tierGraceEnabled = subscriber.subscription_tiers?.grace_period_enabled === true;
+          
+          // Self-healing: if tier has grace disabled, this subscriber was wrongly placed in grace_period
+          // Treat as if grace period is 0 so they expire immediately
+          const effectiveGraceDays = (tierGraceEnabled && gracePeriodDays > 0) ? gracePeriodDays : 0;
           const graceEndDate = new Date(subscriptionEnd);
-          graceEndDate.setDate(graceEndDate.getDate() + gracePeriodDays);
+          graceEndDate.setDate(graceEndDate.getDate() + effectiveGraceDays);
 
           if (now >= graceEndDate) {
-            console.log(`[check-expired] Grace period ended for user ${subscriber.telegram_user_id}`);
+            console.log(`[check-expired] Grace period ended for user ${subscriber.telegram_user_id} (tierGraceEnabled=${tierGraceEnabled}, effectiveGraceDays=${effectiveGraceDays})`);
 
             const { data: updated, error: updateError } = await supabaseAdmin
               .from("subscribers")
