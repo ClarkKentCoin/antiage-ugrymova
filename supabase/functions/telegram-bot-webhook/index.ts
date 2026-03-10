@@ -134,8 +134,7 @@ serve(async (req) => {
       console.log(`[telegram-bot-webhook] /start chat_id=${chatId} user_id=${userId} tenant=${tenantId}`);
 
       // Build default Mini App URL with tenant context
-      const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
-      const baseMiniAppUrl = supabaseUrl.replace('.supabase.co', '.lovable.app');
+      const baseMiniAppUrl = getCanonicalAppBaseUrl();
       const defaultMiniAppUrl = tenantSlug
         ? `${baseMiniAppUrl}/telegram-app?t=${encodeURIComponent(tenantSlug)}`
         : `${baseMiniAppUrl}/telegram-app`;
