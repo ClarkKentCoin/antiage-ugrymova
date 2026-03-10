@@ -182,7 +182,7 @@ serve(async (req) => {
         `id, telegram_user_id, telegram_username, first_name, last_name, phone_number,
          status, subscription_start, subscription_end, auto_renewal, tier_id, is_in_channel,
          created_at, updated_at, subscriber_payment_method,
-         subscription_tiers ( id, name, price, duration_days )`,
+         subscription_tiers ( id, name, price, duration_days, grace_period_enabled )`,
       )
       .eq("telegram_user_id", Number(telegram_user_id))
       .eq("tenant_id", tenantId)
