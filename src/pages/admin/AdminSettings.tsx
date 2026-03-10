@@ -80,8 +80,9 @@ export default function AdminSettings() {
   // Generate default webhook URLs
   const defaultWebhookUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/robokassa-webhook`;
   const botWebhookUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/telegram-bot-webhook`;
+  const canonicalBase = getCanonicalAppBaseUrl();
   const miniAppUrl = tenantSlug
-    ? `${window.location.origin}/telegram-app?t=${encodeURIComponent(tenantSlug)}`
+    ? `${canonicalBase}/telegram-app?t=${encodeURIComponent(tenantSlug)}`
     : null;
 
   useEffect(() => {
