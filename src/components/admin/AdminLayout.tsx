@@ -32,7 +32,7 @@ const navItems = [
 
 function NavContent({ onNavigate, collapsed }: { onNavigate?: () => void; collapsed?: boolean }) {
   const location = useLocation();
-  const { signOut } = useAuth();
+  const { user, signOut } = useAuth();
 
   return (
     <div className="flex h-full flex-col">
@@ -76,8 +76,13 @@ function NavContent({ onNavigate, collapsed }: { onNavigate?: () => void; collap
         })}
       </nav>
 
-      {/* Sign out */}
-      <div className="border-t border-border p-4">
+      {/* User info & Sign out */}
+      <div className="border-t border-border p-4 space-y-2">
+        {!collapsed && user?.email && (
+          <p className="truncate px-3 text-xs text-muted-foreground" title={user.email}>
+            {user.email}
+          </p>
+        )}
         <Button
           variant="ghost"
           className={cn(
