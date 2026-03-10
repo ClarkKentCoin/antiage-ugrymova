@@ -52,6 +52,8 @@ export default function AdminSettings() {
   const [isSaving, setIsSaving] = useState(false);
   const [isSettingBotWebhook, setIsSettingBotWebhook] = useState(false);
   const [isResettingBotWebhook, setIsResettingBotWebhook] = useState(false);
+  const [isUploadingLogo, setIsUploadingLogo] = useState(false);
+  const logoInputRef = useRef<HTMLInputElement>(null);
   const [copied, setCopied] = useState(false);
   const [copiedBotWebhook, setCopiedBotWebhook] = useState(false);
   const [copiedMiniAppUrl, setCopiedMiniAppUrl] = useState(false);
