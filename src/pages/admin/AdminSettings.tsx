@@ -10,6 +10,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { Loader2, Copy, Check } from 'lucide-react';
+import { getCanonicalAppBaseUrl } from '@/lib/appConfig';
 
 interface AdminSettingsData {
   telegram_bot_token: string | null;
@@ -79,8 +80,9 @@ export default function AdminSettings() {
   // Generate default webhook URLs
   const defaultWebhookUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/robokassa-webhook`;
   const botWebhookUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/telegram-bot-webhook`;
+  const canonicalBase = getCanonicalAppBaseUrl();
   const miniAppUrl = tenantSlug
-    ? `${window.location.origin}/telegram-app?t=${encodeURIComponent(tenantSlug)}`
+    ? `${canonicalBase}/telegram-app?t=${encodeURIComponent(tenantSlug)}`
     : null;
 
   useEffect(() => {
@@ -439,20 +441,27 @@ export default function AdminSettings() {
                   <div className="text-xs text-muted-foreground space-y-1">
                     <p>📋 Вставьте этот URL в BotFather → <strong>Bot Settings → Menu Button</strong></p>
                     <p>📋 Вставьте этот URL в BotFather → <strong>Bot Settings → Main Mini App</strong></p>
-                    <p>💡 Для кнопки приветственного сообщения используйте этот же URL (или укажите свой ниже).</p>
                   </div>
 
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => {
-                      setSettings({ ...settings, welcome_message_button_url: miniAppUrl });
-                      toast({ title: 'URL кнопки обновлён' });
-                    }}
-                  >
-                    Заполнить URL кнопки приветствия этим URL
-                  </Button>
+                  <div className="space-y-2 rounded border p-3 bg-background">
+                    <p className="text-sm font-medium">Кнопка приветствия в сообщении бота</p>
+                    <p className="text-xs text-muted-foreground">
+                      Обычно здесь используется тот же Mini App URL.
+                      Нажмите кнопку ниже, чтобы автоматически подставить этот URL.
+                      Если хотите, чтобы кнопка открывала другую страницу — укажите свой URL вручную в поле ниже.
+                    </p>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => {
+                        setSettings({ ...settings, welcome_message_button_url: miniAppUrl });
+                        toast({ title: 'Mini App URL подставлен в кнопку приветствия' });
+                      }}
+                    >
+                      Подставить Mini App URL в кнопку приветствия
+                    </Button>
+                  </div>
                 </div>
               )}
 

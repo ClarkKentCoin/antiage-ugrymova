@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 import { resolveTenantIdFromSlug, DEFAULT_TENANT_ID } from "../_shared/tenant.ts";
+import { getCanonicalAppBaseUrl } from "../_shared/appConfig.ts";
 
 interface TelegramUpdate {
   update_id: number;
@@ -133,8 +134,7 @@ serve(async (req) => {
       console.log(`[telegram-bot-webhook] /start chat_id=${chatId} user_id=${userId} tenant=${tenantId}`);
 
       // Build default Mini App URL with tenant context
-      const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
-      const baseMiniAppUrl = supabaseUrl.replace('.supabase.co', '.lovable.app');
+      const baseMiniAppUrl = getCanonicalAppBaseUrl();
       const defaultMiniAppUrl = tenantSlug
         ? `${baseMiniAppUrl}/telegram-app?t=${encodeURIComponent(tenantSlug)}`
         : `${baseMiniAppUrl}/telegram-app`;
