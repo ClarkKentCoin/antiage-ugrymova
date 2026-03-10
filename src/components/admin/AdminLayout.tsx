@@ -32,7 +32,7 @@ const navItems = [
 
 function NavContent({ onNavigate, collapsed }: { onNavigate?: () => void; collapsed?: boolean }) {
   const location = useLocation();
-  const { signOut } = useAuth();
+  const { user, signOut } = useAuth();
 
   return (
     <div className="flex h-full flex-col">
