@@ -126,7 +126,8 @@ export default function TelegramApp() {
         if (data) {
           setPublicTenantId(data.tenant_id || null);
           setPaymentLink(data.payment_link || null);
-          setLogoUrl(data.logo_url || null);
+          const rawLogoUrl = data.logo_url || null;
+          setLogoUrl(rawLogoUrl);
           setChannelInfo({
             name: data.channel_name || 'АНТИЭЙДЖ ЛАБ',
             description:
@@ -134,7 +135,7 @@ export default function TelegramApp() {
               'Закрытый Telegram-канал для женщин: мотивация, рецепты, научные подходы к антиэйджу. Всё для энергии и молодости в одном месте.',
           });
           setGracePeriodDays(data.grace_period_days ?? 0);
-          console.log('[TelegramApp] Loaded public config:', { tenant_id: data.tenant_id, grace_period_days: data.grace_period_days });
+          console.log('[TelegramApp] Loaded public config:', { tenant_id: data.tenant_id, grace_period_days: data.grace_period_days, logo_url: rawLogoUrl });
         } else {
           setGracePeriodDays(0);
         }
