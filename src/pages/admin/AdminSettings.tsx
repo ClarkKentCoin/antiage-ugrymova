@@ -41,13 +41,15 @@ interface AdminSettingsData {
 
 export default function AdminSettings() {
   const { toast } = useToast();
-  const { tenantId, tenantLoading } = useAuth();
+  const { tenantId, tenantSlug, tenantLoading } = useAuth();
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isSettingBotWebhook, setIsSettingBotWebhook] = useState(false);
   const [isResettingBotWebhook, setIsResettingBotWebhook] = useState(false);
   const [copied, setCopied] = useState(false);
   const [copiedBotWebhook, setCopiedBotWebhook] = useState(false);
+  const [copiedMiniAppUrl, setCopiedMiniAppUrl] = useState(false);
+  const [copiedTenantSlug, setCopiedTenantSlug] = useState(false);
   const [settings, setSettings] = useState<AdminSettingsData>({
     telegram_bot_token: '',
     telegram_channel_id: '',
@@ -77,6 +79,9 @@ export default function AdminSettings() {
   // Generate default webhook URLs
   const defaultWebhookUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/robokassa-webhook`;
   const botWebhookUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/telegram-bot-webhook`;
+  const miniAppUrl = tenantSlug
+    ? `${window.location.origin}/telegram-app?t=${encodeURIComponent(tenantSlug)}`
+    : null;
 
   useEffect(() => {
     if (!tenantLoading) {
@@ -386,6 +391,70 @@ export default function AdminSettings() {
                   </p>
                 </div>
               </div>
+
+              {/* Mini App URL Setup */}
+              {miniAppUrl && (
+                <div className="space-y-3 rounded-lg border p-4 bg-muted/30">
+                  <h4 className="text-sm font-semibold">Mini App URL (для BotFather)</h4>
+
+                  <div className="space-y-1">
+                    <Label className="text-xs">Tenant slug</Label>
+                    <div className="flex gap-2">
+                      <Input value={tenantSlug || ''} readOnly className="flex-1 text-xs font-mono" />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        onClick={() => {
+                          navigator.clipboard.writeText(tenantSlug || '');
+                          setCopiedTenantSlug(true);
+                          setTimeout(() => setCopiedTenantSlug(false), 2000);
+                        }}
+                      >
+                        {copiedTenantSlug ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label className="text-xs">Mini App URL</Label>
+                    <div className="flex gap-2">
+                      <Input value={miniAppUrl} readOnly className="flex-1 text-xs font-mono" />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        onClick={() => {
+                          navigator.clipboard.writeText(miniAppUrl);
+                          setCopiedMiniAppUrl(true);
+                          setTimeout(() => setCopiedMiniAppUrl(false), 2000);
+                          toast({ title: 'Mini App URL скопирован' });
+                        }}
+                      >
+                        {copiedMiniAppUrl ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="text-xs text-muted-foreground space-y-1">
+                    <p>📋 Вставьте этот URL в BotFather → <strong>Bot Settings → Menu Button</strong></p>
+                    <p>📋 Вставьте этот URL в BotFather → <strong>Bot Settings → Main Mini App</strong></p>
+                    <p>💡 Для кнопки приветственного сообщения используйте этот же URL (или укажите свой ниже).</p>
+                  </div>
+
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => {
+                      setSettings({ ...settings, welcome_message_button_url: miniAppUrl });
+                      toast({ title: 'URL кнопки обновлён' });
+                    }}
+                  >
+                    Заполнить URL кнопки приветствия этим URL
+                  </Button>
+                </div>
+              )}
 
               <div className="space-y-2">
                 <Label htmlFor="channel_id">Channel ID</Label>
