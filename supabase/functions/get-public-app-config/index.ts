@@ -43,7 +43,7 @@ serve(async (req) => {
 
     const { data: settings, error } = await supabaseAdmin
       .from("admin_settings")
-      .select("channel_name, channel_description, grace_period_days, payment_link")
+      .select("channel_name, channel_description, grace_period_days, payment_link, logo_url")
       .eq("tenant_id", tenantId)
       .maybeSingle();
 
@@ -63,6 +63,7 @@ serve(async (req) => {
         channel_description: settings?.channel_description ?? null,
         grace_period_days: settings?.grace_period_days ?? 0,
         payment_link: settings?.payment_link ?? null,
+        logo_url: settings?.logo_url ?? null,
         canonical_base_url: getCanonicalAppBaseUrl(),
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },

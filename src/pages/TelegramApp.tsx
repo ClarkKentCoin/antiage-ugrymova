@@ -101,6 +101,7 @@ export default function TelegramApp() {
 
   const [channelInfo, setChannelInfo] = useState<{ name: string; description: string } | null>(null);
   const [gracePeriodDays, setGracePeriodDays] = useState<number | null>(null);
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
 
   // Fetch public tenant config via safe edge function (no direct admin_settings read)
   useEffect(() => {
@@ -125,6 +126,7 @@ export default function TelegramApp() {
         if (data) {
           setPublicTenantId(data.tenant_id || null);
           setPaymentLink(data.payment_link || null);
+          setLogoUrl(data.logo_url || null);
           setChannelInfo({
             name: data.channel_name || 'АНТИЭЙДЖ ЛАБ',
             description:
@@ -322,6 +324,7 @@ export default function TelegramApp() {
           serverGraceDaysRemaining={null}
           onDebugTap={onDebugTap}
           purchasedOnceOnlyTierIds={purchasedOnceOnlyTierIds}
+          logoUrl={logoUrl}
         />
         {debugBadgeEnabled && <MiniAppBuildBadge serverDebug={null} />}
       </main>
@@ -381,6 +384,7 @@ export default function TelegramApp() {
         serverGraceDaysRemaining={activeDebugInfo?.grace_days_remaining ?? null}
         onDebugTap={onDebugTap}
         purchasedOnceOnlyTierIds={purchasedOnceOnlyTierIds}
+        logoUrl={logoUrl}
       />
       {debugBadgeEnabled && <MiniAppBuildBadge serverDebug={activeDebugInfo} />}
     </div>
@@ -396,6 +400,7 @@ function NewUserView({
   onRefetch,
   onDebugTap,
   purchasedOnceOnlyTierIds = new Set(),
+  logoUrl,
 }: {
   channelInfo: { name: string; description: string } | null;
   tiers: any[];
@@ -404,6 +409,7 @@ function NewUserView({
   onRefetch?: () => void;
   onDebugTap?: () => void;
   purchasedOnceOnlyTierIds?: Set<string>;
+  logoUrl?: string | null;
 }) {
   const [selectedTier, setSelectedTier] = useState<string | null>(null);
   const [autoRenewal, setAutoRenewal] = useState(false);
@@ -509,7 +515,7 @@ function NewUserView({
           className="flex items-center justify-center mx-auto mb-4 cursor-pointer select-none"
           onClick={onDebugTap}
         >
-          <img src={logoUgrymova} alt="Ugrymova" className="max-w-[200px] h-auto" />
+          <img src={logoUrl || logoUgrymova} alt="Logo" className="max-w-[200px] h-auto" />
         </div>
         <h1 className="text-2xl font-bold mb-3">
           🌟 {channelInfo?.name || 'АНТИЭЙДЖ ЛАБ'}
@@ -690,6 +696,7 @@ function GracePeriodView({
   graceDaysRemaining,
   onDebugTap,
   purchasedOnceOnlyTierIds = new Set(),
+  logoUrl,
 }: {
   channelInfo: { name: string; description: string } | null;
   tiers: any[];
@@ -699,6 +706,7 @@ function GracePeriodView({
   graceDaysRemaining: number;
   onDebugTap?: () => void;
   purchasedOnceOnlyTierIds?: Set<string>;
+  logoUrl?: string | null;
 }) {
   const [selectedTier, setSelectedTier] = useState<string | null>(null);
   const [autoRenewal, setAutoRenewal] = useState(false);
@@ -777,7 +785,7 @@ function GracePeriodView({
           className="flex items-center justify-center mx-auto mb-2 cursor-pointer select-none"
           onClick={onDebugTap}
         >
-          <img src={logoUgrymova} alt="Ugrymova" className="max-w-[160px] h-auto" />
+          <img src={logoUrl || logoUgrymova} alt="Logo" className="max-w-[160px] h-auto" />
         </div>
       </div>
 
@@ -978,6 +986,7 @@ function SubscriptionContent({
   serverGraceDaysRemaining = null,
   onDebugTap,
   purchasedOnceOnlyTierIds = new Set(),
+  logoUrl,
 }: {
   subscriber: any; 
   isLoading: boolean;
@@ -996,6 +1005,7 @@ function SubscriptionContent({
   serverGraceDaysRemaining?: number | null;
   onDebugTap?: () => void;
   purchasedOnceOnlyTierIds?: Set<string>;
+  logoUrl?: string | null;
 }) {
   const [selectedTier, setSelectedTier] = useState<string | null>(null);
   const [autoRenewal, setAutoRenewal] = useState(false);
@@ -1142,6 +1152,7 @@ function SubscriptionContent({
         graceDaysRemaining={graceDaysRemaining}
         onDebugTap={onDebugTap}
         purchasedOnceOnlyTierIds={purchasedOnceOnlyTierIds}
+        logoUrl={logoUrl}
       />
     );
   }
@@ -1157,6 +1168,7 @@ function SubscriptionContent({
         onRefetch={onRefetch}
         onDebugTap={onDebugTap}
         purchasedOnceOnlyTierIds={purchasedOnceOnlyTierIds}
+        logoUrl={logoUrl}
       />
     );
   }
@@ -1174,7 +1186,7 @@ function SubscriptionContent({
           className="flex items-center justify-center mx-auto mb-4 cursor-pointer select-none"
           onClick={onDebugTap}
         >
-          <img src={logoUgrymova} alt="Ugrymova" className="max-w-[200px] h-auto" />
+          <img src={logoUrl || logoUgrymova} alt="Logo" className="max-w-[200px] h-auto" />
         </div>
         <h2 className="text-2xl font-bold mb-2">
           🌟 {channelInfo?.name || 'АНТИЭЙДЖ ЛАБ'}
