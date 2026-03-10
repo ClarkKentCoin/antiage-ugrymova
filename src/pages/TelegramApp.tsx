@@ -101,6 +101,7 @@ export default function TelegramApp() {
 
   const [channelInfo, setChannelInfo] = useState<{ name: string; description: string } | null>(null);
   const [gracePeriodDays, setGracePeriodDays] = useState<number | null>(null);
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
 
   // Fetch public tenant config via safe edge function (no direct admin_settings read)
   useEffect(() => {
