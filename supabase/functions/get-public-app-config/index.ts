@@ -63,6 +63,7 @@ serve(async (req) => {
         channel_description: settings?.channel_description ?? null,
         grace_period_days: settings?.grace_period_days ?? 0,
         payment_link: settings?.payment_link ?? null,
+        canonical_base_url: getCanonicalAppBaseUrl(),
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
