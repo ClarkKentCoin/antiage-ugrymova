@@ -142,7 +142,8 @@ serve(async (req) => {
         .select(`
           *,
           subscription_tiers (
-            name
+            name,
+            grace_period_enabled
           )
         `)
         .eq("tenant_id", tenantId)
@@ -161,7 +162,8 @@ serve(async (req) => {
         .select(`
           *,
           subscription_tiers (
-            name
+            name,
+            grace_period_enabled
           )
         `)
         .eq("tenant_id", tenantId)
