@@ -45,6 +45,13 @@ const openPaymentUrl = (url: string) => {
   window.location.href = url;
 };
 
+/** Cache-busting for custom logos from storage CDN. Local fallback is never modified. */
+function resolveLogoSrc(logoUrl: string | null | undefined): string {
+  if (!logoUrl) return logoUgrymova;
+  const sep = logoUrl.includes('?') ? '&' : '?';
+  return `${logoUrl}${sep}cb=${encodeURIComponent(logoUrl)}`;
+}
+
 export default function TelegramApp() {
   const { isReady, isTelegramWebApp, user, showConfirm, hapticFeedback, webApp } = useTelegramWebApp();
   const initData = webApp?.initData ?? null;
