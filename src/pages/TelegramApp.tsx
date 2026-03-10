@@ -986,6 +986,7 @@ function SubscriptionContent({
   serverGraceDaysRemaining = null,
   onDebugTap,
   purchasedOnceOnlyTierIds = new Set(),
+  logoUrl,
 }: {
   subscriber: any; 
   isLoading: boolean;
@@ -1004,6 +1005,7 @@ function SubscriptionContent({
   serverGraceDaysRemaining?: number | null;
   onDebugTap?: () => void;
   purchasedOnceOnlyTierIds?: Set<string>;
+  logoUrl?: string | null;
 }) {
   const [selectedTier, setSelectedTier] = useState<string | null>(null);
   const [autoRenewal, setAutoRenewal] = useState(false);
