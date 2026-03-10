@@ -83,6 +83,9 @@ export default function AdminSettings() {
     notification_subscription_expiring_single: '',
     telegram_admin_notifications_enabled: false,
     telegram_admin_notifications_channel_id: '',
+    channel_name: '',
+    channel_description: '',
+    logo_url: null,
   });
 
   // Generate default webhook URLs
