@@ -1186,7 +1186,7 @@ function SubscriptionContent({
           className="flex items-center justify-center mx-auto mb-4 cursor-pointer select-none"
           onClick={onDebugTap}
         >
-          <img src={logoUgrymova} alt="Ugrymova" className="max-w-[200px] h-auto" />
+          <img src={logoUrl || logoUgrymova} alt="Logo" className="max-w-[200px] h-auto" />
         </div>
         <h2 className="text-2xl font-bold mb-2">
           🌟 {channelInfo?.name || 'АНТИЭЙДЖ ЛАБ'}
