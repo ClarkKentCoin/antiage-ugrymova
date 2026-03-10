@@ -43,7 +43,7 @@ serve(async (req) => {
 
     const { data: settings, error } = await supabaseAdmin
       .from("admin_settings")
-      .select("channel_name, channel_description, grace_period_days, payment_link")
+      .select("channel_name, channel_description, grace_period_days, payment_link, logo_url")
       .eq("tenant_id", tenantId)
       .maybeSingle();
 
