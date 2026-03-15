@@ -35,6 +35,7 @@ export default function AdminSubscribers() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [tierFilter, setTierFilter] = useState<string>('all');
+  const [paymentMethodFilter, setPaymentMethodFilter] = useState<PaymentMethodFilter>('all');
 
   // Build tier options: active first, then inactive (grey) only if subscribers use them
   const tierOptions = useMemo(() => {
