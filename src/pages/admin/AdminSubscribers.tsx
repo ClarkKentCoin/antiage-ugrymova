@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/select';
 
 type StatusFilter = 'all' | 'active' | 'grace_period' | 'inactive' | 'expired' | 'cancelled';
+type PaymentMethodFilter = 'all' | 'recurrent' | 'single' | 'manual';
 
 const filterTabs: { value: StatusFilter; label: string }[] = [
   { value: 'all', label: 'Все' },
@@ -34,6 +35,7 @@ export default function AdminSubscribers() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [tierFilter, setTierFilter] = useState<string>('all');
+  const [paymentMethodFilter, setPaymentMethodFilter] = useState<PaymentMethodFilter>('all');
 
   // Build tier options: active first, then inactive (grey) only if subscribers use them
   const tierOptions = useMemo(() => {
@@ -67,6 +69,15 @@ export default function AdminSubscribers() {
     if (tierFilter !== 'all') {
       list = list.filter(sub => sub.tier_id === tierFilter);
     }
+    if (paymentMethodFilter !== 'all') {
+      list = list.filter(sub => {
+        const method = sub.subscriber_payment_method;
+        if (paymentMethodFilter === 'recurrent') return method === 'robokassa_recurring';
+        if (paymentMethodFilter === 'single') return method === 'robokassa_single';
+        if (paymentMethodFilter === 'manual') return method === 'manual' || !method;
+        return true;
+      });
+    }
     if (search) {
       const q = search.toLowerCase();
       list = list.filter(sub =>
@@ -79,7 +90,7 @@ export default function AdminSubscribers() {
       );
     }
     return list;
-  }, [subscribers, statusFilter, tierFilter, search]);
+  }, [subscribers, statusFilter, tierFilter, paymentMethodFilter, search]);
 
   if (isLoading) {
     return (
@@ -145,6 +156,17 @@ export default function AdminSubscribers() {
                   {tier.name}{!tier.isActive ? ' (неактивен)' : ''}
                 </SelectItem>
               ))}
+            </SelectContent>
+          </Select>
+          <Select value={paymentMethodFilter} onValueChange={(v) => setPaymentMethodFilter(v as PaymentMethodFilter)}>
+            <SelectTrigger className="w-full sm:w-[200px]">
+              <SelectValue placeholder="Все способы" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Все способы</SelectItem>
+              <SelectItem value="recurrent">Рекуррент</SelectItem>
+              <SelectItem value="single">Разовые</SelectItem>
+              <SelectItem value="manual">Ручные</SelectItem>
             </SelectContent>
           </Select>
         </div>
