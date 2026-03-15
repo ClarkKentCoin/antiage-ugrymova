@@ -81,7 +81,7 @@ export default function AdminSubscribers() {
       );
     }
     return list;
-  }, [subscribers, statusFilter, tierFilter, search]);
+  }, [subscribers, statusFilter, tierFilter, paymentMethodFilter, search]);
 
   if (isLoading) {
     return (
