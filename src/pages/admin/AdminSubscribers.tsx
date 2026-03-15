@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/select';
 
 type StatusFilter = 'all' | 'active' | 'grace_period' | 'inactive' | 'expired' | 'cancelled';
+type PaymentMethodFilter = 'all' | 'recurrent' | 'single' | 'manual';
 
 const filterTabs: { value: StatusFilter; label: string }[] = [
   { value: 'all', label: 'Все' },
