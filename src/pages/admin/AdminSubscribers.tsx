@@ -69,6 +69,15 @@ export default function AdminSubscribers() {
     if (tierFilter !== 'all') {
       list = list.filter(sub => sub.tier_id === tierFilter);
     }
+    if (paymentMethodFilter !== 'all') {
+      list = list.filter(sub => {
+        const method = sub.subscriber_payment_method;
+        if (paymentMethodFilter === 'recurrent') return method === 'robokassa_recurring';
+        if (paymentMethodFilter === 'single') return method === 'robokassa_single';
+        if (paymentMethodFilter === 'manual') return method === 'manual' || !method;
+        return true;
+      });
+    }
     if (search) {
       const q = search.toLowerCase();
       list = list.filter(sub =>
@@ -147,6 +156,17 @@ export default function AdminSubscribers() {
                   {tier.name}{!tier.isActive ? ' (неактивен)' : ''}
                 </SelectItem>
               ))}
+            </SelectContent>
+          </Select>
+          <Select value={paymentMethodFilter} onValueChange={(v) => setPaymentMethodFilter(v as PaymentMethodFilter)}>
+            <SelectTrigger className="w-full sm:w-[200px]">
+              <SelectValue placeholder="Все способы" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Все способы</SelectItem>
+              <SelectItem value="recurrent">Рекуррент</SelectItem>
+              <SelectItem value="single">Разовые</SelectItem>
+              <SelectItem value="manual">Ручные</SelectItem>
             </SelectContent>
           </Select>
         </div>
