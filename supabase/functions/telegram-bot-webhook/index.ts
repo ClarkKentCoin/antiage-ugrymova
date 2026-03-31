@@ -148,7 +148,19 @@ serve(async (req) => {
       const imageUrl = settings.welcome_message_image_url;
 
       const canonicalBase = (Deno.env.get("PUBLIC_APP_BASE_URL") || "").replace(/\/+$/, "");
-      const isCanonicalMiniAppUrl = !!(canonicalBase && buttonUrl.startsWith(`${canonicalBase}/telegram-app`));
+      let isCanonicalMiniAppUrl = false;
+      if (canonicalBase) {
+        try {
+          const btnParsed = new URL(buttonUrl);
+          const baseParsed = new URL(canonicalBase);
+          isCanonicalMiniAppUrl =
+            btnParsed.origin === baseParsed.origin &&
+            btnParsed.pathname.replace(/\/+$/, "").startsWith("/telegram-app");
+        } catch {
+          // buttonUrl is not a valid URL — treat as external
+          isCanonicalMiniAppUrl = false;
+        }
+      }
       console.log("[telegram-bot-webhook] welcome_button_mode", { tenant_slug: tenantSlug, buttonUrl, canonicalBase, mode: isCanonicalMiniAppUrl ? "web_app" : "url" });
 
       const inlineKeyboard = {
