@@ -54,6 +54,7 @@ export function MiniAppBuildBadge({ serverDebug }: MiniAppBuildBadgeProps) {
       className="fixed bottom-2 right-2 z-50 px-2 py-1.5 rounded-md bg-black/60 backdrop-blur-sm text-[9px] font-mono leading-tight text-white/80 pointer-events-none select-none max-w-[200px]"
     >
       <div>Build: {assetHash}</div>
+      <div>Fix: 2026-04-01-a</div>
       <div>Mode: {mode}</div>
       {tenantSlug && <div>t: {tenantSlug}</div>}
       {serverDebug && (
