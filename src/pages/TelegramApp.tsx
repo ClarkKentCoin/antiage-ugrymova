@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { format, differenceInDays, addDays } from 'date-fns';
 import { ru } from 'date-fns/locale';
-import { Calendar, CreditCard, AlertCircle, Clock, ExternalLink, RefreshCw, CheckCircle, XCircle, AlertTriangle } from 'lucide-react';
+import { Calendar, CreditCard, AlertCircle, Clock, ExternalLink, RefreshCw, CheckCircle, XCircle, AlertTriangle, Loader2 } from 'lucide-react';
 import logoUgrymova from '@/assets/logo-ugrymova.png';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
