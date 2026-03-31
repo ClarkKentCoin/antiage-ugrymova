@@ -102,21 +102,35 @@ export function useTelegramWebApp() {
 
     const tryInit = () => {
       const webApp = window.Telegram?.WebApp;
-      if (!webApp?.initData && !webApp?.initDataUnsafe?.user) return false;
+      // Use initDataUnsafe.user as a detection hint that we ARE inside Telegram,
+      // but only mark fully ready when initData (the signed string) is present.
+      const hasUser = !!webApp?.initDataUnsafe?.user;
+      const hasInitData = !!webApp?.initData;
+
+      if (!hasUser && !hasInitData) return false;
 
       try {
-        webApp.ready();
-        webApp.expand();
+        webApp!.ready();
+        webApp!.expand();
       } catch (e) {
         console.warn('[useTelegramWebApp] SDK ready/expand failed:', e);
       }
 
-      setDetectStatus('ready');
-      setUser(webApp.initDataUnsafe.user || null);
-      setColorScheme(webApp.colorScheme);
+      if (hasInitData) {
+        // Fully authenticated — initData is present for HMAC validation
+        setDetectStatus('ready');
+      } else {
+        // We see initDataUnsafe.user but no initData — keep pending to wait longer
+        // This handles the race where user data appears before the signed payload
+        console.log('[useTelegramWebApp] initDataUnsafe.user detected but initData still empty, continuing poll');
+        return false;
+      }
+
+      setUser(webApp!.initDataUnsafe.user || null);
+      setColorScheme(webApp!.colorScheme);
 
       // Apply telegram theme
-      document.documentElement.classList.toggle('dark', webApp.colorScheme === 'dark');
+      document.documentElement.classList.toggle('dark', webApp!.colorScheme === 'dark');
       return true;
     };
 
