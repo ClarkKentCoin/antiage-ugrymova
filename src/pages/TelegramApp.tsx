@@ -272,6 +272,18 @@ export default function TelegramApp() {
     alert(`Request to extend with ${tier?.name} plan sent! Contact admin to complete payment.`);
   };
 
+  // While Telegram SDK detection is still in progress, show a loading screen
+  if (!allowTestMode && telegramDetectStatus === 'pending') {
+    return (
+      <main className="min-h-screen bg-background flex items-center justify-center p-4">
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <p className="text-sm text-muted-foreground">Загрузка...</p>
+        </div>
+      </main>
+    );
+  }
+
   // If opened outside Telegram, show instructions in production; keep Test Mode for dev / ?test=1
   if (!isTelegramWebApp) {
     if (!allowTestMode) {
