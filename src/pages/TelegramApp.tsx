@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { format, differenceInDays, addDays } from 'date-fns';
 import { ru } from 'date-fns/locale';
-import { Calendar, CreditCard, AlertCircle, Clock, ExternalLink, RefreshCw, CheckCircle, XCircle, AlertTriangle } from 'lucide-react';
+import { Calendar, CreditCard, AlertCircle, Clock, ExternalLink, RefreshCw, CheckCircle, XCircle, AlertTriangle, Loader2 } from 'lucide-react';
 import logoUgrymova from '@/assets/logo-ugrymova.png';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
@@ -53,7 +53,7 @@ function resolveLogoSrc(logoUrl: string | null | undefined): string {
 }
 
 export default function TelegramApp() {
-  const { isReady, isTelegramWebApp, user, showConfirm, hapticFeedback, webApp } = useTelegramWebApp();
+  const { isReady, isTelegramWebApp, telegramDetectStatus, user, showConfirm, hapticFeedback, webApp } = useTelegramWebApp();
   const initData = webApp?.initData ?? null;
   
   // Get tenant slug from URL (for multi-tenant support)
@@ -271,6 +271,18 @@ export default function TelegramApp() {
     const tier = publicTiers.find((t) => t.id === tierId);
     alert(`Request to extend with ${tier?.name} plan sent! Contact admin to complete payment.`);
   };
+
+  // While Telegram SDK detection is still in progress, show a loading screen
+  if (!allowTestMode && telegramDetectStatus === 'pending') {
+    return (
+      <main className="min-h-screen bg-background flex items-center justify-center p-4">
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <p className="text-sm text-muted-foreground">Загрузка...</p>
+        </div>
+      </main>
+    );
+  }
 
   // If opened outside Telegram, show instructions in production; keep Test Mode for dev / ?test=1
   if (!isTelegramWebApp) {

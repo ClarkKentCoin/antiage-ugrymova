@@ -78,23 +78,40 @@ export interface TelegramUser {
   is_premium?: boolean;
 }
 
+export type TelegramDetectStatus = 'pending' | 'ready' | 'not_telegram';
+
 export function useTelegramWebApp() {
-  const [isReady, setIsReady] = useState(false);
+  const [detectStatus, setDetectStatus] = useState<TelegramDetectStatus>('pending');
   const [user, setUser] = useState<TelegramUser | null>(null);
   const [colorScheme, setColorScheme] = useState<'light' | 'dark'>('light');
 
+  // Check if test mode is active (skip detection)
+  const testMode = typeof window !== 'undefined' && (
+    import.meta.env.DEV || new URLSearchParams(window.location.search).has('test')
+  );
+
   useEffect(() => {
+    // In test mode, mark as ready immediately without requiring Telegram SDK
+    if (testMode) {
+      setDetectStatus('ready');
+      return;
+    }
+
     let tries = 0;
-    const maxTries = 30; // ~3s
+    const maxTries = 80; // ~8s — enough for slow devices
 
     const tryInit = () => {
       const webApp = window.Telegram?.WebApp;
-      if (!webApp?.initData) return false;
+      if (!webApp?.initData && !webApp?.initDataUnsafe?.user) return false;
 
-      webApp.ready();
-      webApp.expand();
+      try {
+        webApp.ready();
+        webApp.expand();
+      } catch (e) {
+        console.warn('[useTelegramWebApp] SDK ready/expand failed:', e);
+      }
 
-      setIsReady(true);
+      setDetectStatus('ready');
       setUser(webApp.initDataUnsafe.user || null);
       setColorScheme(webApp.colorScheme);
 
@@ -108,12 +125,16 @@ export function useTelegramWebApp() {
     const interval = window.setInterval(() => {
       tries += 1;
       if (tryInit() || tries >= maxTries) {
+        if (tries >= maxTries) {
+          console.warn('[useTelegramWebApp] Telegram SDK not detected after', maxTries * 100, 'ms');
+          setDetectStatus('not_telegram');
+        }
         window.clearInterval(interval);
       }
     }, 100);
 
     return () => window.clearInterval(interval);
-  }, []);
+  }, [testMode]);
 
   const showAlert = (message: string) => {
     window.Telegram?.WebApp.showAlert(message);
@@ -136,8 +157,9 @@ export function useTelegramWebApp() {
   };
 
   return {
-    isReady,
-    isTelegramWebApp: !!window.Telegram?.WebApp?.initData,
+    isReady: detectStatus !== 'pending',
+    isTelegramWebApp: detectStatus === 'ready',
+    telegramDetectStatus: detectStatus,
     user,
     colorScheme,
     showAlert,
