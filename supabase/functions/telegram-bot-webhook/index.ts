@@ -147,11 +147,13 @@ serve(async (req) => {
       const buttonText = settings.welcome_message_button_text || "Подробнее";
       const imageUrl = settings.welcome_message_image_url;
 
-      const isWebApp = buttonUrl.includes('/telegram') || buttonUrl.includes('t.me/') && buttonUrl.includes('/app');
-      
+      const canonicalBase = (Deno.env.get("PUBLIC_APP_BASE_URL") || "").replace(/\/+$/, "");
+      const isCanonicalMiniAppUrl = !!(canonicalBase && buttonUrl.startsWith(`${canonicalBase}/telegram-app`));
+      console.log("[telegram-bot-webhook] welcome_button_mode", { tenant_slug: tenantSlug, buttonUrl, canonicalBase, mode: isCanonicalMiniAppUrl ? "web_app" : "url" });
+
       const inlineKeyboard = {
         inline_keyboard: [[
-          isWebApp 
+          isCanonicalMiniAppUrl
             ? { text: buttonText, web_app: { url: buttonUrl } }
             : { text: buttonText, url: buttonUrl }
         ]]

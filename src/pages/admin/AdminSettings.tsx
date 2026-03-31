@@ -777,6 +777,11 @@ export default function AdminSettings() {
                   onChange={(e) => setSettings({ ...settings, welcome_message_button_url: e.target.value })}
                 />
                 <p className="text-xs text-muted-foreground">URL для кнопки (например, ссылка на Mini App или сайт)</p>
+                {miniAppUrl && settings.welcome_message_button_url && settings.welcome_message_button_url !== miniAppUrl && (
+                  <p className="text-xs text-warning flex items-center gap-1 mt-1">
+                    ⚠️ URL кнопки не совпадает с каноническим Mini App URL. Убедитесь, что это намеренно.
+                  </p>
+                )}
               </div>
             </CardContent>
           </Card>
