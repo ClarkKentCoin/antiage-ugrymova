@@ -53,7 +53,7 @@ function resolveLogoSrc(logoUrl: string | null | undefined): string {
 }
 
 export default function TelegramApp() {
-  const { isReady, isTelegramWebApp, user, showConfirm, hapticFeedback, webApp } = useTelegramWebApp();
+  const { isReady, isTelegramWebApp, telegramDetectStatus, user, showConfirm, hapticFeedback, webApp } = useTelegramWebApp();
   const initData = webApp?.initData ?? null;
   
   // Get tenant slug from URL (for multi-tenant support)
