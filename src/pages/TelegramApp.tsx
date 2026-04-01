@@ -59,6 +59,17 @@ export default function TelegramApp() {
   // Get tenant slug from URL (for multi-tenant support)
   const tenantSlug = useMemo(() => getPublicTenantSlug(), []);
 
+  // === TEMPORARY DEBUG LOGGING ===
+  useEffect(() => {
+    console.log('[TelegramApp][DEBUG] Detection result:', {
+      detectStatus: telegramDetectStatus,
+      hasInitData: !!initData,
+      initDataLen: initData?.length ?? 0,
+      tgUserId: user?.id ?? null,
+      tenantSlug,
+    });
+  }, [telegramDetectStatus, initData, user, tenantSlug]);
+
   // Debug badge toggle (7 taps on logo to enable/disable)
   const { isEnabled: debugBadgeEnabled, handleTap: handleDebugTap } = useDebugBadgeToggle();
 
