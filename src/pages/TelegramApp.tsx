@@ -385,7 +385,7 @@ export default function TelegramApp() {
           purchasedOnceOnlyTierIds={purchasedOnceOnlyTierIds}
           logoUrl={logoUrl}
         />
-        {debugBadgeEnabled && <MiniAppBuildBadge serverDebug={null} />}
+        <MiniAppBuildBadge serverDebug={null} telegramDebug={telegramDebug} />
       </main>
     );
   }
