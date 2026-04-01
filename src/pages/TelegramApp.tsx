@@ -298,6 +298,18 @@ export default function TelegramApp() {
     alert(`Request to extend with ${tier?.name} plan sent! Contact admin to complete payment.`);
   };
 
+  // === TEMPORARY DEBUG OBJECT ===
+  const telegramDebug: TelegramDebugInfo = {
+    detectStatus: telegramDetectStatus,
+    isTelegramWebApp,
+    hasInitData: !!initData,
+    initDataLen: initData?.length ?? 0,
+    tgUserId: user?.id ?? null,
+    tenantSlug,
+    subscriberQueryEnabled,
+    paymentQueryEnabled: paymentQueryEnabled,
+  };
+
   // While Telegram SDK detection is still in progress, show a loading screen
   if (!allowTestMode && telegramDetectStatus === 'pending') {
     return (
@@ -306,6 +318,7 @@ export default function TelegramApp() {
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
           <p className="text-sm text-muted-foreground">Загрузка...</p>
         </div>
+        <MiniAppBuildBadge serverDebug={null} telegramDebug={telegramDebug} />
       </main>
     );
   }
