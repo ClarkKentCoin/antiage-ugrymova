@@ -17,7 +17,7 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { formatDaysRu } from '@/lib/textFormatters';
-import { MiniAppBuildBadge } from '@/components/telegram/MiniAppBuildBadge';
+import { MiniAppBuildBadge, TelegramDebugInfo } from '@/components/telegram/MiniAppBuildBadge';
 import { getPublicTenantSlug } from '@/lib/publicTenant';
 import {
   AlertDialog,
@@ -59,8 +59,34 @@ export default function TelegramApp() {
   // Get tenant slug from URL (for multi-tenant support)
   const tenantSlug = useMemo(() => getPublicTenantSlug(), []);
 
+  // === TEMPORARY DEBUG LOGGING ===
+  useEffect(() => {
+    console.log('[TelegramApp][DEBUG] Detection result:', {
+      detectStatus: telegramDetectStatus,
+      hasInitData: !!initData,
+      initDataLen: initData?.length ?? 0,
+      tgUserId: user?.id ?? null,
+      tenantSlug,
+    });
+  }, [telegramDetectStatus, initData, user, tenantSlug]);
+
   // Debug badge toggle (7 taps on logo to enable/disable)
   const { isEnabled: debugBadgeEnabled, handleTap: handleDebugTap } = useDebugBadgeToggle();
+
+  // Subscriber query - only enabled when we have a real Telegram user
+  const subscriberQueryEnabled = !!(user?.id) && !!initData;
+  const paymentQueryEnabled = !!(user?.id) && !!initData;
+
+  // === TEMPORARY DEBUG LOGGING ===
+  useEffect(() => {
+    console.log('[TelegramApp][DEBUG] Query enablement:', {
+      tgUserId: user?.id ?? null,
+      hasInitData: !!initData,
+      tenantSlug,
+      subscriberQueryEnabled,
+      paymentQueryEnabled,
+    });
+  }, [user, initData, tenantSlug, subscriberQueryEnabled, paymentQueryEnabled]);
 
   const { data: subscriberResponse, isLoading: loadingSubscriber, refetch: refetchSubscriber, error: subscriberError } = useSubscriber(
     user?.id ?? null,
@@ -272,6 +298,18 @@ export default function TelegramApp() {
     alert(`Request to extend with ${tier?.name} plan sent! Contact admin to complete payment.`);
   };
 
+  // === TEMPORARY DEBUG OBJECT ===
+  const telegramDebug: TelegramDebugInfo = {
+    detectStatus: telegramDetectStatus,
+    isTelegramWebApp,
+    hasInitData: !!initData,
+    initDataLen: initData?.length ?? 0,
+    tgUserId: user?.id ?? null,
+    tenantSlug,
+    subscriberQueryEnabled,
+    paymentQueryEnabled: paymentQueryEnabled,
+  };
+
   // While Telegram SDK detection is still in progress, show a loading screen
   if (!allowTestMode && telegramDetectStatus === 'pending') {
     return (
@@ -280,6 +318,7 @@ export default function TelegramApp() {
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
           <p className="text-sm text-muted-foreground">Загрузка...</p>
         </div>
+        <MiniAppBuildBadge serverDebug={null} telegramDebug={telegramDebug} />
       </main>
     );
   }
@@ -302,6 +341,7 @@ export default function TelegramApp() {
               </p>
             </CardContent>
           </Card>
+          <MiniAppBuildBadge serverDebug={null} telegramDebug={telegramDebug} />
         </main>
       );
     }
@@ -346,7 +386,7 @@ export default function TelegramApp() {
           purchasedOnceOnlyTierIds={purchasedOnceOnlyTierIds}
           logoUrl={logoUrl}
         />
-        {debugBadgeEnabled && <MiniAppBuildBadge serverDebug={null} />}
+        <MiniAppBuildBadge serverDebug={null} telegramDebug={telegramDebug} />
       </main>
     );
   }
@@ -406,7 +446,7 @@ export default function TelegramApp() {
         purchasedOnceOnlyTierIds={purchasedOnceOnlyTierIds}
         logoUrl={logoUrl}
       />
-      {debugBadgeEnabled && <MiniAppBuildBadge serverDebug={activeDebugInfo} />}
+      <MiniAppBuildBadge serverDebug={activeDebugInfo} telegramDebug={telegramDebug} />
     </div>
   );
 }
