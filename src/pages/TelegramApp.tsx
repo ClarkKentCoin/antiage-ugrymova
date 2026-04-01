@@ -341,7 +341,7 @@ export default function TelegramApp() {
               </p>
             </CardContent>
           </Card>
-          <MiniAppBuildBadge serverDebug={null} telegramDebug={telegramDebug} />
+          {debugBadgeEnabled && <MiniAppBuildBadge serverDebug={null} telegramDebug={telegramDebug} />}
         </main>
       );
     }
