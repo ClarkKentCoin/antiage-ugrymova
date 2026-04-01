@@ -75,7 +75,7 @@ export default function TelegramApp() {
 
   // Subscriber query - only enabled when we have a real Telegram user
   const subscriberQueryEnabled = !!(user?.id) && !!initData;
-  const paymentQueryEnabled = !!(user?.id ?? testUserId) && !!initData;
+  const paymentQueryEnabled = !!(user?.id) && !!initData;
 
   // === TEMPORARY DEBUG LOGGING ===
   useEffect(() => {
