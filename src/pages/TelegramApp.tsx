@@ -73,6 +73,21 @@ export default function TelegramApp() {
   // Debug badge toggle (7 taps on logo to enable/disable)
   const { isEnabled: debugBadgeEnabled, handleTap: handleDebugTap } = useDebugBadgeToggle();
 
+  // Subscriber query - only enabled when we have a real Telegram user
+  const subscriberQueryEnabled = !!(user?.id) && !!initData;
+  const paymentQueryEnabled = !!(user?.id ?? testUserId) && !!initData;
+
+  // === TEMPORARY DEBUG LOGGING ===
+  useEffect(() => {
+    console.log('[TelegramApp][DEBUG] Query enablement:', {
+      tgUserId: user?.id ?? null,
+      hasInitData: !!initData,
+      tenantSlug,
+      subscriberQueryEnabled,
+      paymentQueryEnabled,
+    });
+  }, [user, initData, tenantSlug, subscriberQueryEnabled, paymentQueryEnabled]);
+
   const { data: subscriberResponse, isLoading: loadingSubscriber, refetch: refetchSubscriber, error: subscriberError } = useSubscriber(
     user?.id ?? null,
     initData,
