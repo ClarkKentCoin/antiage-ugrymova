@@ -17,7 +17,7 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { formatDaysRu } from '@/lib/textFormatters';
-import { MiniAppBuildBadge } from '@/components/telegram/MiniAppBuildBadge';
+import { MiniAppBuildBadge, TelegramDebugInfo } from '@/components/telegram/MiniAppBuildBadge';
 import { getPublicTenantSlug } from '@/lib/publicTenant';
 import {
   AlertDialog,
