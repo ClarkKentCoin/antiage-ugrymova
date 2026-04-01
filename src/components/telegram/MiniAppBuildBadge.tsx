@@ -40,23 +40,46 @@ export interface ServerDebugInfo {
   grace_ms_remaining?: number | null;
 }
 
-interface MiniAppBuildBadgeProps {
-  serverDebug?: ServerDebugInfo | null;
+export interface TelegramDebugInfo {
+  detectStatus: string;
+  isTelegramWebApp: boolean;
+  hasInitData: boolean;
+  initDataLen: number;
+  tgUserId: number | null;
+  tenantSlug: string | null;
+  subscriberQueryEnabled: boolean;
+  paymentQueryEnabled: boolean;
 }
 
-export function MiniAppBuildBadge({ serverDebug }: MiniAppBuildBadgeProps) {
+interface MiniAppBuildBadgeProps {
+  serverDebug?: ServerDebugInfo | null;
+  telegramDebug?: TelegramDebugInfo | null;
+}
+
+export function MiniAppBuildBadge({ serverDebug, telegramDebug }: MiniAppBuildBadgeProps) {
   const assetHash = useMemo(() => getAssetHash(), []);
   const tenantSlug = useMemo(() => getTenantSlug(), []);
   const mode = import.meta.env.MODE;
 
   return (
     <div 
-      className="fixed bottom-2 right-2 z-50 px-2 py-1.5 rounded-md bg-black/60 backdrop-blur-sm text-[9px] font-mono leading-tight text-white/80 pointer-events-none select-none max-w-[200px]"
+      className="fixed bottom-2 right-2 z-50 px-2 py-1.5 rounded-md bg-black/60 backdrop-blur-sm text-[9px] font-mono leading-tight text-white/80 pointer-events-none select-none max-w-[220px]"
     >
       <div>Build: {assetHash}</div>
       <div>Fix: 2026-04-01-a</div>
       <div>Mode: {mode}</div>
       {tenantSlug && <div>t: {tenantSlug}</div>}
+      {telegramDebug && (
+        <div className="border-t border-white/20 my-1 pt-1">
+          <div>detect: {telegramDebug.detectStatus}</div>
+          <div>isTgApp: {telegramDebug.isTelegramWebApp ? 'Y' : 'N'}</div>
+          <div>initData: {telegramDebug.hasInitData ? 'Y' : 'N'} ({telegramDebug.initDataLen})</div>
+          <div>tgUser: {telegramDebug.tgUserId ?? 'null'}</div>
+          <div>slug: {telegramDebug.tenantSlug ?? 'null'}</div>
+          <div>subQ: {telegramDebug.subscriberQueryEnabled ? 'ON' : 'OFF'}</div>
+          <div>payQ: {telegramDebug.paymentQueryEnabled ? 'ON' : 'OFF'}</div>
+        </div>
+      )}
       {serverDebug && (
         <>
           <div className="border-t border-white/20 my-1 pt-1">
