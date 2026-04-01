@@ -318,7 +318,7 @@ export default function TelegramApp() {
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
           <p className="text-sm text-muted-foreground">Загрузка...</p>
         </div>
-        <MiniAppBuildBadge serverDebug={null} telegramDebug={telegramDebug} />
+        {debugBadgeEnabled && <MiniAppBuildBadge serverDebug={null} telegramDebug={telegramDebug} />}
       </main>
     );
   }
@@ -341,7 +341,7 @@ export default function TelegramApp() {
               </p>
             </CardContent>
           </Card>
-          <MiniAppBuildBadge serverDebug={null} telegramDebug={telegramDebug} />
+          {debugBadgeEnabled && <MiniAppBuildBadge serverDebug={null} telegramDebug={telegramDebug} />}
         </main>
       );
     }
@@ -386,7 +386,7 @@ export default function TelegramApp() {
           purchasedOnceOnlyTierIds={purchasedOnceOnlyTierIds}
           logoUrl={logoUrl}
         />
-        <MiniAppBuildBadge serverDebug={null} telegramDebug={telegramDebug} />
+        {debugBadgeEnabled && <MiniAppBuildBadge serverDebug={null} telegramDebug={telegramDebug} />}
       </main>
     );
   }
@@ -446,7 +446,7 @@ export default function TelegramApp() {
         purchasedOnceOnlyTierIds={purchasedOnceOnlyTierIds}
         logoUrl={logoUrl}
       />
-      <MiniAppBuildBadge serverDebug={activeDebugInfo} telegramDebug={telegramDebug} />
+      {debugBadgeEnabled && <MiniAppBuildBadge serverDebug={activeDebugInfo} telegramDebug={telegramDebug} />}
     </div>
   );
 }
