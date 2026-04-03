@@ -31,7 +31,7 @@ export interface Subscriber {
     billing_timezone?: string | null;
   } | null;
   // Used for inner join filtering - only subscribers with completed payments
-  payment_history?: { id: string; status: string }[];
+  payment_history?: { id: string; status: string; payment_method?: string; created_at?: string }[];
 }
 
 export interface CreateSubscriberInput {
