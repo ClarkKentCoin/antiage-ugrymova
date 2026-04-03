@@ -65,7 +65,7 @@ export function useSubscribers() {
             interval_count,
             billing_timezone
           ),
-          payment_history!inner(id, status)
+          payment_history!inner(id, status, payment_method, created_at)
         `)
         .eq('payment_history.status', 'completed')
         .order('created_at', { ascending: false });
