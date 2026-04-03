@@ -31,7 +31,7 @@ export interface Subscriber {
     billing_timezone?: string | null;
   } | null;
   // Used for inner join filtering - only subscribers with completed payments
-  payment_history?: { id: string; status: string }[];
+  payment_history?: { id: string; status: string; payment_method?: string; created_at?: string }[];
 }
 
 export interface CreateSubscriberInput {
@@ -65,7 +65,7 @@ export function useSubscribers() {
             interval_count,
             billing_timezone
           ),
-          payment_history!inner(id, status)
+          payment_history!inner(id, status, payment_method, created_at)
         `)
         .eq('payment_history.status', 'completed')
         .order('created_at', { ascending: false });

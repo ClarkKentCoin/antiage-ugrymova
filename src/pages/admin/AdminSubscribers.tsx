@@ -71,7 +71,10 @@ export default function AdminSubscribers() {
     }
     if (paymentMethodFilter !== 'all') {
       list = list.filter(sub => {
-        const method = sub.subscriber_payment_method;
+        // Use latest completed payment's method, fall back to subscriber field
+        const payments = sub.payment_history?.filter(p => p.status === 'completed') ?? [];
+        const latest = payments.sort((a, b) => (b.created_at ?? '').localeCompare(a.created_at ?? ''))[0];
+        const method = latest?.payment_method ?? sub.subscriber_payment_method;
         if (paymentMethodFilter === 'recurrent') return method === 'robokassa_recurring';
         if (paymentMethodFilter === 'single') return method === 'robokassa_single';
         if (paymentMethodFilter === 'manual') return method === 'manual' || !method;
