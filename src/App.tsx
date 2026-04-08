@@ -13,6 +13,7 @@ import AdminTiers from "./pages/admin/AdminTiers";
 import AdminPayments from "./pages/admin/AdminPayments";
 import AdminLogs from "./pages/admin/AdminLogs";
 import AdminSettings from "./pages/admin/AdminSettings";
+import AdminChat from "./pages/admin/AdminChat";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -67,6 +68,7 @@ function AppRoutes() {
       <Route path="/admin/tiers" element={<ProtectedRoute><AdminTiers /></ProtectedRoute>} />
       <Route path="/admin/payments" element={<ProtectedRoute><AdminPayments /></ProtectedRoute>} />
       <Route path="/admin/logs" element={<ProtectedRoute><AdminLogs /></ProtectedRoute>} />
+      <Route path="/admin/chat" element={<ProtectedRoute><AdminChat /></ProtectedRoute>} />
       <Route path="/admin/settings" element={<ProtectedRoute><AdminSettings /></ProtectedRoute>} />
       <Route path="*" element={<NotFound />} />
     </Routes>
