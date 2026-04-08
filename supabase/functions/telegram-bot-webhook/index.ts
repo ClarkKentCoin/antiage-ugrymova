@@ -226,14 +226,25 @@ serve(async (req) => {
       const mcm = update.my_chat_member;
       const newStatus = mcm.new_chat_member.status;
       const tgUserId = mcm.from.id;
-      // "kicked" or "left" = user blocked/deleted the bot
-      // "member" = user unblocked/re-added the bot
-      const botBlocked = newStatus === "kicked" || newStatus === "left";
-      console.log(`[telegram-bot-webhook] my_chat_member tgUser=${tgUserId} newStatus=${newStatus} bot_blocked=${botBlocked} tenant=${tenantId}`);
+
+      let botContactStatus: string;
+      let botBlocked: boolean;
+      if (newStatus === "kicked" || newStatus === "left") {
+        botContactStatus = "blocked";
+        botBlocked = true;
+      } else if (newStatus === "member") {
+        botContactStatus = "active";
+        botBlocked = false;
+      } else {
+        // Unknown status — treat as start_required to be safe
+        botContactStatus = "start_required";
+        botBlocked = false;
+      }
+      console.log(`[telegram-bot-webhook] my_chat_member tgUser=${tgUserId} newStatus=${newStatus} bot_contact_status=${botContactStatus} tenant=${tenantId}`);
 
       await supabaseAdmin
         .from("chat_threads")
-        .update({ bot_blocked: botBlocked, updated_at: new Date().toISOString() })
+        .update({ bot_blocked: botBlocked, bot_contact_status: botContactStatus, updated_at: new Date().toISOString() })
         .eq("tenant_id", tenantId)
         .eq("telegram_user_id", tgUserId);
 

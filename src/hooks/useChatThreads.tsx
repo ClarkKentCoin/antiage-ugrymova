@@ -14,6 +14,7 @@ export interface ChatThread {
   last_message_preview: string | null;
   admin_unread_count: number;
   bot_blocked: boolean;
+  bot_contact_status: string; // 'active' | 'blocked' | 'start_required'
   created_at: string;
   updated_at: string;
   // joined subscriber data

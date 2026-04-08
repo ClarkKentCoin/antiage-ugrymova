@@ -302,6 +302,7 @@ export type Database = {
         Row: {
           admin_unread_count: number
           bot_blocked: boolean
+          bot_contact_status: string
           bot_id: string | null
           channel_id: string | null
           created_at: string
@@ -320,6 +321,7 @@ export type Database = {
         Insert: {
           admin_unread_count?: number
           bot_blocked?: boolean
+          bot_contact_status?: string
           bot_id?: string | null
           channel_id?: string | null
           created_at?: string
@@ -338,6 +340,7 @@ export type Database = {
         Update: {
           admin_unread_count?: number
           bot_blocked?: boolean
+          bot_contact_status?: string
           bot_id?: string | null
           channel_id?: string | null
           created_at?: string
