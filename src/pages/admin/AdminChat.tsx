@@ -6,12 +6,18 @@ import { ChatContactCard } from '@/components/admin/chat/ChatContactCard';
 import { useChatThreads, type ChatThread } from '@/hooks/useChatThreads';
 import { useChatMessages } from '@/hooks/useChatMessages';
 import { useMarkThreadRead } from '@/hooks/useMarkThreadRead';
+import { useChatRealtime } from '@/hooks/useChatRealtime';
+import { useAuth } from '@/hooks/useAuth';
 
 export default function AdminChat() {
+  const { tenantId } = useAuth();
   const { data: threads = [], isLoading: threadsLoading } = useChatThreads();
   const [selectedThread, setSelectedThread] = useState<ChatThread | null>(null);
   const { data: messages = [], isLoading: messagesLoading } = useChatMessages(selectedThread?.id ?? null);
   const { markRead } = useMarkThreadRead();
+
+  // Realtime subscriptions for live updates
+  useChatRealtime(tenantId, selectedThread?.id ?? null);
 
   // Keep selectedThread in sync with refreshed threads data
   useEffect(() => {
