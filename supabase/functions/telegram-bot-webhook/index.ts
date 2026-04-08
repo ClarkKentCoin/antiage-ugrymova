@@ -209,6 +209,25 @@ serve(async (req) => {
       );
     }
 
+    // --- Chat ingestion for non-/start messages ---
+    // Only persist private chat text messages; ignore everything else safely
+    if (
+      update.message &&
+      update.message.chat.type === "private" &&
+      update.message.text &&
+      !messageText.startsWith("/")
+    ) {
+      await persistIncomingChatMessage(supabaseAdmin, {
+        tenantId,
+        telegramUserId: update.message.from.id,
+        telegramMessageId: update.message.message_id,
+        text: update.message.text,
+        messageDate: update.message.date,
+      });
+    } else if (update.message && !messageText.startsWith("/start")) {
+      console.log(`[telegram-bot-webhook] Skipping non-text or non-private message, chat_type=${update.message?.chat?.type}`);
+    }
+
     return new Response(
       JSON.stringify({ ok: true }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
