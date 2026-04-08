@@ -11,6 +11,7 @@ import {
   LogOut,
   LayoutDashboard,
   ScrollText,
+  MessageSquare,
   Menu,
   ChevronLeft,
   ChevronRight
@@ -25,6 +26,7 @@ const navItems = [
   { href: '/admin', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/admin/subscribers', label: 'Subscribers', icon: Users },
   { href: '/admin/tiers', label: 'Tiers', icon: Layers },
+  { href: '/admin/chat', label: 'Чат', icon: MessageSquare },
   { href: '/admin/payments', label: 'Payments', icon: CreditCard },
   { href: '/admin/logs', label: 'Logs', icon: ScrollText },
   { href: '/admin/settings', label: 'Settings', icon: Settings },
