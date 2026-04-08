@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
-import { MessageSquare } from 'lucide-react';
+import { MessageSquare, Check, Clock, AlertCircle } from 'lucide-react';
 import type { ChatMessage } from '@/hooks/useChatMessages';
 
 function formatMsgTime(dateStr: string): string {
@@ -100,12 +100,22 @@ export function ChatMessageHistory({ messages, isLoading, threadSelected }: Chat
                       )}
                     >
                       <p className="whitespace-pre-wrap break-words">{msg.text_content ?? ''}</p>
-                      <p className={cn(
-                        'text-[10px] mt-1 text-right',
+                      <div className={cn(
+                        'flex items-center gap-1 mt-1 justify-end',
                         isIncoming ? 'text-muted-foreground' : 'text-primary-foreground/70'
                       )}>
-                        {formatMsgTime(msg.created_at)}
-                      </p>
+                        {!isIncoming && msg.telegram_status && (
+                          <span className="flex items-center gap-0.5">
+                            {msg.telegram_status === 'queued' && <Clock className="h-3 w-3" />}
+                            {msg.telegram_status === 'sent' && <Check className="h-3 w-3" />}
+                            {msg.telegram_status === 'accepted' && <Check className="h-3 w-3" />}
+                            {msg.telegram_status === 'failed' && <AlertCircle className="h-3 w-3 text-destructive" />}
+                          </span>
+                        )}
+                        <span className="text-[10px]">
+                          {formatMsgTime(msg.created_at)}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 );
