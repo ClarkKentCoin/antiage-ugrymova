@@ -13,6 +13,7 @@ export interface ChatMessage {
   telegram_message_id: number | null;
   is_read_by_admin: boolean;
   read_by_admin_at: string | null;
+  telegram_status: string | null;
   created_at: string;
 }
 

@@ -3,10 +3,12 @@ import { AdminLayout } from '@/components/admin/AdminLayout';
 import { ChatThreadList } from '@/components/admin/chat/ChatThreadList';
 import { ChatMessageHistory } from '@/components/admin/chat/ChatMessageHistory';
 import { ChatContactCard } from '@/components/admin/chat/ChatContactCard';
+import { ChatComposer } from '@/components/admin/chat/ChatComposer';
 import { useChatThreads, type ChatThread } from '@/hooks/useChatThreads';
 import { useChatMessages } from '@/hooks/useChatMessages';
 import { useMarkThreadRead } from '@/hooks/useMarkThreadRead';
 import { useChatRealtime } from '@/hooks/useChatRealtime';
+import { useSendChatReply } from '@/hooks/useSendChatReply';
 import { useAuth } from '@/hooks/useAuth';
 
 export default function AdminChat() {
@@ -15,9 +17,15 @@ export default function AdminChat() {
   const [selectedThread, setSelectedThread] = useState<ChatThread | null>(null);
   const { data: messages = [], isLoading: messagesLoading } = useChatMessages(selectedThread?.id ?? null);
   const { markRead } = useMarkThreadRead();
+  const { sendReply, isSending } = useSendChatReply();
 
   // Realtime subscriptions for live updates
   useChatRealtime(tenantId, selectedThread?.id ?? null);
+
+  const handleSendReply = useCallback(async (text: string): Promise<boolean> => {
+    if (!selectedThread) return false;
+    return sendReply(selectedThread.id, text);
+  }, [selectedThread, sendReply]);
 
   // Keep selectedThread in sync with refreshed threads data
   useEffect(() => {
@@ -51,12 +59,23 @@ export default function AdminChat() {
             onSelectThread={handleSelectThread}
           />
 
-          {/* Center: Messages */}
-          <ChatMessageHistory
-            messages={messages}
-            isLoading={messagesLoading}
-            threadSelected={!!selectedThread}
-          />
+          {/* Center: Messages + Composer */}
+          <div className="flex flex-col min-h-0">
+            <div className="flex-1 min-h-0">
+              <ChatMessageHistory
+                messages={messages}
+                isLoading={messagesLoading}
+                threadSelected={!!selectedThread}
+              />
+            </div>
+            {selectedThread && (
+              <ChatComposer
+                onSend={handleSendReply}
+                isSending={isSending}
+                disabled={!selectedThread.telegram_user_id}
+              />
+            )}
+          </div>
 
           {/* Right: Contact card */}
           <div className="hidden md:block">
