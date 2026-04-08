@@ -13,6 +13,7 @@ export interface ChatThread {
   last_message_direction: string | null;
   last_message_preview: string | null;
   admin_unread_count: number;
+  bot_blocked: boolean;
   created_at: string;
   updated_at: string;
   // joined subscriber data

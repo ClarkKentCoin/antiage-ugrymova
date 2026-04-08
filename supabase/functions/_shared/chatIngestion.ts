@@ -98,6 +98,9 @@ export async function persistIncomingChatMessage(
         updatePayload.subscriber_id = subscriberId;
       }
 
+      // Clear bot_blocked — user just sent a message, so bot is available
+      updatePayload.bot_blocked = false;
+
       const { error: updateErr } = await supabaseAdmin
         .from("chat_threads")
         .update(updatePayload)
@@ -125,6 +128,7 @@ export async function persistIncomingChatMessage(
         last_message_direction: "incoming",
         last_message_preview: preview,
         admin_unread_count: 1,
+        bot_blocked: false,
       };
 
       const { data: createdThread, error: createErr } = await supabaseAdmin

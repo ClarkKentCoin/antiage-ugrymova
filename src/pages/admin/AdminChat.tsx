@@ -79,7 +79,8 @@ export default function AdminChat() {
               <ChatComposer
                 onSend={handleSendReply}
                 isSending={isSending}
-                disabled={!selectedThread.telegram_user_id}
+                disabled={!selectedThread.telegram_user_id || selectedThread.bot_blocked}
+                disabledReason={selectedThread.bot_blocked ? 'Пользователь заблокировал бота' : undefined}
               />
             )}
           </div>

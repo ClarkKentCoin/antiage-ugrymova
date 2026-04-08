@@ -180,7 +180,7 @@ serve(async (req) => {
     const setResult = await callTelegramApi(botToken, "setWebhook", {
       url: webhookUrl,
       secret_token: secretToken,
-      allowed_updates: ["message"],
+      allowed_updates: ["message", "my_chat_member"],
     });
 
     console.log(

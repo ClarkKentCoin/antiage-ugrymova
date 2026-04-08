@@ -119,23 +119,26 @@ export function ChatContactCard({ thread }: ChatContactCardProps) {
 }
 
 /**
- * Bot status derived from chat activity.
- * "Подписан" = has recent incoming messages (bot is not blocked).
- * Currently no persistent "blocked" signal exists in the DB,
- * so we treat any thread with incoming activity as subscribed.
- * Future: webhook can detect blocked_bot events and persist a flag.
+ * Bot status based on persistent bot_blocked flag.
+ * "Подписан" = bot messaging is available
+ * "Отписан" = user blocked/deleted the bot
  */
 function BotStatus({ thread }: { thread: ChatThread }) {
-  // Safe heuristic: if there's any incoming message activity, the user has the bot active
-  const hasActivity = thread.last_message_at !== null;
-  const isSubscribed = hasActivity;
+  const isBlocked = thread.bot_blocked;
 
   return (
-    <div className="flex items-center gap-2">
-      <span className="text-sm text-muted-foreground">Статус:</span>
-      <Badge variant={isSubscribed ? 'default' : 'secondary'} className="text-xs">
-        {isSubscribed ? 'Подписан' : 'Отписан'}
-      </Badge>
+    <div className="space-y-1.5">
+      <div className="flex items-center gap-2">
+        <span className="text-sm text-muted-foreground">Статус:</span>
+        <Badge variant={isBlocked ? 'destructive' : 'default'} className="text-xs">
+          {isBlocked ? 'Отписан' : 'Подписан'}
+        </Badge>
+      </div>
+      {isBlocked && (
+        <p className="text-xs text-muted-foreground">
+          Пользователь удалил или заблокировал бота. Отправка сообщений недоступна.
+        </p>
+      )}
     </div>
   );
 }

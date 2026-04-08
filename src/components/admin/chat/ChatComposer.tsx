@@ -7,9 +7,10 @@ interface ChatComposerProps {
   onSend: (text: string) => Promise<boolean>;
   disabled?: boolean;
   isSending?: boolean;
+  disabledReason?: string;
 }
 
-export function ChatComposer({ onSend, disabled, isSending }: ChatComposerProps) {
+export function ChatComposer({ onSend, disabled, isSending, disabledReason }: ChatComposerProps) {
   const [text, setText] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -39,6 +40,9 @@ export function ChatComposer({ onSend, disabled, isSending }: ChatComposerProps)
 
   return (
     <div className="border-t border-border bg-card px-3 py-2">
+      {disabledReason && (
+        <p className="text-xs text-muted-foreground mb-1.5 px-1">{disabledReason}</p>
+      )}
       <div className="flex items-end gap-2">
         <Textarea
           ref={textareaRef}

@@ -1,0 +1,1 @@
+ALTER TABLE public.chat_threads ADD COLUMN bot_blocked boolean NOT NULL DEFAULT false;
