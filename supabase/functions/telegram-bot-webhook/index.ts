@@ -3,6 +3,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 import { resolveTenantIdFromSlug, DEFAULT_TENANT_ID } from "../_shared/tenant.ts";
 import { getCanonicalAppBaseUrl } from "../_shared/appConfig.ts";
+import { persistIncomingChatMessage } from "../_shared/chatIngestion.ts";
 
 interface TelegramUpdate {
   update_id: number;
