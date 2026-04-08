@@ -1,7 +1,7 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useMemo } from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
-import { MessageSquare, Check, Clock, AlertCircle } from 'lucide-react';
+import { MessageSquare, Check, Clock, AlertCircle, Reply } from 'lucide-react';
 import type { ChatMessage } from '@/hooks/useChatMessages';
 
 function formatMsgTime(dateStr: string): string {
@@ -40,6 +40,27 @@ export function ChatMessageHistory({ messages, isLoading, threadSelected }: Chat
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'auto' });
+  }, [messages]);
+
+  // Pre-compute: which outgoing messages have a later incoming reply
+  // Must be called before early returns (React hooks rule)
+  const repliedOutgoingIds = useMemo(() => {
+    const ids = new Set<string>();
+    let lastOutgoingIdx = -1;
+    for (let i = 0; i < messages.length; i++) {
+      if (messages[i].direction === 'outgoing') {
+        lastOutgoingIdx = i;
+      } else if (messages[i].direction === 'incoming' && lastOutgoingIdx >= 0) {
+        for (let j = lastOutgoingIdx; j >= 0; j--) {
+          if (messages[j].direction === 'outgoing') {
+            ids.add(messages[j].id);
+          } else {
+            break;
+          }
+        }
+      }
+    }
+    return ids;
   }, [messages]);
 
   if (!threadSelected) {
@@ -86,6 +107,7 @@ export function ChatMessageHistory({ messages, isLoading, threadSelected }: Chat
             <div className="space-y-2">
               {group.messages.map(msg => {
                 const isIncoming = msg.direction === 'incoming';
+                const hasUserReply = !isIncoming && repliedOutgoingIds.has(msg.id);
                 return (
                   <div
                     key={msg.id}
@@ -107,8 +129,11 @@ export function ChatMessageHistory({ messages, isLoading, threadSelected }: Chat
                         {!isIncoming && msg.telegram_status && (
                           <span className="flex items-center gap-0.5">
                             {msg.telegram_status === 'queued' && <Clock className="h-3 w-3" />}
-                            {msg.telegram_status === 'sent' && <Check className="h-3 w-3" />}
-                            {msg.telegram_status === 'accepted' && <Check className="h-3 w-3" />}
+                            {(msg.telegram_status === 'sent' || msg.telegram_status === 'accepted') && (
+                              hasUserReply
+                                ? <Reply className="h-3 w-3" />
+                                : <Check className="h-3 w-3" />
+                            )}
                             {msg.telegram_status === 'failed' && <AlertCircle className="h-3 w-3 text-destructive" />}
                           </span>
                         )}
