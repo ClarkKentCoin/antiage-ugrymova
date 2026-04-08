@@ -229,6 +229,144 @@ export type Database = {
           },
         ]
       }
+      chat_messages: {
+        Row: {
+          created_at: string
+          direction: string
+          file_name: string | null
+          file_url: string | null
+          id: string
+          is_read_by_admin: boolean
+          message_type: string
+          mime_type: string | null
+          read_by_admin_at: string | null
+          sender_type: string
+          telegram_message_id: number | null
+          telegram_status: string | null
+          tenant_id: string
+          text_content: string | null
+          thread_id: string
+        }
+        Insert: {
+          created_at?: string
+          direction: string
+          file_name?: string | null
+          file_url?: string | null
+          id?: string
+          is_read_by_admin?: boolean
+          message_type?: string
+          mime_type?: string | null
+          read_by_admin_at?: string | null
+          sender_type: string
+          telegram_message_id?: number | null
+          telegram_status?: string | null
+          tenant_id: string
+          text_content?: string | null
+          thread_id: string
+        }
+        Update: {
+          created_at?: string
+          direction?: string
+          file_name?: string | null
+          file_url?: string | null
+          id?: string
+          is_read_by_admin?: boolean
+          message_type?: string
+          mime_type?: string | null
+          read_by_admin_at?: string | null
+          sender_type?: string
+          telegram_message_id?: number | null
+          telegram_status?: string | null
+          tenant_id?: string
+          text_content?: string | null
+          thread_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_messages_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_messages_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "chat_threads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      chat_threads: {
+        Row: {
+          admin_unread_count: number
+          bot_id: string | null
+          channel_id: string | null
+          created_at: string
+          group_id: string | null
+          id: string
+          last_message_at: string | null
+          last_message_direction: string | null
+          last_message_preview: string | null
+          source_type: string
+          status: string
+          subscriber_id: string | null
+          telegram_user_id: number
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          admin_unread_count?: number
+          bot_id?: string | null
+          channel_id?: string | null
+          created_at?: string
+          group_id?: string | null
+          id?: string
+          last_message_at?: string | null
+          last_message_direction?: string | null
+          last_message_preview?: string | null
+          source_type?: string
+          status?: string
+          subscriber_id?: string | null
+          telegram_user_id: number
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          admin_unread_count?: number
+          bot_id?: string | null
+          channel_id?: string | null
+          created_at?: string
+          group_id?: string | null
+          id?: string
+          last_message_at?: string | null
+          last_message_direction?: string | null
+          last_message_preview?: string | null
+          source_type?: string
+          status?: string
+          subscriber_id?: string | null
+          telegram_user_id?: number
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_threads_subscriber_id_fkey"
+            columns: ["subscriber_id"]
+            isOneToOne: false
+            referencedRelation: "subscribers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_threads_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       invite_links: {
         Row: {
           created_at: string
