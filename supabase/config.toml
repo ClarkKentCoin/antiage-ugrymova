@@ -50,3 +50,6 @@ verify_jwt = false
 
 [functions.get-public-tiers]
 verify_jwt = false
+
+[functions.send-chat-reply]
+verify_jwt = false
