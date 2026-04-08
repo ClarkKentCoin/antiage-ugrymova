@@ -19,8 +19,15 @@ export default function AdminChat() {
   const { markRead } = useMarkThreadRead();
   const { sendReply, isSending } = useSendChatReply();
 
+  // Auto-mark read when new incoming message arrives on the open thread
+  const handleIncomingForSelected = useCallback(() => {
+    if (selectedThread) {
+      markRead(selectedThread.id);
+    }
+  }, [selectedThread, markRead]);
+
   // Realtime subscriptions for live updates
-  useChatRealtime(tenantId, selectedThread?.id ?? null);
+  useChatRealtime(tenantId, selectedThread?.id ?? null, handleIncomingForSelected);
 
   const handleSendReply = useCallback(async (text: string): Promise<boolean> => {
     if (!selectedThread) return false;
