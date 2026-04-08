@@ -3,6 +3,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 import { resolveTenantIdFromSlug, DEFAULT_TENANT_ID } from "../_shared/tenant.ts";
 import { getCanonicalAppBaseUrl } from "../_shared/appConfig.ts";
+import { persistIncomingChatMessage } from "../_shared/chatIngestion.ts";
 
 interface TelegramUpdate {
   update_id: number;
@@ -206,6 +207,25 @@ serve(async (req) => {
         JSON.stringify({ ok: true }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
+    }
+
+    // --- Chat ingestion for non-/start messages ---
+    // Only persist private chat text messages; ignore everything else safely
+    if (
+      update.message &&
+      update.message.chat.type === "private" &&
+      update.message.text &&
+      !messageText.startsWith("/")
+    ) {
+      await persistIncomingChatMessage(supabaseAdmin, {
+        tenantId,
+        telegramUserId: update.message.from.id,
+        telegramMessageId: update.message.message_id,
+        text: update.message.text,
+        messageDate: update.message.date,
+      });
+    } else if (update.message && !messageText.startsWith("/start")) {
+      console.log(`[telegram-bot-webhook] Skipping non-text or non-private message, chat_type=${update.message?.chat?.type}`);
     }
 
     return new Response(
