@@ -42,6 +42,27 @@ export function ChatMessageHistory({ messages, isLoading, threadSelected }: Chat
     bottomRef.current?.scrollIntoView({ behavior: 'auto' });
   }, [messages]);
 
+  // Pre-compute: which outgoing messages have a later incoming reply
+  // Must be called before early returns (React hooks rule)
+  const repliedOutgoingIds = useMemo(() => {
+    const ids = new Set<string>();
+    let lastOutgoingIdx = -1;
+    for (let i = 0; i < messages.length; i++) {
+      if (messages[i].direction === 'outgoing') {
+        lastOutgoingIdx = i;
+      } else if (messages[i].direction === 'incoming' && lastOutgoingIdx >= 0) {
+        for (let j = lastOutgoingIdx; j >= 0; j--) {
+          if (messages[j].direction === 'outgoing') {
+            ids.add(messages[j].id);
+          } else {
+            break;
+          }
+        }
+      }
+    }
+    return ids;
+  }, [messages]);
+
   if (!threadSelected) {
     return (
       <div className="flex h-full items-center justify-center bg-background">
@@ -71,29 +92,6 @@ export function ChatMessageHistory({ messages, isLoading, threadSelected }: Chat
 
   const groups = groupByDate(messages);
 
-  // Pre-compute: which outgoing messages have a later incoming reply
-  const repliedOutgoingIds = useMemo(() => {
-    const ids = new Set<string>();
-    // Find the earliest incoming message timestamp after each outgoing message
-    // Messages are sorted by created_at asc
-    let lastOutgoingIdx = -1;
-    for (let i = 0; i < messages.length; i++) {
-      if (messages[i].direction === 'outgoing') {
-        lastOutgoingIdx = i;
-      } else if (messages[i].direction === 'incoming' && lastOutgoingIdx >= 0) {
-        // All outgoing messages before this incoming one are "replied to"
-        for (let j = lastOutgoingIdx; j >= 0; j--) {
-          if (messages[j].direction === 'outgoing') {
-            ids.add(messages[j].id);
-          } else {
-            break; // stop at the previous incoming
-          }
-        }
-      }
-    }
-    return ids;
-  }, [messages]);
-
   return (
     <ScrollArea className="h-full bg-background">
       <div className="p-4 space-y-4">
@@ -109,6 +107,7 @@ export function ChatMessageHistory({ messages, isLoading, threadSelected }: Chat
             <div className="space-y-2">
               {group.messages.map(msg => {
                 const isIncoming = msg.direction === 'incoming';
+                const hasUserReply = !isIncoming && repliedOutgoingIds.has(msg.id);
                 return (
                   <div
                     key={msg.id}
@@ -131,8 +130,8 @@ export function ChatMessageHistory({ messages, isLoading, threadSelected }: Chat
                           <span className="flex items-center gap-0.5">
                             {msg.telegram_status === 'queued' && <Clock className="h-3 w-3" />}
                             {(msg.telegram_status === 'sent' || msg.telegram_status === 'accepted') && (
-                              repliedOutgoingIds.has(msg.id)
-                                ? <Reply className="h-3 w-3" title="Есть ответ" />
+                              hasUserReply
+                                ? <Reply className="h-3 w-3" />
                                 : <Check className="h-3 w-3" />
                             )}
                             {msg.telegram_status === 'failed' && <AlertCircle className="h-3 w-3 text-destructive" />}
