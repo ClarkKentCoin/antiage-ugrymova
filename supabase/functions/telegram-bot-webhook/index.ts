@@ -22,6 +22,18 @@ interface TelegramUpdate {
     text?: string;
     date: number;
   };
+  my_chat_member?: {
+    chat: { id: number; type: string };
+    from: { id: number };
+    new_chat_member: {
+      status: string; // "member" | "kicked" | "left" | etc.
+      user: { id: number; is_bot?: boolean };
+    };
+    old_chat_member: {
+      status: string;
+      user: { id: number; is_bot?: boolean };
+    };
+  };
 }
 
 interface TelegramResponse {
@@ -202,6 +214,28 @@ serve(async (req) => {
       }
 
       console.log(`[telegram-bot-webhook] send result: ok=${result.ok}, description=${result.description || 'none'}`);
+
+      return new Response(
+        JSON.stringify({ ok: true }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // --- Handle my_chat_member updates (bot blocked/unblocked) ---
+    if (update.my_chat_member && update.my_chat_member.chat.type === "private") {
+      const mcm = update.my_chat_member;
+      const newStatus = mcm.new_chat_member.status;
+      const tgUserId = mcm.from.id;
+      // "kicked" or "left" = user blocked/deleted the bot
+      // "member" = user unblocked/re-added the bot
+      const botBlocked = newStatus === "kicked" || newStatus === "left";
+      console.log(`[telegram-bot-webhook] my_chat_member tgUser=${tgUserId} newStatus=${newStatus} bot_blocked=${botBlocked} tenant=${tenantId}`);
+
+      await supabaseAdmin
+        .from("chat_threads")
+        .update({ bot_blocked: botBlocked, updated_at: new Date().toISOString() })
+        .eq("tenant_id", tenantId)
+        .eq("telegram_user_id", tgUserId);
 
       return new Response(
         JSON.stringify({ ok: true }),
