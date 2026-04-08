@@ -98,8 +98,9 @@ export async function persistIncomingChatMessage(
         updatePayload.subscriber_id = subscriberId;
       }
 
-      // Clear bot_blocked — user just sent a message, so bot is available
+      // Clear bot_blocked — user just sent a message, so bot is active
       updatePayload.bot_blocked = false;
+      updatePayload.bot_contact_status = "active";
 
       const { error: updateErr } = await supabaseAdmin
         .from("chat_threads")
@@ -129,6 +130,7 @@ export async function persistIncomingChatMessage(
         last_message_preview: preview,
         admin_unread_count: 1,
         bot_blocked: false,
+        bot_contact_status: "active",
       };
 
       const { data: createdThread, error: createErr } = await supabaseAdmin

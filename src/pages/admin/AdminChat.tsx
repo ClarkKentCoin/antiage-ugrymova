@@ -79,8 +79,14 @@ export default function AdminChat() {
               <ChatComposer
                 onSend={handleSendReply}
                 isSending={isSending}
-                disabled={!selectedThread.telegram_user_id || selectedThread.bot_blocked}
-                disabledReason={selectedThread.bot_blocked ? 'Пользователь заблокировал бота' : undefined}
+                disabled={!selectedThread.telegram_user_id || selectedThread.bot_contact_status !== 'active'}
+                disabledReason={
+                  selectedThread.bot_contact_status === 'blocked'
+                    ? 'Пользователь удалил или заблокировал бота. Отправка сообщений недоступна.'
+                    : selectedThread.bot_contact_status === 'start_required'
+                    ? 'Пользователь ещё не запустил бота. Отправка сообщений недоступна.'
+                    : undefined
+                }
               />
             )}
           </div>

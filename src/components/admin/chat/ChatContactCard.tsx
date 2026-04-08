@@ -119,25 +119,40 @@ export function ChatContactCard({ thread }: ChatContactCardProps) {
 }
 
 /**
- * Bot status based on persistent bot_blocked flag.
- * "Подписан" = bot messaging is available
- * "Отписан" = user blocked/deleted the bot
+ * Bot contact status based on persistent bot_contact_status field.
+ * "active"          => Подписан
+ * "blocked"         => Отписан
+ * "start_required"  => Не запущен
  */
 function BotStatus({ thread }: { thread: ChatThread }) {
-  const isBlocked = thread.bot_blocked;
+  const status = thread.bot_contact_status ?? (thread.bot_blocked ? 'blocked' : 'active');
+
+  const config: Record<string, { label: string; variant: 'default' | 'destructive' | 'secondary'; hint?: string }> = {
+    active: { label: 'Подписан', variant: 'default' },
+    blocked: {
+      label: 'Отписан',
+      variant: 'destructive',
+      hint: 'Пользователь удалил или заблокировал бота. Отправка сообщений недоступна.',
+    },
+    start_required: {
+      label: 'Не запущен',
+      variant: 'secondary',
+      hint: 'Пользователь ещё не запустил бота. Отправка сообщений недоступна.',
+    },
+  };
+
+  const cfg = config[status] ?? config.active;
 
   return (
     <div className="space-y-1.5">
       <div className="flex items-center gap-2">
         <span className="text-sm text-muted-foreground">Статус:</span>
-        <Badge variant={isBlocked ? 'destructive' : 'default'} className="text-xs">
-          {isBlocked ? 'Отписан' : 'Подписан'}
+        <Badge variant={cfg.variant} className="text-xs">
+          {cfg.label}
         </Badge>
       </div>
-      {isBlocked && (
-        <p className="text-xs text-muted-foreground">
-          Пользователь удалил или заблокировал бота. Отправка сообщений недоступна.
-        </p>
+      {cfg.hint && (
+        <p className="text-xs text-muted-foreground">{cfg.hint}</p>
       )}
     </div>
   );

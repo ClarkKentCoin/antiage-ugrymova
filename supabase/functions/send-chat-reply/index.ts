@@ -147,12 +147,18 @@ Deno.serve(async (req: Request) => {
       })
       .eq("id", messageId);
 
-    // 10. Detect explicit bot-blocked signals from Telegram error
-    const blockedSignals = ["Forbidden", "bot was blocked", "user is deactivated", "chat not found"];
-    const isBotBlocked =
-      finalStatus === "failed" &&
-      errorDescription &&
-      blockedSignals.some((s) => errorDescription!.toLowerCase().includes(s.toLowerCase()));
+    // 10. Detect bot contact status from Telegram error
+    const blockedSignals = ["Forbidden", "bot was blocked", "user is deactivated"];
+    const startRequiredSignals = ["chat not found"];
+    let newBotContactStatus: string | null = null;
+    if (finalStatus === "failed" && errorDescription) {
+      const errLower = errorDescription.toLowerCase();
+      if (blockedSignals.some((s) => errLower.includes(s.toLowerCase()))) {
+        newBotContactStatus = "blocked";
+      } else if (startRequiredSignals.some((s) => errLower.includes(s.toLowerCase()))) {
+        newBotContactStatus = "start_required";
+      }
+    }
 
     // 11. Update thread cache fields (no admin_unread_count change for outgoing)
     const preview = trimmedText.length > 100 ? trimmedText.slice(0, 100) + "…" : trimmedText;
@@ -162,9 +168,10 @@ Deno.serve(async (req: Request) => {
       last_message_preview: preview,
       updated_at: new Date().toISOString(),
     };
-    if (isBotBlocked) {
-      threadUpdate.bot_blocked = true;
-      console.log(`[send-chat-reply] Marking thread ${thread.id} as bot_blocked due to: ${errorDescription}`);
+    if (newBotContactStatus) {
+      threadUpdate.bot_contact_status = newBotContactStatus;
+      threadUpdate.bot_blocked = newBotContactStatus === "blocked";
+      console.log(`[send-chat-reply] Marking thread ${thread.id} bot_contact_status=${newBotContactStatus} due to: ${errorDescription}`);
     }
     await supabaseAdmin
       .from("chat_threads")
