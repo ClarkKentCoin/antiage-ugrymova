@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Send } from 'lucide-react';
@@ -16,13 +16,20 @@ export function ChatComposer({ onSend, disabled, isSending, disabledReason }: Ch
 
   const canSend = !disabled && !isSending && text.trim().length > 0;
 
+  // Auto-resize textarea
+  useEffect(() => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    ta.style.height = 'auto';
+    ta.style.height = Math.min(ta.scrollHeight, 144) + 'px'; // ~6 lines max
+  }, [text]);
+
   const handleSend = useCallback(async () => {
     if (!canSend) return;
     const msg = text;
     setText('');
     const ok = await onSend(msg);
     if (!ok) {
-      // Restore text on failure so admin can retry
       setText(msg);
     }
     textareaRef.current?.focus();
@@ -51,7 +58,7 @@ export function ChatComposer({ onSend, disabled, isSending, disabledReason }: Ch
           onKeyDown={handleKeyDown}
           placeholder="Написать сообщение..."
           disabled={disabled || isSending}
-          className="min-h-[40px] max-h-[120px] resize-none text-sm py-2"
+          className="min-h-[40px] max-h-[144px] resize-none text-sm py-2 overflow-y-auto"
           rows={1}
         />
         <Button
