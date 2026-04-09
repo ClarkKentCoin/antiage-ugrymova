@@ -1,10 +1,10 @@
 import { useState, useCallback, useEffect } from 'react';
 import { EditorContent, useEditor, type Editor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
-import Underline from '@tiptap/extension-underline';
+import UnderlineExtension from '@tiptap/extension-underline';
 import LinkExtension from '@tiptap/extension-link';
 import { Button } from '@/components/ui/button';
-import { Send, Bold, Italic, Underline, Strikethrough, Link } from 'lucide-react';
+import { Send, Bold, Italic, Underline, Strikethrough, Link, type LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
@@ -121,7 +121,7 @@ export function ChatComposer({ onSend, disabled, isSending, disabledReason }: Ch
         horizontalRule: false,
         orderedList: false,
       }),
-      Underline,
+      UnderlineExtension,
       LinkExtension.configure({
         autolink: false,
         linkOnPaste: false,
@@ -238,12 +238,12 @@ export function ChatComposer({ onSend, disabled, isSending, disabledReason }: Ch
 
     const ok = await onSend(telegramHtml, 'HTML');
     if (!ok) {
-      editor.commands.setContent(rawEditorHtml, false);
+      editor.commands.setContent(rawEditorHtml, { emitUpdate: false });
       editor.commands.focus('end');
     }
   }, [canSend, editor, onSend]);
 
-  const formatButtons = [
+  const formatButtons: Array<{ type: string; icon: LucideIcon; label: string }> = [
     { type: 'bold', icon: Bold, label: 'Жирный' },
     { type: 'italic', icon: Italic, label: 'Курсив' },
     { type: 'underline', icon: Underline, label: 'Подчёркнутый' },
