@@ -666,7 +666,84 @@ export default function AdminSettings() {
             </CardContent>
           </Card>
 
-          {/* Robokassa Settings */}
+          {/* Chat Notifications */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Уведомления чата</CardTitle>
+              <CardDescription>Оповещения о новых входящих сообщениях от пользователей</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between rounded-lg border p-3">
+                <div className="space-y-0.5">
+                  <Label>Telegram-оповещения о чате</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Отправлять уведомление в Telegram при новом входящем сообщении
+                  </p>
+                </div>
+                <Switch
+                  checked={settings.chat_notifications_enabled}
+                  onCheckedChange={(checked) => setSettings({ ...settings, chat_notifications_enabled: checked })}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="chat_tg_dest">Telegram-адресат для чат-уведомлений</Label>
+                <Input
+                  id="chat_tg_dest"
+                  placeholder="-1001234567890 или @username"
+                  value={settings.chat_notification_telegram_chat_id}
+                  onChange={(e) => setSettings({ ...settings, chat_notification_telegram_chat_id: e.target.value })}
+                />
+                <p className="text-xs text-muted-foreground">
+                  ID канала, группы или личного чата. Бот должен иметь доступ к этому адресату.
+                  Используйте отдельный от основных уведомлений адрес.
+                </p>
+              </div>
+
+              <div className="flex items-center justify-between rounded-lg border p-3">
+                <div className="space-y-0.5">
+                  <Label>Звуковые уведомления (в панели)</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Звуковой сигнал при новом сообщении, пока админ-панель открыта
+                  </p>
+                </div>
+                <Switch
+                  checked={settings.chat_sound_enabled}
+                  onCheckedChange={(checked) => {
+                    setSettings({ ...settings, chat_sound_enabled: checked });
+                    localStorage.setItem('chat_sound_enabled', String(checked));
+                  }}
+                />
+              </div>
+
+              <div className="flex items-center justify-between rounded-lg border p-3">
+                <div className="space-y-0.5">
+                  <Label>Браузерные уведомления (в панели)</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Уведомления браузера при новом сообщении, пока панель открыта
+                  </p>
+                </div>
+                <Switch
+                  checked={settings.chat_browser_notifications_enabled}
+                  onCheckedChange={(checked) => {
+                    setSettings({ ...settings, chat_browser_notifications_enabled: checked });
+                    localStorage.setItem('chat_browser_notifications_enabled', String(checked));
+                    if (checked && typeof Notification !== 'undefined' && Notification.permission === 'default') {
+                      Notification.requestPermission();
+                    }
+                  }}
+                />
+              </div>
+
+              {typeof Notification !== 'undefined' && Notification.permission === 'denied' && settings.chat_browser_notifications_enabled && (
+                <p className="text-xs text-destructive">
+                  ⚠️ Браузерные уведомления заблокированы. Разрешите их в настройках браузера для этого сайта.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+
+
           <Card>
             <CardHeader>
               <CardTitle>Robokassa</CardTitle>
