@@ -84,7 +84,7 @@ export function ChatThreadList({ threads, isLoading, selectedThreadId, onSelectT
   }, [threads, filter, search]);
 
   return (
-    <div className="flex h-full flex-col border-r border-border bg-card">
+    <div className="flex h-full min-h-0 flex-col border-r border-border bg-card overflow-hidden">
       {/* Search */}
       <div className="border-b border-border p-3">
         <div className="relative">
