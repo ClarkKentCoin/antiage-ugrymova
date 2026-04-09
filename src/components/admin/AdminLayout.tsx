@@ -34,7 +34,7 @@ const navItems = [
   { href: '/admin/settings', label: 'Settings', icon: Settings },
 ];
 
-function NavContent({ onNavigate, collapsed }: { onNavigate?: () => void; collapsed?: boolean }) {
+function NavContent({ onNavigate, collapsed, chatUnreadCount }: { onNavigate?: () => void; collapsed?: boolean; chatUnreadCount?: number }) {
   const location = useLocation();
   const { user, signOut } = useAuth();
 
