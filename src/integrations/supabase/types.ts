@@ -126,6 +126,10 @@ export type Database = {
         Row: {
           channel_description: string | null
           channel_name: string | null
+          chat_browser_notifications_enabled: boolean
+          chat_notification_telegram_chat_id: string | null
+          chat_notifications_enabled: boolean
+          chat_sound_enabled: boolean
           created_at: string
           grace_period_days: number | null
           id: string
@@ -158,6 +162,10 @@ export type Database = {
         Insert: {
           channel_description?: string | null
           channel_name?: string | null
+          chat_browser_notifications_enabled?: boolean
+          chat_notification_telegram_chat_id?: string | null
+          chat_notifications_enabled?: boolean
+          chat_sound_enabled?: boolean
           created_at?: string
           grace_period_days?: number | null
           id?: string
@@ -190,6 +198,10 @@ export type Database = {
         Update: {
           channel_description?: string | null
           channel_name?: string | null
+          chat_browser_notifications_enabled?: boolean
+          chat_notification_telegram_chat_id?: string | null
+          chat_notifications_enabled?: boolean
+          chat_sound_enabled?: boolean
           created_at?: string
           grace_period_days?: number | null
           id?: string
