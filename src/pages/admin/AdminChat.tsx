@@ -12,13 +12,15 @@ import { useSendChatReply } from '@/hooks/useSendChatReply';
 import { useAuth } from '@/hooks/useAuth';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft } from 'lucide-react';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { ArrowLeft, Info } from 'lucide-react';
 
 export default function AdminChat() {
   const { tenantId } = useAuth();
   const isMobile = useIsMobile();
   const { data: threads = [], isLoading: threadsLoading } = useChatThreads();
   const [selectedThread, setSelectedThread] = useState<ChatThread | null>(null);
+  const [mobileInfoOpen, setMobileInfoOpen] = useState(false);
   const { data: messages = [], isLoading: messagesLoading } = useChatMessages(selectedThread?.id ?? null);
   const { markRead } = useMarkThreadRead();
   const { sendReply, isSending } = useSendChatReply();
@@ -55,6 +57,7 @@ export default function AdminChat() {
 
   const handleBack = useCallback(() => {
     setSelectedThread(null);
+    setMobileInfoOpen(false);
   }, []);
 
   // Helper to get display name for mobile header
@@ -76,7 +79,7 @@ export default function AdminChat() {
       return (
         <AdminLayout>
           <div className="flex flex-col h-[calc(100vh-2rem)] min-h-0">
-            {/* Mobile thread header */}
+            {/* Mobile thread header - sticky */}
             <div className="flex items-center gap-2 px-3 py-2 border-b border-border bg-card shrink-0">
               <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={handleBack}>
                 <ArrowLeft className="h-4 w-4" />
@@ -87,6 +90,9 @@ export default function AdminChat() {
                   <p className="text-xs text-muted-foreground truncate">@{selectedThread.subscriber.telegram_username}</p>
                 )}
               </div>
+              <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => setMobileInfoOpen(true)}>
+                <Info className="h-4 w-4" />
+              </Button>
             </div>
 
             {/* Messages */}
@@ -111,6 +117,16 @@ export default function AdminChat() {
                   : undefined
               }
             />
+
+            {/* Mobile user details sheet */}
+            <Sheet open={mobileInfoOpen} onOpenChange={setMobileInfoOpen}>
+              <SheetContent side="right" className="w-[300px] p-0">
+                <SheetHeader className="sr-only">
+                  <SheetTitle>Информация о контакте</SheetTitle>
+                </SheetHeader>
+                <ChatContactCard thread={selectedThread} />
+              </SheetContent>
+            </Sheet>
           </div>
         </AdminLayout>
       );
