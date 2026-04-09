@@ -91,6 +91,10 @@ export default function AdminSettings() {
     channel_name: '',
     channel_description: '',
     logo_url: null,
+    chat_notifications_enabled: false,
+    chat_notification_telegram_chat_id: '',
+    chat_sound_enabled: false,
+    chat_browser_notifications_enabled: false,
   });
 
   // Generate default webhook URLs
