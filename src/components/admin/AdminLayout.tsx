@@ -135,7 +135,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
             </Button>
           </SheetTrigger>
           <SheetContent side="left" className="w-64 p-0">
-            <NavContent onNavigate={() => setMobileMenuOpen(false)} />
+            <NavContent onNavigate={() => setMobileMenuOpen(false)} chatUnreadCount={chatUnreadCount} />
           </SheetContent>
         </Sheet>
         <h1 className="text-lg font-semibold">Subscription Manager</h1>
@@ -148,7 +148,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
           sidebarCollapsed ? "w-16" : "w-64"
         )}
       >
-        <NavContent collapsed={sidebarCollapsed} />
+        <NavContent collapsed={sidebarCollapsed} chatUnreadCount={chatUnreadCount} />
         
         {/* Collapse toggle button */}
         <Button
