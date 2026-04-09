@@ -5,6 +5,8 @@
  * Safe, additive, does not modify any existing tables or logic.
  */
 
+import { sendChatAlertNotification } from "./chatAlertNotification.ts";
+
 interface IncomingChatMessage {
   tenantId: string;
   telegramUserId: number;
