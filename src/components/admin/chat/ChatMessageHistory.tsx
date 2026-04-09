@@ -121,7 +121,14 @@ export function ChatMessageHistory({ messages, isLoading, threadSelected }: Chat
                           : 'bg-primary text-primary-foreground rounded-br-md'
                       )}
                     >
-                      <p className="whitespace-pre-wrap break-words">{msg.text_content ?? ''}</p>
+                      {msg.direction === 'outgoing' ? (
+                        <p
+                          className="whitespace-pre-wrap break-words [&_a]:underline"
+                          dangerouslySetInnerHTML={{ __html: msg.text_content ?? '' }}
+                        />
+                      ) : (
+                        <p className="whitespace-pre-wrap break-words">{msg.text_content ?? ''}</p>
+                      )}
                       <div className={cn(
                         'flex items-center gap-1 mt-1 justify-end',
                         isIncoming ? 'text-muted-foreground' : 'text-primary-foreground/70'

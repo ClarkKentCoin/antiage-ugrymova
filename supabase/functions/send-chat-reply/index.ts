@@ -43,7 +43,7 @@ Deno.serve(async (req: Request) => {
 
     // 3. Parse & validate body
     const body = await req.json();
-    const { thread_id, text, action } = body;
+    const { thread_id, text, action, parse_mode } = body;
 
     // --- Test chat alert action ---
     if (action === "test_chat_alert") {
@@ -74,6 +74,12 @@ Deno.serve(async (req: Request) => {
     }
     if (!text || typeof text !== "string" || !text.trim()) {
       return json({ error: "text is required" }, 400);
+    }
+
+    // 3b. Enforce 1000-character product limit (plain text, tags stripped)
+    const plainText = text.replace(/<[^>]*>/g, "").trim();
+    if (plainText.length > 1000) {
+      return json({ error: "text_too_long", message: "Сообщение слишком длинное (макс. 1000 символов)" }, 400);
     }
 
     // 4. Resolve tenant
@@ -136,15 +142,19 @@ Deno.serve(async (req: Request) => {
     let errorDescription: string | null = null;
 
     try {
+      const tgBody: Record<string, unknown> = {
+        chat_id: thread.telegram_user_id,
+        text: trimmedText,
+      };
+      if (parse_mode === "HTML") {
+        tgBody.parse_mode = "HTML";
+      }
       const tgRes = await fetch(
         `https://api.telegram.org/bot${botToken}/sendMessage`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            chat_id: thread.telegram_user_id,
-            text: trimmedText,
-          }),
+          body: JSON.stringify(tgBody),
         }
       );
       const tgData = await tgRes.json();
@@ -186,11 +196,11 @@ Deno.serve(async (req: Request) => {
     }
 
     // 11. Update thread cache fields (no admin_unread_count change for outgoing)
-    const preview = trimmedText.length > 100 ? trimmedText.slice(0, 100) + "…" : trimmedText;
+    const previewPlain = plainText.length > 100 ? plainText.slice(0, 100) + "…" : plainText;
     const threadUpdate: Record<string, any> = {
       last_message_at: new Date().toISOString(),
       last_message_direction: "outgoing",
-      last_message_preview: preview,
+      last_message_preview: previewPlain,
       updated_at: new Date().toISOString(),
     };
     if (newBotContactStatus) {
