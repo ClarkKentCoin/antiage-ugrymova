@@ -171,6 +171,9 @@ export default function AdminSettings() {
           chat_sound_enabled: (data as any).chat_sound_enabled ?? false,
           chat_browser_notifications_enabled: (data as any).chat_browser_notifications_enabled ?? false,
         });
+        // Sync local preferences for in-app notifications
+        localStorage.setItem('chat_sound_enabled', String((data as any).chat_sound_enabled ?? false));
+        localStorage.setItem('chat_browser_notifications_enabled', String((data as any).chat_browser_notifications_enabled ?? false));
       }
     } catch (error) {
       console.error('Error loading settings:', error);
