@@ -1,6 +1,8 @@
 import { ReactNode, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
+import { useChatUnreadCount } from '@/hooks/useChatUnreadCount';
+import { useChatNotificationEffects } from '@/hooks/useChatNotificationEffects';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { 

@@ -172,6 +172,60 @@ export async function persistIncomingChatMessage(
     }
 
     console.log(`${tag} persisted message tgMsgId=${telegramMessageId} thread=${threadId}`);
+
+    // 4. Send Telegram chat alert if this is the first unread message (anti-spam)
+    // Only trigger when unread count went from 0 → 1
+    const previousUnread = existingThread ? (existingThread.admin_unread_count ?? 0) : 0;
+    if (previousUnread === 0) {
+      try {
+        // Load chat notification settings for this tenant
+        const { data: alertSettings } = await supabaseAdmin
+          .from("admin_settings")
+          .select("telegram_bot_token, chat_notifications_enabled, chat_notification_telegram_chat_id")
+          .eq("tenant_id", tenantId)
+          .maybeSingle();
+
+        if (
+          alertSettings?.chat_notifications_enabled &&
+          alertSettings?.telegram_bot_token &&
+          alertSettings?.chat_notification_telegram_chat_id
+        ) {
+          // Resolve subscriber name for the alert
+          let alertName = `Telegram #${telegramUserId}`;
+          let alertUsername: string | null = null;
+          if (subscriberId) {
+            const { data: subInfo } = await supabaseAdmin
+              .from("subscribers")
+              .select("first_name, last_name, telegram_username")
+              .eq("id", subscriberId)
+              .maybeSingle();
+            if (subInfo) {
+              const parts = [subInfo.first_name, subInfo.last_name].filter(Boolean);
+              if (parts.length > 0) alertName = parts.join(" ");
+              alertUsername = subInfo.telegram_username ?? null;
+            }
+          }
+
+          // Fire and forget — do not block ingestion
+          sendChatAlertNotification({
+            supabaseAdmin,
+            tenantId,
+            botToken: alertSettings.telegram_bot_token,
+            chatAlertDestination: alertSettings.chat_notification_telegram_chat_id,
+            subscriberName: alertName,
+            subscriberUsername: alertUsername,
+            messagePreview: preview,
+            threadId,
+          }).catch((err) => {
+            console.error(`${tag} chat alert fire-and-forget error:`, err);
+          });
+        }
+      } catch (alertErr) {
+        console.error(`${tag} chat alert setup error:`, alertErr);
+        // Non-blocking — ingestion already succeeded
+      }
+    }
+
     return true;
   } catch (err) {
     console.error(`${tag} unexpected error:`, err);
