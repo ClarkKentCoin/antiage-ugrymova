@@ -51,8 +51,8 @@ export default function AdminChat() {
 
   return (
     <AdminLayout>
-      <div className="flex flex-col h-[calc(100vh-2rem)] md:h-[calc(100vh-4rem)]">
-        <div className="mb-4">
+      <div className="flex flex-col h-[calc(100vh-2rem)] md:h-[calc(100vh-4rem)] min-h-0">
+        <div className="mb-4 shrink-0">
           <h1 className="text-2xl font-bold text-foreground">Чат</h1>
           <p className="text-sm text-muted-foreground">Входящие сообщения от пользователей</p>
         </div>
@@ -67,8 +67,8 @@ export default function AdminChat() {
           />
 
           {/* Center: Messages + Composer */}
-          <div className="flex flex-col min-h-0">
-            <div className="flex-1 min-h-0">
+          <div className="hidden md:flex flex-col min-h-0">
+            <div className="flex-1 min-h-0 overflow-hidden">
               <ChatMessageHistory
                 messages={messages}
                 isLoading={messagesLoading}
@@ -92,7 +92,7 @@ export default function AdminChat() {
           </div>
 
           {/* Right: Contact card */}
-          <div className="hidden md:block">
+          <div className="hidden md:block min-h-0 overflow-hidden">
             <ChatContactCard thread={selectedThread} />
           </div>
         </div>
