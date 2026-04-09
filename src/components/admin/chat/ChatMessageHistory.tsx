@@ -1,6 +1,7 @@
 import { useEffect, useRef, useMemo } from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
+import { renderTelegramMessageHtml } from '@/lib/telegramMessageHtml';
 import { MessageSquare, Check, Clock, AlertCircle, Reply } from 'lucide-react';
 import type { ChatMessage } from '@/hooks/useChatMessages';
 
@@ -42,8 +43,6 @@ export function ChatMessageHistory({ messages, isLoading, threadSelected }: Chat
     bottomRef.current?.scrollIntoView({ behavior: 'auto' });
   }, [messages]);
 
-  // Pre-compute: which outgoing messages have a later incoming reply
-  // Must be called before early returns (React hooks rule)
   const repliedOutgoingIds = useMemo(() => {
     const ids = new Set<string>();
     let lastOutgoingIdx = -1;
@@ -97,13 +96,11 @@ export function ChatMessageHistory({ messages, isLoading, threadSelected }: Chat
       <div className="p-4 space-y-4">
         {groups.map((group, gi) => (
           <div key={gi}>
-            {/* Date separator */}
             <div className="flex justify-center my-3">
               <span className="bg-muted text-muted-foreground text-xs px-3 py-1 rounded-full">
                 {formatDateSeparator(group.date)}
               </span>
             </div>
-            {/* Messages */}
             <div className="space-y-2">
               {group.messages.map(msg => {
                 const isIncoming = msg.direction === 'incoming';
@@ -123,8 +120,8 @@ export function ChatMessageHistory({ messages, isLoading, threadSelected }: Chat
                     >
                       {msg.direction === 'outgoing' ? (
                         <p
-                          className="whitespace-pre-wrap break-words [&_a]:underline"
-                          dangerouslySetInnerHTML={{ __html: msg.text_content ?? '' }}
+                          className="whitespace-pre-wrap break-words [&_a]:underline [&_a]:break-all"
+                          dangerouslySetInnerHTML={{ __html: renderTelegramMessageHtml(msg.text_content) }}
                         />
                       ) : (
                         <p className="whitespace-pre-wrap break-words">{msg.text_content ?? ''}</p>
