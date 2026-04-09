@@ -43,6 +43,11 @@ interface AdminSettingsData {
   channel_name: string | null;
   channel_description: string | null;
   logo_url: string | null;
+  // Chat notifications
+  chat_notifications_enabled: boolean;
+  chat_notification_telegram_chat_id: string;
+  chat_sound_enabled: boolean;
+  chat_browser_notifications_enabled: boolean;
 }
 
 export default function AdminSettings() {
@@ -86,6 +91,10 @@ export default function AdminSettings() {
     channel_name: '',
     channel_description: '',
     logo_url: null,
+    chat_notifications_enabled: false,
+    chat_notification_telegram_chat_id: '',
+    chat_sound_enabled: false,
+    chat_browser_notifications_enabled: false,
   });
 
   // Generate default webhook URLs
@@ -157,7 +166,14 @@ export default function AdminSettings() {
           channel_name: (data as any).channel_name || '',
           channel_description: (data as any).channel_description || '',
           logo_url: (data as any).logo_url || null,
+          chat_notifications_enabled: (data as any).chat_notifications_enabled ?? false,
+          chat_notification_telegram_chat_id: (data as any).chat_notification_telegram_chat_id || '',
+          chat_sound_enabled: (data as any).chat_sound_enabled ?? false,
+          chat_browser_notifications_enabled: (data as any).chat_browser_notifications_enabled ?? false,
         });
+        // Sync local preferences for in-app notifications
+        localStorage.setItem('chat_sound_enabled', String((data as any).chat_sound_enabled ?? false));
+        localStorage.setItem('chat_browser_notifications_enabled', String((data as any).chat_browser_notifications_enabled ?? false));
       }
     } catch (error) {
       console.error('Error loading settings:', error);
@@ -208,6 +224,10 @@ export default function AdminSettings() {
         channel_name: settings.channel_name || null,
         channel_description: settings.channel_description || null,
         logo_url: settings.logo_url || null,
+        chat_notifications_enabled: settings.chat_notifications_enabled,
+        chat_notification_telegram_chat_id: settings.chat_notification_telegram_chat_id || null,
+        chat_sound_enabled: settings.chat_sound_enabled,
+        chat_browser_notifications_enabled: settings.chat_browser_notifications_enabled,
       };
 
       let error;
@@ -649,7 +669,84 @@ export default function AdminSettings() {
             </CardContent>
           </Card>
 
-          {/* Robokassa Settings */}
+          {/* Chat Notifications */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Уведомления чата</CardTitle>
+              <CardDescription>Оповещения о новых входящих сообщениях от пользователей</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between rounded-lg border p-3">
+                <div className="space-y-0.5">
+                  <Label>Telegram-оповещения о чате</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Отправлять уведомление в Telegram при новом входящем сообщении
+                  </p>
+                </div>
+                <Switch
+                  checked={settings.chat_notifications_enabled}
+                  onCheckedChange={(checked) => setSettings({ ...settings, chat_notifications_enabled: checked })}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="chat_tg_dest">Telegram-адресат для чат-уведомлений</Label>
+                <Input
+                  id="chat_tg_dest"
+                  placeholder="-1001234567890 или @username"
+                  value={settings.chat_notification_telegram_chat_id}
+                  onChange={(e) => setSettings({ ...settings, chat_notification_telegram_chat_id: e.target.value })}
+                />
+                <p className="text-xs text-muted-foreground">
+                  ID канала, группы или личного чата. Бот должен иметь доступ к этому адресату.
+                  Используйте отдельный от основных уведомлений адрес.
+                </p>
+              </div>
+
+              <div className="flex items-center justify-between rounded-lg border p-3">
+                <div className="space-y-0.5">
+                  <Label>Звуковые уведомления (в панели)</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Звуковой сигнал при новом сообщении, пока админ-панель открыта
+                  </p>
+                </div>
+                <Switch
+                  checked={settings.chat_sound_enabled}
+                  onCheckedChange={(checked) => {
+                    setSettings({ ...settings, chat_sound_enabled: checked });
+                    localStorage.setItem('chat_sound_enabled', String(checked));
+                  }}
+                />
+              </div>
+
+              <div className="flex items-center justify-between rounded-lg border p-3">
+                <div className="space-y-0.5">
+                  <Label>Браузерные уведомления (в панели)</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Уведомления браузера при новом сообщении, пока панель открыта
+                  </p>
+                </div>
+                <Switch
+                  checked={settings.chat_browser_notifications_enabled}
+                  onCheckedChange={(checked) => {
+                    setSettings({ ...settings, chat_browser_notifications_enabled: checked });
+                    localStorage.setItem('chat_browser_notifications_enabled', String(checked));
+                    if (checked && typeof Notification !== 'undefined' && Notification.permission === 'default') {
+                      Notification.requestPermission();
+                    }
+                  }}
+                />
+              </div>
+
+              {typeof Notification !== 'undefined' && Notification.permission === 'denied' && settings.chat_browser_notifications_enabled && (
+                <p className="text-xs text-destructive">
+                  ⚠️ Браузерные уведомления заблокированы. Разрешите их в настройках браузера для этого сайта.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+
+
           <Card>
             <CardHeader>
               <CardTitle>Robokassa</CardTitle>

@@ -1,6 +1,8 @@
 import { ReactNode, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
+import { useChatUnreadCount } from '@/hooks/useChatUnreadCount';
+import { useChatNotificationEffects } from '@/hooks/useChatNotificationEffects';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { 
@@ -32,7 +34,7 @@ const navItems = [
   { href: '/admin/settings', label: 'Settings', icon: Settings },
 ];
 
-function NavContent({ onNavigate, collapsed }: { onNavigate?: () => void; collapsed?: boolean }) {
+function NavContent({ onNavigate, collapsed, chatUnreadCount }: { onNavigate?: () => void; collapsed?: boolean; chatUnreadCount?: number }) {
   const location = useLocation();
   const { user, signOut } = useAuth();
 
@@ -57,6 +59,7 @@ function NavContent({ onNavigate, collapsed }: { onNavigate?: () => void; collap
       <nav className="flex-1 space-y-1 p-4">
         {navItems.map((item) => {
           const isActive = location.pathname === item.href;
+          const showBadge = item.href === '/admin/chat' && (chatUnreadCount ?? 0) > 0;
           return (
             <Link
               key={item.href}
@@ -64,7 +67,7 @@ function NavContent({ onNavigate, collapsed }: { onNavigate?: () => void; collap
               onClick={onNavigate}
               title={collapsed ? item.label : undefined}
               className={cn(
-                'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
+                'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors relative',
                 collapsed && 'justify-center px-2',
                 isActive
                   ? 'bg-primary text-primary-foreground'
@@ -73,6 +76,14 @@ function NavContent({ onNavigate, collapsed }: { onNavigate?: () => void; collap
             >
               <item.icon className="h-5 w-5 shrink-0" />
               {!collapsed && item.label}
+              {showBadge && (
+                <span className={cn(
+                  "inline-flex items-center justify-center rounded-full bg-destructive text-destructive-foreground text-xs font-bold min-w-[20px] h-5 px-1.5",
+                  collapsed ? "absolute -top-1 -right-1" : "ml-auto"
+                )}>
+                  {chatUnreadCount! > 99 ? '99+' : chatUnreadCount}
+                </span>
+              )}
             </Link>
           );
         })}
@@ -105,6 +116,12 @@ function NavContent({ onNavigate, collapsed }: { onNavigate?: () => void; collap
 export function AdminLayout({ children }: AdminLayoutProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const { data: chatUnreadCount = 0 } = useChatUnreadCount();
+
+  // Mount realtime notification effects (sound + browser notifications read from localStorage)
+  const soundEnabled = typeof window !== 'undefined' && localStorage.getItem('chat_sound_enabled') === 'true';
+  const browserNotifEnabled = typeof window !== 'undefined' && localStorage.getItem('chat_browser_notifications_enabled') === 'true';
+  useChatNotificationEffects({ soundEnabled, browserNotificationsEnabled: browserNotifEnabled });
 
   return (
     <div className="min-h-screen bg-background">
@@ -118,7 +135,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
             </Button>
           </SheetTrigger>
           <SheetContent side="left" className="w-64 p-0">
-            <NavContent onNavigate={() => setMobileMenuOpen(false)} />
+            <NavContent onNavigate={() => setMobileMenuOpen(false)} chatUnreadCount={chatUnreadCount} />
           </SheetContent>
         </Sheet>
         <h1 className="text-lg font-semibold">Subscription Manager</h1>
@@ -131,7 +148,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
           sidebarCollapsed ? "w-16" : "w-64"
         )}
       >
-        <NavContent collapsed={sidebarCollapsed} />
+        <NavContent collapsed={sidebarCollapsed} chatUnreadCount={chatUnreadCount} />
         
         {/* Collapse toggle button */}
         <Button
