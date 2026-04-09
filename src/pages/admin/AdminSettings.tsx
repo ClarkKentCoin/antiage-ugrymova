@@ -43,6 +43,11 @@ interface AdminSettingsData {
   channel_name: string | null;
   channel_description: string | null;
   logo_url: string | null;
+  // Chat notifications
+  chat_notifications_enabled: boolean;
+  chat_notification_telegram_chat_id: string;
+  chat_sound_enabled: boolean;
+  chat_browser_notifications_enabled: boolean;
 }
 
 export default function AdminSettings() {
