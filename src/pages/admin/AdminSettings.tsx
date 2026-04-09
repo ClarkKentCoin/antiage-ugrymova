@@ -63,6 +63,7 @@ export default function AdminSettings() {
   const [copiedBotWebhook, setCopiedBotWebhook] = useState(false);
   const [copiedMiniAppUrl, setCopiedMiniAppUrl] = useState(false);
   const [copiedTenantSlug, setCopiedTenantSlug] = useState(false);
+  const [isSendingTestChat, setIsSendingTestChat] = useState(false);
   const [canonicalBase, setCanonicalBase] = useState<string | null>(null);
   const [settings, setSettings] = useState<AdminSettingsData>({
     telegram_bot_token: '',
@@ -742,6 +743,32 @@ export default function AdminSettings() {
                 <p className="text-xs text-destructive">
                   ⚠️ Браузерные уведомления заблокированы. Разрешите их в настройках браузера для этого сайта.
                 </p>
+              )}
+
+              {settings.chat_notifications_enabled && settings.chat_notification_telegram_chat_id && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={isSendingTestChat}
+                  onClick={async () => {
+                    setIsSendingTestChat(true);
+                    try {
+                      const { data, error } = await supabase.functions.invoke('send-chat-reply', {
+                        body: { action: 'test_chat_alert' },
+                      });
+                      if (error) throw error;
+                      if (data?.error) throw new Error(data.error);
+                      toast({ title: '✅ Тестовое уведомление отправлено' });
+                    } catch (err: any) {
+                      toast({ title: 'Ошибка отправки', description: err.message, variant: 'destructive' });
+                    } finally {
+                      setIsSendingTestChat(false);
+                    }
+                  }}
+                >
+                  {isSendingTestChat ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  Отправить тестовое уведомление
+                </Button>
               )}
             </CardContent>
           </Card>

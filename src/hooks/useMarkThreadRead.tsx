@@ -42,6 +42,7 @@ export function useMarkThreadRead() {
     // Invalidate queries to refresh UI
     queryClient.invalidateQueries({ queryKey: ['chat-threads', tenantId] });
     queryClient.invalidateQueries({ queryKey: ['chat-messages', tenantId, threadId] });
+    queryClient.invalidateQueries({ queryKey: ['chat-unread-count', tenantId] });
   }, [tenantId, queryClient]);
 
   return { markRead };
