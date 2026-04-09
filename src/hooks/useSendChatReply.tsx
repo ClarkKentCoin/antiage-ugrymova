@@ -9,13 +9,13 @@ export function useSendChatReply() {
   const queryClient = useQueryClient();
   const [isSending, setIsSending] = useState(false);
 
-  const sendReply = async (threadId: string, text: string): Promise<boolean> => {
+  const sendReply = async (threadId: string, text: string, parseMode?: string): Promise<boolean> => {
     if (!tenantId || !threadId || !text.trim()) return false;
 
     setIsSending(true);
     try {
       const { data, error } = await supabase.functions.invoke('send-chat-reply', {
-        body: { thread_id: threadId, text: text.trim() },
+        body: { thread_id: threadId, text: text.trim(), parse_mode: parseMode || undefined },
       });
 
       if (error) {
@@ -24,15 +24,19 @@ export function useSendChatReply() {
         return false;
       }
 
+      if (data?.error === 'text_too_long') {
+        toast.error(data.message || 'Сообщение слишком длинное (макс. 1000 символов)');
+        return false;
+      }
+
       if (data?.error === 'telegram_send_failed') {
         toast.error(data.message || 'Telegram отклонил сообщение');
-        // Still invalidate — failed message is persisted and should show in UI
         queryClient.invalidateQueries({ queryKey: ['chat-messages', tenantId, threadId] });
         queryClient.invalidateQueries({ queryKey: ['chat-threads', tenantId] });
         return false;
       }
 
-      // Success — invalidate to show outgoing message
+      // Success
       queryClient.invalidateQueries({ queryKey: ['chat-messages', tenantId, threadId] });
       queryClient.invalidateQueries({ queryKey: ['chat-threads', tenantId] });
       return true;
