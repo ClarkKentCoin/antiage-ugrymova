@@ -35,9 +35,9 @@ export default function AdminChat() {
   // Realtime subscriptions for live updates
   useChatRealtime(tenantId, selectedThread?.id ?? null, handleIncomingForSelected);
 
-  const handleSendReply = useCallback(async (text: string): Promise<boolean> => {
+  const handleSendReply = useCallback(async (text: string, parseMode?: string): Promise<boolean> => {
     if (!selectedThread) return false;
-    return sendReply(selectedThread.id, text);
+    return sendReply(selectedThread.id, text, parseMode);
   }, [selectedThread, sendReply]);
 
   // Keep selectedThread in sync with refreshed threads data
