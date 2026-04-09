@@ -43,7 +43,7 @@ Deno.serve(async (req: Request) => {
 
     // 3. Parse & validate body
     const body = await req.json();
-    const { thread_id, text, action } = body;
+    const { thread_id, text, action, parse_mode } = body;
 
     // --- Test chat alert action ---
     if (action === "test_chat_alert") {
@@ -74,6 +74,12 @@ Deno.serve(async (req: Request) => {
     }
     if (!text || typeof text !== "string" || !text.trim()) {
       return json({ error: "text is required" }, 400);
+    }
+
+    // 3b. Enforce 1000-character product limit (plain text, tags stripped)
+    const plainText = text.replace(/<[^>]*>/g, "").trim();
+    if (plainText.length > 1000) {
+      return json({ error: "text_too_long", message: "Сообщение слишком длинное (макс. 1000 символов)" }, 400);
     }
 
     // 4. Resolve tenant
