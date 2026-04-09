@@ -221,6 +221,10 @@ export default function AdminSettings() {
         channel_name: settings.channel_name || null,
         channel_description: settings.channel_description || null,
         logo_url: settings.logo_url || null,
+        chat_notifications_enabled: settings.chat_notifications_enabled,
+        chat_notification_telegram_chat_id: settings.chat_notification_telegram_chat_id || null,
+        chat_sound_enabled: settings.chat_sound_enabled,
+        chat_browser_notifications_enabled: settings.chat_browser_notifications_enabled,
       };
 
       let error;
