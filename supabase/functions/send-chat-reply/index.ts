@@ -1,6 +1,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 import { resolveTenantFromRequest, getAdminSettingsForTenant } from "../_shared/tenant.ts";
+import { sendChatAlertNotification } from "../_shared/chatAlertNotification.ts";
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -42,7 +43,31 @@ Deno.serve(async (req: Request) => {
 
     // 3. Parse & validate body
     const body = await req.json();
-    const { thread_id, text } = body;
+    const { thread_id, text, action } = body;
+
+    // --- Test chat alert action ---
+    if (action === "test_chat_alert") {
+      const tenant = await resolveTenantFromRequest({ req, supabaseAdmin, body });
+      const { data: alertSettings } = await getAdminSettingsForTenant(
+        supabaseAdmin,
+        tenant.tenantId,
+        "telegram_bot_token, chat_notifications_enabled, chat_notification_telegram_chat_id"
+      );
+      if (!alertSettings?.chat_notifications_enabled || !alertSettings?.telegram_bot_token || !alertSettings?.chat_notification_telegram_chat_id) {
+        return json({ error: "Chat notifications not configured" }, 400);
+      }
+      const sent = await sendChatAlertNotification({
+        supabaseAdmin,
+        tenantId: tenant.tenantId,
+        botToken: alertSettings.telegram_bot_token as string,
+        chatAlertDestination: alertSettings.chat_notification_telegram_chat_id as string,
+        subscriberName: "Тестовое уведомление",
+        subscriberUsername: null,
+        messagePreview: "🔔 Это тестовое сообщение для проверки чат-уведомлений.",
+        threadId: "test",
+      });
+      return json({ success: sent });
+    }
 
     if (!thread_id || typeof thread_id !== "string") {
       return json({ error: "thread_id is required" }, 400);
