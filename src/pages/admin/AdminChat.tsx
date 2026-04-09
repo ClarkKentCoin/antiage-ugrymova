@@ -78,7 +78,7 @@ export default function AdminChat() {
     if (selectedThread) {
       return (
         <AdminLayout>
-          <div className="flex flex-col h-[calc(100vh-2rem)] min-h-0">
+          <div className="flex flex-col h-[calc(100dvh-6.5rem)] min-h-0 overflow-hidden">
             {/* Mobile thread header - sticky */}
             <div className="flex items-center gap-2 px-3 py-2 border-b border-border bg-card shrink-0">
               <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={handleBack}>
@@ -135,7 +135,7 @@ export default function AdminChat() {
     // List view
     return (
       <AdminLayout>
-        <div className="flex flex-col h-[calc(100vh-2rem)] min-h-0">
+        <div className="flex flex-col h-[calc(100dvh-6.5rem)] min-h-0 overflow-hidden">
           <div className="mb-2 px-1 shrink-0">
             <h1 className="text-xl font-bold text-foreground">Чат</h1>
           </div>
