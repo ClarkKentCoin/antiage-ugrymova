@@ -116,6 +116,12 @@ function NavContent({ onNavigate, collapsed, chatUnreadCount }: { onNavigate?: (
 export function AdminLayout({ children }: AdminLayoutProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const { data: chatUnreadCount = 0 } = useChatUnreadCount();
+
+  // Mount realtime notification effects (sound + browser notifications read from localStorage)
+  const soundEnabled = typeof window !== 'undefined' && localStorage.getItem('chat_sound_enabled') === 'true';
+  const browserNotifEnabled = typeof window !== 'undefined' && localStorage.getItem('chat_browser_notifications_enabled') === 'true';
+  useChatNotificationEffects({ soundEnabled, browserNotificationsEnabled: browserNotifEnabled });
 
   return (
     <div className="min-h-screen bg-background">
