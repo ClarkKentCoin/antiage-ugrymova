@@ -12,7 +12,8 @@ import { useSendChatReply } from '@/hooks/useSendChatReply';
 import { useAuth } from '@/hooks/useAuth';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft } from 'lucide-react';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { ArrowLeft, Info } from 'lucide-react';
 
 export default function AdminChat() {
   const { tenantId } = useAuth();
