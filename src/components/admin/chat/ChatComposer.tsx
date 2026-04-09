@@ -1,40 +1,93 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect } from 'react';
+import { EditorContent, useEditor, type Editor } from '@tiptap/react';
+import StarterKit from '@tiptap/starter-kit';
+import UnderlineExtension from '@tiptap/extension-underline';
+import LinkExtension from '@tiptap/extension-link';
 import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
-import { Send, Bold, Italic, Underline, Strikethrough, Link } from 'lucide-react';
+import { Send, Bold, Italic, Underline, Strikethrough, Link, type LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 
 const MAX_CHARS = 1000;
 
-/** Strip HTML tags to get plain text length */
-function stripTags(html: string): string {
-  return html.replace(/<[^>]*>/g, '');
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
 }
 
-/**
- * Convert raw composer text (with allowed HTML tags) into Telegram-safe HTML.
- * Escapes stray <, >, & while preserving allowed tags: b, i, u, s, a.
- */
-export function toTelegramHtml(raw: string): string {
-  const allowedTagPattern = /<(\/?)([bius]|a(?:\s+href="[^"]*")?)>/gi;
-  const tags: { match: string; index: number; length: number }[] = [];
-  let m: RegExpExecArray | null;
-  while ((m = allowedTagPattern.exec(raw)) !== null) {
-    tags.push({ match: m[0], index: m.index, length: m[0].length });
+function escapeAttribute(text: string): string {
+  return escapeHtml(text).replace(/"/g, '&quot;');
+}
+
+function normalizeLinkHref(input: string): string | null {
+  const trimmed = input.trim();
+  if (!trimmed) return null;
+
+  if (/^(https?:|mailto:|tg:)/i.test(trimmed)) {
+    return trimmed;
   }
 
-  const escapeHtml = (s: string) =>
-    s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-
-  let result = '';
-  let lastIndex = 0;
-  for (const tag of tags) {
-    result += escapeHtml(raw.slice(lastIndex, tag.index));
-    result += tag.match;
-    lastIndex = tag.index + tag.length;
+  if (/^[\w.-]+\.[A-Za-z]{2,}(?:[/?#].*)?$/i.test(trimmed)) {
+    return `https://${trimmed}`;
   }
-  result += escapeHtml(raw.slice(lastIndex));
-  return result;
+
+  return null;
+}
+
+function getPlainText(editor: Editor | null): string {
+  return editor?.getText({ blockSeparator: '\n' }) ?? '';
+}
+
+function serializeTelegramNode(node: Node): string {
+  if (node.nodeType === Node.TEXT_NODE) {
+    return escapeHtml(node.textContent ?? '');
+  }
+
+  if (node.nodeType !== Node.ELEMENT_NODE) {
+    return '';
+  }
+
+  const element = node as HTMLElement;
+  const tag = element.tagName.toLowerCase();
+  const content = Array.from(element.childNodes).map(serializeTelegramNode).join('');
+
+  switch (tag) {
+    case 'strong':
+    case 'b':
+      return content ? `<b>${content}</b>` : content;
+    case 'em':
+    case 'i':
+      return content ? `<i>${content}</i>` : content;
+    case 'u':
+      return content ? `<u>${content}</u>` : content;
+    case 's':
+    case 'strike':
+    case 'del':
+      return content ? `<s>${content}</s>` : content;
+    case 'a': {
+      const href = normalizeLinkHref(element.getAttribute('href') ?? '');
+      if (!href) return content;
+      return content ? `<a href="${escapeAttribute(href)}">${content}</a>` : escapeHtml(href);
+    }
+    case 'br':
+      return '\n';
+    case 'p':
+    case 'div':
+      return `${content}\n`;
+    default:
+      return content;
+  }
+}
+
+export function toTelegramHtml(editorHtml: string): string {
+  const doc = new DOMParser().parseFromString(editorHtml, 'text/html');
+  return Array.from(doc.body.childNodes)
+    .map(serializeTelegramNode)
+    .join('')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
 }
 
 interface ChatComposerProps {
@@ -45,81 +98,152 @@ interface ChatComposerProps {
 }
 
 export function ChatComposer({ onSend, disabled, isSending, disabledReason }: ChatComposerProps) {
-  const [text, setText] = useState('');
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [plainLen, setPlainLen] = useState(0);
+  const [hasContent, setHasContent] = useState(false);
 
-  const plainLen = stripTags(text).length;
+  const syncEditorState = useCallback((instance: Editor) => {
+    const plainText = getPlainText(instance);
+    setPlainLen(plainText.length);
+    setHasContent(plainText.trim().length > 0);
+  }, []);
+
+  const editor = useEditor({
+    immediatelyRender: false,
+    extensions: [
+      StarterKit.configure({
+        blockquote: false,
+        bulletList: false,
+        code: false,
+        codeBlock: false,
+        dropcursor: false,
+        gapcursor: false,
+        heading: false,
+        horizontalRule: false,
+        orderedList: false,
+      }),
+      UnderlineExtension,
+      LinkExtension.configure({
+        autolink: false,
+        linkOnPaste: false,
+        openOnClick: false,
+      }),
+    ],
+    content: '',
+    editorProps: {
+      attributes: {
+        class:
+          'min-h-[40px] max-h-[144px] overflow-y-auto px-3 py-2 text-sm text-foreground focus:outline-none whitespace-pre-wrap break-words',
+      },
+      handleKeyDown: (_view, event) => {
+        if (event.key === 'Enter' && !event.shiftKey) {
+          event.preventDefault();
+          void handleSend();
+          return true;
+        }
+
+        return false;
+      },
+    },
+    onCreate: ({ editor: instance }) => {
+      syncEditorState(instance);
+    },
+    onUpdate: ({ editor: instance }) => {
+      syncEditorState(instance);
+    },
+  });
+
   const overLimit = plainLen > MAX_CHARS;
-  const canSend = !disabled && !isSending && text.trim().length > 0 && !overLimit;
+  const canSend = !disabled && !isSending && hasContent && !overLimit;
 
-  // Auto-resize textarea
   useEffect(() => {
-    const ta = textareaRef.current;
-    if (!ta) return;
-    ta.style.height = 'auto';
-    ta.style.height = Math.min(ta.scrollHeight, 144) + 'px';
-  }, [text]);
-
-  const wrapSelection = useCallback((openTag: string, closeTag: string) => {
-    const ta = textareaRef.current;
-    if (!ta) return;
-    const start = ta.selectionStart;
-    const end = ta.selectionEnd;
-    const selected = text.slice(start, end);
-    const newText = text.slice(0, start) + openTag + selected + closeTag + text.slice(end);
-    setText(newText);
-    setTimeout(() => {
-      ta.focus();
-      ta.selectionStart = start + openTag.length;
-      ta.selectionEnd = end + openTag.length;
-    }, 0);
-  }, [text]);
+    editor?.setEditable(!disabled && !isSending);
+  }, [editor, disabled, isSending]);
 
   const handleFormat = useCallback((type: string) => {
+    if (!editor) return;
+
     switch (type) {
-      case 'bold': wrapSelection('<b>', '</b>'); break;
-      case 'italic': wrapSelection('<i>', '</i>'); break;
-      case 'underline': wrapSelection('<u>', '</u>'); break;
-      case 'strikethrough': wrapSelection('<s>', '</s>'); break;
+      case 'bold':
+        editor.chain().focus().toggleBold().run();
+        break;
+      case 'italic':
+        editor.chain().focus().toggleItalic().run();
+        break;
+      case 'underline':
+        editor.chain().focus().toggleUnderline().run();
+        break;
+      case 'strikethrough':
+        editor.chain().focus().toggleStrike().run();
+        break;
       case 'link': {
-        const url = window.prompt('Введите URL:');
-        if (url) {
-          const ta = textareaRef.current;
-          if (!ta) return;
-          const start = ta.selectionStart;
-          const end = ta.selectionEnd;
-          const selected = text.slice(start, end) || url;
-          const newText = text.slice(0, start) + `<a href="${url}">${selected}</a>` + text.slice(end);
-          setText(newText);
+        const currentHref = editor.getAttributes('link').href as string | undefined;
+        const input = window.prompt('Введите URL:', currentHref ?? 'https://');
+        if (input === null) break;
+
+        const normalizedHref = normalizeLinkHref(input);
+
+        if (!input.trim()) {
+          editor.chain().focus().extendMarkRange('link').unsetLink().run();
+          break;
         }
+
+        if (!normalizedHref) {
+          toast.error('Введите корректную ссылку');
+          break;
+        }
+
+        const { from, to } = editor.state.selection;
+        if (from === to) {
+          editor
+            .chain()
+            .focus()
+            .insertContent(normalizedHref)
+            .setTextSelection({ from, to: from + normalizedHref.length })
+            .setLink({ href: normalizedHref })
+            .run();
+        } else {
+          editor.chain().focus().extendMarkRange('link').setLink({ href: normalizedHref }).run();
+        }
+
         break;
       }
     }
-  }, [wrapSelection, text]);
+  }, [editor]);
 
   const handleSend = useCallback(async () => {
+    if (!editor) return;
     if (!canSend) return;
-    const rawText = text;
-    const htmlText = toTelegramHtml(rawText);
-    setText('');
-    const ok = await onSend(htmlText, 'HTML');
-    if (!ok) {
-      setText(rawText);
+
+    const plainText = getPlainText(editor);
+    if (plainText.length > MAX_CHARS) {
+      toast.error('Сообщение слишком длинное (макс. 1000 символов)');
+      return;
     }
-    textareaRef.current?.focus();
-  }, [canSend, text, onSend]);
 
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        handleSend();
-      }
-    },
-    [handleSend]
-  );
+    const rawEditorHtml = editor.getHTML();
+    let telegramHtml = '';
 
-  const formatButtons = [
+    try {
+      telegramHtml = toTelegramHtml(rawEditorHtml);
+    } catch (error) {
+      console.error('[ChatComposer] HTML conversion failed:', error);
+      toast.error('Не удалось подготовить форматирование сообщения');
+      return;
+    }
+
+    if (!telegramHtml.trim()) return;
+
+    editor.commands.clearContent(true);
+    editor.commands.focus();
+
+    const ok = await onSend(telegramHtml, 'HTML');
+    if (!ok) {
+      editor.commands.setContent(rawEditorHtml, { emitUpdate: false });
+      editor.commands.focus('end');
+    }
+  }, [canSend, editor, onSend]);
+
+  const formatButtons: Array<{ type: string; icon: LucideIcon; label: string }> = [
     { type: 'bold', icon: Bold, label: 'Жирный' },
     { type: 'italic', icon: Italic, label: 'Курсив' },
     { type: 'underline', icon: Underline, label: 'Подчёркнутый' },
@@ -132,17 +256,17 @@ export function ChatComposer({ onSend, disabled, isSending, disabledReason }: Ch
       {disabledReason && (
         <p className="text-xs text-muted-foreground mb-1.5 px-1">{disabledReason}</p>
       )}
-      {/* Formatting toolbar + counter */}
       <div className="flex items-center gap-0.5 mb-1">
         {formatButtons.map(({ type, icon: Icon, label }) => (
           <Button
             key={type}
             type="button"
-            variant="ghost"
+            variant={editor?.isActive(type === 'strikethrough' ? 'strike' : type) ? 'secondary' : 'ghost'}
             size="icon"
             className="h-7 w-7"
             title={label}
-            disabled={disabled || isSending}
+            disabled={disabled || isSending || !editor}
+            onMouseDown={e => e.preventDefault()}
             onClick={() => handleFormat(type)}
           >
             <Icon className="h-3.5 w-3.5" />
@@ -156,16 +280,21 @@ export function ChatComposer({ onSend, disabled, isSending, disabledReason }: Ch
         </span>
       </div>
       <div className="flex items-end gap-2">
-        <Textarea
-          ref={textareaRef}
-          value={text}
-          onChange={e => setText(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder="Написать сообщение..."
-          disabled={disabled || isSending}
-          className="min-h-[40px] max-h-[144px] resize-none text-sm py-2 overflow-y-auto"
-          rows={1}
-        />
+        <div
+          className={cn(
+            'relative flex-1 rounded-md border border-input bg-background text-sm ring-offset-background transition-shadow',
+            editor?.isFocused && 'ring-2 ring-ring ring-offset-2',
+            disabled || isSending ? 'cursor-not-allowed opacity-50' : 'cursor-text'
+          )}
+          onClick={() => editor?.commands.focus()}
+        >
+          {!hasContent && (
+            <div className="pointer-events-none absolute left-3 top-2 text-sm text-muted-foreground">
+              Написать сообщение...
+            </div>
+          )}
+          <EditorContent editor={editor} />
+        </div>
         <Button
           size="icon"
           onClick={handleSend}
