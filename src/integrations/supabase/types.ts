@@ -326,7 +326,10 @@ export type Database = {
           source_type: string
           status: string
           subscriber_id: string | null
+          telegram_first_name: string | null
+          telegram_last_name: string | null
           telegram_user_id: number
+          telegram_username: string | null
           tenant_id: string
           updated_at: string
         }
@@ -345,7 +348,10 @@ export type Database = {
           source_type?: string
           status?: string
           subscriber_id?: string | null
+          telegram_first_name?: string | null
+          telegram_last_name?: string | null
           telegram_user_id: number
+          telegram_username?: string | null
           tenant_id: string
           updated_at?: string
         }
@@ -364,7 +370,10 @@ export type Database = {
           source_type?: string
           status?: string
           subscriber_id?: string | null
+          telegram_first_name?: string | null
+          telegram_last_name?: string | null
           telegram_user_id?: number
+          telegram_username?: string | null
           tenant_id?: string
           updated_at?: string
         }

@@ -6,6 +6,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { ChatThread } from '@/hooks/useChatThreads';
+import { getThreadDisplayName, getThreadUsername } from '@/lib/chatIdentity';
 
 type ThreadFilter = 'all' | 'unread' | 'open' | 'closed';
 
@@ -16,21 +17,9 @@ const FILTER_TABS: { value: ThreadFilter; label: string }[] = [
   { value: 'closed', label: 'Закрытые' },
 ];
 
-function getThreadDisplayName(thread: ChatThread): string {
-  const sub = thread.subscriber;
-  if (sub) {
-    const parts = [sub.first_name, sub.last_name].filter(Boolean);
-    if (parts.length > 0) return parts.join(' ');
-    if (sub.telegram_username) return `@${sub.telegram_username}`;
-    if (sub.email) return sub.email;
-  }
-  return `Telegram #${thread.telegram_user_id}`;
-}
-
-function getThreadUsername(thread: ChatThread): string | null {
-  return thread.subscriber?.telegram_username
-    ? `@${thread.subscriber.telegram_username}`
-    : null;
+function getThreadUsernameDisplay(thread: ChatThread): string | null {
+  const u = getThreadUsername(thread);
+  return u ? `@${u}` : null;
 }
 
 function formatMessageTime(dateStr: string | null): string {
@@ -73,6 +62,9 @@ export function ChatThreadList({ threads, isLoading, selectedThreadId, onSelectT
           sub?.last_name,
           sub?.telegram_username,
           sub?.email,
+          t.telegram_first_name,
+          t.telegram_last_name,
+          t.telegram_username,
           String(t.telegram_user_id),
           t.last_message_preview,
         ].filter(Boolean).join(' ').toLowerCase();
@@ -148,8 +140,8 @@ export function ChatThreadList({ threads, isLoading, selectedThreadId, onSelectT
                         </Badge>
                       )}
                     </div>
-                    {getThreadUsername(thread) && (
-                      <p className="text-xs text-muted-foreground truncate">{getThreadUsername(thread)}</p>
+                    {getThreadUsernameDisplay(thread) && (
+                      <p className="text-xs text-muted-foreground truncate">{getThreadUsernameDisplay(thread)}</p>
                     )}
                     {thread.last_message_preview && (
                       <p className={cn('text-xs mt-0.5 truncate', hasUnread ? 'text-foreground' : 'text-muted-foreground')}>

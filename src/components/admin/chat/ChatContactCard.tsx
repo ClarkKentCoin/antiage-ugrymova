@@ -3,22 +3,14 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { User, Mail, Phone, AtSign, Hash } from 'lucide-react';
 import type { ChatThread } from '@/hooks/useChatThreads';
+import { getThreadDisplayName, getThreadUsername, getThreadInitials } from '@/lib/chatIdentity';
 
 function getInitials(thread: ChatThread): string {
-  const sub = thread.subscriber;
-  if (sub?.first_name) {
-    return (sub.first_name[0] + (sub.last_name?.[0] ?? '')).toUpperCase();
-  }
-  return 'T';
+  return getThreadInitials(thread);
 }
 
 function getDisplayName(thread: ChatThread): string {
-  const sub = thread.subscriber;
-  if (sub) {
-    const parts = [sub.first_name, sub.last_name].filter(Boolean);
-    if (parts.length > 0) return parts.join(' ');
-  }
-  return `Telegram #${thread.telegram_user_id}`;
+  return getThreadDisplayName(thread);
 }
 
 interface ChatContactCardProps {
@@ -35,6 +27,7 @@ export function ChatContactCard({ thread }: ChatContactCardProps) {
   }
 
   const sub = thread.subscriber;
+  const username = getThreadUsername(thread);
 
   return (
     <div className="h-full bg-card border-l border-border overflow-y-auto">
@@ -48,8 +41,8 @@ export function ChatContactCard({ thread }: ChatContactCardProps) {
           </Avatar>
           <div>
             <h3 className="font-semibold text-foreground">{getDisplayName(thread)}</h3>
-            {sub?.telegram_username && (
-              <p className="text-sm text-muted-foreground">@{sub.telegram_username}</p>
+            {username && (
+              <p className="text-sm text-muted-foreground">@{username}</p>
             )}
           </div>
         </div>
@@ -62,8 +55,8 @@ export function ChatContactCard({ thread }: ChatContactCardProps) {
           
           <InfoRow icon={Hash} label="Telegram ID" value={String(thread.telegram_user_id)} />
           
-          {sub?.telegram_username && (
-            <InfoRow icon={AtSign} label="Username" value={`@${sub.telegram_username}`} />
+          {username && (
+            <InfoRow icon={AtSign} label="Username" value={`@${username}`} />
           )}
           
           {sub?.email && (

@@ -14,6 +14,7 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { ArrowLeft, Info } from 'lucide-react';
+import { getThreadDisplayName, getThreadUsername } from '@/lib/chatIdentity';
 
 export default function AdminChat() {
   const { tenantId } = useAuth();
@@ -61,16 +62,7 @@ export default function AdminChat() {
   }, []);
 
   // Helper to get display name for mobile header
-  const getThreadName = (thread: ChatThread): string => {
-    const sub = thread.subscriber;
-    if (sub) {
-      const parts = [sub.first_name, sub.last_name].filter(Boolean);
-      if (parts.length > 0) return parts.join(' ');
-      if (sub.telegram_username) return `@${sub.telegram_username}`;
-      if (sub.email) return sub.email;
-    }
-    return `Telegram #${thread.telegram_user_id}`;
-  };
+  const getThreadName = (thread: ChatThread): string => getThreadDisplayName(thread);
 
   // Mobile: show either list or thread detail
   if (isMobile) {
@@ -86,8 +78,8 @@ export default function AdminChat() {
               </Button>
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-semibold truncate">{getThreadName(selectedThread)}</p>
-                {selectedThread.subscriber?.telegram_username && (
-                  <p className="text-xs text-muted-foreground truncate">@{selectedThread.subscriber.telegram_username}</p>
+                {getThreadUsername(selectedThread) && (
+                  <p className="text-xs text-muted-foreground truncate">@{getThreadUsername(selectedThread)}</p>
                 )}
               </div>
               <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => setMobileInfoOpen(true)}>
