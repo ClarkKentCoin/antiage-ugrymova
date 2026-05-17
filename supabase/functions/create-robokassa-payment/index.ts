@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { resolveTenantIdFromSlug, resolveTenantFromRequest, DEFAULT_TENANT_ID } from "../_shared/tenant.ts";
+import { validateTelegramInitData } from "../_shared/telegramInitData.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
