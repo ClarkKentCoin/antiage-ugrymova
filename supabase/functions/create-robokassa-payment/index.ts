@@ -16,7 +16,40 @@ async function robokassaSignature(message: string): Promise<string> {
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("")
     .toUpperCase();
-}
+    }
+
+    // Backfill chat_threads with resolved subscriber and identity when missing.
+    // Safe: tenant-scoped; never overwrites non-empty identity fields.
+    try {
+      const { data: subForChat } = await supabaseAdmin
+        .from("subscribers")
+        .select("first_name, last_name, telegram_username, telegram_user_id")
+        .eq("id", resolvedSubscriberId)
+        .eq("tenant_id", tenantId)
+        .maybeSingle();
+
+      if (subForChat?.telegram_user_id) {
+        const { data: threadsToBackfill } = await supabaseAdmin
+          .from("chat_threads")
+          .select("id, subscriber_id, telegram_first_name, telegram_last_name, telegram_username")
+          .eq("tenant_id", tenantId)
+          .eq("telegram_user_id", subForChat.telegram_user_id);
+
+        for (const t of threadsToBackfill ?? []) {
+          const upd: Record<string, any> = {};
+          if (!t.subscriber_id) upd.subscriber_id = resolvedSubscriberId;
+          if (!t.telegram_first_name && subForChat.first_name) upd.telegram_first_name = subForChat.first_name;
+          if (!t.telegram_last_name && subForChat.last_name) upd.telegram_last_name = subForChat.last_name;
+          if (!t.telegram_username && subForChat.telegram_username) upd.telegram_username = subForChat.telegram_username;
+          if (Object.keys(upd).length > 0) {
+            upd.updated_at = new Date().toISOString();
+            await supabaseAdmin.from("chat_threads").update(upd).eq("id", t.id);
+          }
+        }
+      }
+    } catch (backfillErr) {
+      console.warn("[create-robokassa-payment] chat_threads backfill warning:", backfillErr);
+    }
 
 
 serve(async (req) => {
