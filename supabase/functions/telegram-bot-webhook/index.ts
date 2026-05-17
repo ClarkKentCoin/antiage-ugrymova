@@ -268,6 +268,9 @@ serve(async (req) => {
         telegramMessageId: update.message.message_id,
         text: update.message.text,
         messageDate: update.message.date,
+        telegramFirstName: update.message.from.first_name ?? null,
+        telegramLastName: update.message.from.last_name ?? null,
+        telegramUsername: update.message.from.username ?? null,
       });
     } else if (update.message && !messageText.startsWith("/start")) {
       console.log(`[telegram-bot-webhook] Skipping non-text or non-private message, chat_type=${update.message?.chat?.type}`);
