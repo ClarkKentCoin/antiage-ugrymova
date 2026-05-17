@@ -27,6 +27,7 @@ export function ChatContactCard({ thread }: ChatContactCardProps) {
   }
 
   const sub = thread.subscriber;
+  const username = getThreadUsername(thread);
 
   return (
     <div className="h-full bg-card border-l border-border overflow-y-auto">
