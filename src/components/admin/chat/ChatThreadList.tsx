@@ -140,8 +140,8 @@ export function ChatThreadList({ threads, isLoading, selectedThreadId, onSelectT
                         </Badge>
                       )}
                     </div>
-                    {getThreadUsername(thread) && (
-                      <p className="text-xs text-muted-foreground truncate">{getThreadUsername(thread)}</p>
+                    {getThreadUsernameDisplay(thread) && (
+                      <p className="text-xs text-muted-foreground truncate">{getThreadUsernameDisplay(thread)}</p>
                     )}
                     {thread.last_message_preview && (
                       <p className={cn('text-xs mt-0.5 truncate', hasUnread ? 'text-foreground' : 'text-muted-foreground')}>
