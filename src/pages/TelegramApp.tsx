@@ -793,6 +793,7 @@ function GracePeriodView({
 
     setGeneratingLink(true);
     try {
+      const tgInitData = (window as any)?.Telegram?.WebApp?.initData ?? '';
       const { data, error } = await supabase.functions.invoke('create-robokassa-payment', {
         body: {
           subscriber_id: subscriber.id,
@@ -802,6 +803,7 @@ function GracePeriodView({
           user_agent: navigator.userAgent,
           telegram_user_id: telegramUserId,
           tenant_slug: getPublicTenantSlug(),
+          init_data: tgInitData,
         },
       });
 
