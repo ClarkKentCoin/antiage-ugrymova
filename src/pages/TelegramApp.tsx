@@ -506,6 +506,7 @@ function NewUserView({
     setGeneratingLink(true);
     try {
       const tgInitData = (window as any)?.Telegram?.WebApp?.initData ?? '';
+      console.log('[TelegramApp payment] initData available:', Boolean(tgInitData), 'length:', tgInitData.length);
       const body: Record<string, unknown> = {
         tier_id: selectedTier,
         is_recurring: autoRenewal,
