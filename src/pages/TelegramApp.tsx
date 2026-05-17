@@ -546,7 +546,14 @@ function NewUserView({
         } catch {}
       }
 
-      if (errorCode === 'tier_already_purchased_once') {
+      const securityCodes = new Set(['invalid_init_data', 'user_id_mismatch', 'telegram_bot_not_configured']);
+      if (errorCode && (securityCodes.has(errorCode) || errorMessage === 'telegram_user_id and init_data are required' || errorCode === 'telegram_user_id and init_data are required')) {
+        toast({
+          title: 'Ошибка',
+          description: 'Не удалось подтвердить Telegram-сессию. Откройте оплату через кнопку в Telegram-боте.',
+          variant: 'destructive',
+        });
+      } else if (errorCode === 'tier_already_purchased_once') {
         const tierName = tiers.find(t => t.id === selectedTier)?.name;
         toast({
           title: 'Тариф уже использован',
