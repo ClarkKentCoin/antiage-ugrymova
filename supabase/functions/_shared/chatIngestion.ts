@@ -13,6 +13,9 @@ interface IncomingChatMessage {
   telegramMessageId: number;
   text: string;
   messageDate: number; // Unix timestamp from Telegram
+  telegramFirstName?: string | null;
+  telegramLastName?: string | null;
+  telegramUsername?: string | null;
 }
 
 /**
@@ -21,6 +24,24 @@ interface IncomingChatMessage {
 function truncatePreview(text: string, maxLen = 100): string {
   if (text.length <= maxLen) return text;
   return text.substring(0, maxLen - 1) + "…";
+}
+
+/**
+ * Normalize a Telegram identity string — trim, return null if empty.
+ */
+function normalizeIdentity(v: string | null | undefined): string | null {
+  if (v == null) return null;
+  const trimmed = String(v).trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+/**
+ * Normalize Telegram username — strip leading @, trim, null if empty.
+ */
+function normalizeUsername(v: string | null | undefined): string | null {
+  if (v == null) return null;
+  const trimmed = String(v).trim().replace(/^@+/, "").trim();
+  return trimmed.length > 0 ? trimmed : null;
 }
 
 /**
@@ -45,31 +66,31 @@ export async function persistIncomingChatMessage(
     const messageTimestamp = new Date(messageDate * 1000).toISOString();
     const preview = truncatePreview(text);
 
+    const incomingFirstName = normalizeIdentity(msg.telegramFirstName);
+    const incomingLastName = normalizeIdentity(msg.telegramLastName);
+    const incomingUsername = normalizeUsername(msg.telegramUsername);
+
     // 1. Resolve subscriber (optional — null if not found)
     let subscriberId: string | null = null;
+    let subscriberRow: { id: string; first_name: string | null; last_name: string | null; telegram_username: string | null } | null = null;
     const { data: subscriber } = await supabaseAdmin
       .from("subscribers")
-      .select("id")
+      .select("id, first_name, last_name, telegram_username")
       .eq("tenant_id", tenantId)
       .eq("telegram_user_id", telegramUserId)
       .maybeSingle();
 
     if (subscriber) {
       subscriberId = subscriber.id;
+      subscriberRow = subscriber;
     }
 
     console.log(`${tag} tenant=${tenantId} tgUser=${telegramUserId} subscriber=${subscriberId ?? "none"}`);
 
     // 2. Find existing thread
-    const threadFilter = {
-      tenant_id: tenantId,
-      telegram_user_id: telegramUserId,
-      source_type: "telegram_bot",
-    };
-
     const { data: existingThread, error: threadFetchErr } = await supabaseAdmin
       .from("chat_threads")
-      .select("id, subscriber_id, admin_unread_count")
+      .select("id, subscriber_id, admin_unread_count, telegram_first_name, telegram_last_name, telegram_username")
       .eq("tenant_id", tenantId)
       .eq("telegram_user_id", telegramUserId)
       .eq("source_type", "telegram_bot")
@@ -104,6 +125,12 @@ export async function persistIncomingChatMessage(
       updatePayload.bot_blocked = false;
       updatePayload.bot_contact_status = "active";
 
+      // Identity backfill — only update when incoming value is non-empty.
+      // Do not overwrite existing non-empty values with null/empty.
+      if (incomingFirstName) updatePayload.telegram_first_name = incomingFirstName;
+      if (incomingLastName) updatePayload.telegram_last_name = incomingLastName;
+      if (incomingUsername) updatePayload.telegram_username = incomingUsername;
+
       const { error: updateErr } = await supabaseAdmin
         .from("chat_threads")
         .update(updatePayload)
@@ -118,7 +145,7 @@ export async function persistIncomingChatMessage(
       console.log(`${tag} updated thread=${threadId} unread=${updatePayload.admin_unread_count}`);
     } else {
       // Create new thread
-      const newThread = {
+      const newThread: Record<string, any> = {
         tenant_id: tenantId,
         subscriber_id: subscriberId,
         telegram_user_id: telegramUserId,
@@ -133,6 +160,9 @@ export async function persistIncomingChatMessage(
         admin_unread_count: 1,
         bot_blocked: false,
         bot_contact_status: "active",
+        telegram_first_name: incomingFirstName,
+        telegram_last_name: incomingLastName,
+        telegram_username: incomingUsername,
       };
 
       const { data: createdThread, error: createErr } = await supabaseAdmin
@@ -148,6 +178,23 @@ export async function persistIncomingChatMessage(
 
       threadId = createdThread.id;
       console.log(`${tag} created thread=${threadId}`);
+    }
+
+    // Optional: refresh subscriber identity fields with latest non-empty values.
+    if (subscriberId && subscriberRow) {
+      const subUpdate: Record<string, any> = {};
+      if (incomingFirstName && !subscriberRow.first_name) subUpdate.first_name = incomingFirstName;
+      if (incomingLastName && !subscriberRow.last_name) subUpdate.last_name = incomingLastName;
+      if (incomingUsername && !subscriberRow.telegram_username) subUpdate.telegram_username = incomingUsername;
+      if (Object.keys(subUpdate).length > 0) {
+        const { error: subUpdErr } = await supabaseAdmin
+          .from("subscribers")
+          .update(subUpdate)
+          .eq("id", subscriberId);
+        if (subUpdErr) {
+          console.warn(`${tag} subscriber identity backfill warn:`, subUpdErr.message);
+        }
+      }
     }
 
     // 3. Insert chat message
@@ -190,20 +237,35 @@ export async function persistIncomingChatMessage(
           alertSettings?.telegram_bot_token &&
           alertSettings?.chat_notification_telegram_chat_id
         ) {
-          // Resolve subscriber name for the alert
+          // Resolve alert name — prefer subscriber, fall back to Telegram identity
           let alertName = `Telegram #${telegramUserId}`;
           let alertUsername: string | null = null;
-          if (subscriberId) {
-            const { data: subInfo } = await supabaseAdmin
-              .from("subscribers")
-              .select("first_name, last_name, telegram_username")
-              .eq("id", subscriberId)
-              .maybeSingle();
-            if (subInfo) {
-              const parts = [subInfo.first_name, subInfo.last_name].filter(Boolean);
-              if (parts.length > 0) alertName = parts.join(" ");
-              alertUsername = subInfo.telegram_username ?? null;
+
+          if (subscriberRow) {
+            const parts = [subscriberRow.first_name, subscriberRow.last_name].filter(Boolean);
+            if (parts.length > 0) {
+              alertName = parts.join(" ");
+            } else if (subscriberRow.telegram_username) {
+              alertName = `@${subscriberRow.telegram_username}`;
             }
+            alertUsername = subscriberRow.telegram_username ?? null;
+          }
+
+          // If still default and we have incoming Telegram identity, use it.
+          if (alertName === `Telegram #${telegramUserId}`) {
+            const tgParts = [incomingFirstName, incomingLastName].filter(Boolean);
+            if (tgParts.length > 0) {
+              alertName = tgParts.join(" ");
+            } else if (incomingUsername) {
+              alertName = `@${incomingUsername}`;
+            } else if (existingThread) {
+              const exParts = [existingThread.telegram_first_name, existingThread.telegram_last_name].filter(Boolean);
+              if (exParts.length > 0) alertName = exParts.join(" ");
+              else if (existingThread.telegram_username) alertName = `@${existingThread.telegram_username}`;
+            }
+          }
+          if (!alertUsername) {
+            alertUsername = incomingUsername ?? existingThread?.telegram_username ?? null;
           }
 
           // Fire and forget — do not block ingestion
