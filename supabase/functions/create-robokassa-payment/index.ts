@@ -33,9 +33,12 @@ serve(async (req) => {
     );
 
     // Parse request body first to check source
-    const { subscriber_id, tier_id, is_recurring, ip_address, user_agent, telegram_user_id, telegram_username, first_name, last_name, tenant_slug, init_data } = await req.json();
+    const body = await req.json();
+    const { subscriber_id, tier_id, is_recurring, ip_address, user_agent, telegram_user_id, telegram_username, first_name, last_name, tenant_slug } = body;
+    // Accept both snake_case (init_data) and camelCase (initData) from clients
+    const init_data: string = (body.init_data ?? body.initData ?? "") as string;
 
-    console.log("Request received:", { subscriber_id, tier_id, is_recurring, telegram_user_id, telegram_username, first_name, last_name, tenant_slug, hasInitData: !!init_data });
+    console.log("Request received:", { subscriber_id, tier_id, is_recurring, telegram_user_id, telegram_username, first_name, last_name, tenant_slug, hasInitData: !!init_data, initDataLength: init_data?.length ?? 0 });
 
     if (!tier_id) {
       return new Response(
