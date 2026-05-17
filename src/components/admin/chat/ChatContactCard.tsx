@@ -41,8 +41,8 @@ export function ChatContactCard({ thread }: ChatContactCardProps) {
           </Avatar>
           <div>
             <h3 className="font-semibold text-foreground">{getDisplayName(thread)}</h3>
-            {sub?.telegram_username && (
-              <p className="text-sm text-muted-foreground">@{sub.telegram_username}</p>
+            {username && (
+              <p className="text-sm text-muted-foreground">@{username}</p>
             )}
           </div>
         </div>
