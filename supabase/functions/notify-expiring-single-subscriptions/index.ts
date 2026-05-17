@@ -3,6 +3,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { sendAdminNotification } from "../_shared/adminNotifications.ts";
 import { logUserNotification } from "../_shared/userNotificationLogger.ts";
 import { getDayWordRu, formatDaysRu } from "../_shared/textFormatters.ts";
+import { requireScheduledSecret } from "../_shared/scheduledAuth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -33,32 +34,8 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  // Accept Supabase anon key JWT (from cron) or SCHEDULED_TASK_SECRET
-  const authHeader = req.headers.get("Authorization");
-  const bearerToken = authHeader?.replace("Bearer ", "");
-  const expectedSecret = Deno.env.get("SCHEDULED_TASK_SECRET");
-  const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
-  const projectRef = supabaseUrl.match(/https:\/\/([^.]+)\./)?.[1];
-  
-  let isValidAuth = expectedSecret && bearerToken === expectedSecret;
-  
-  if (!isValidAuth && bearerToken && projectRef) {
-    try {
-      const payloadBase64 = bearerToken.split('.')[1];
-      if (payloadBase64) {
-        const payload = JSON.parse(atob(payloadBase64));
-        isValidAuth = payload.ref === projectRef && payload.role === 'anon';
-      }
-    } catch (e) {}
-  }
-
-  if (!isValidAuth) {
-    console.error("Unauthorized scheduled task execution attempt");
-    return new Response(
-      JSON.stringify({ error: "Unauthorized" }),
-      { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
-  }
+  const authError = await requireScheduledSecret(req);
+  if (authError) return authError;
 
   console.log("Processing single expiry notifications");
 

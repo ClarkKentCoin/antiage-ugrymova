@@ -3,6 +3,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { DateTime } from "https://esm.sh/luxon@3.4.4";
 import { sendAdminNotification } from "../_shared/adminNotifications.ts";
 import { logUserNotification } from "../_shared/userNotificationLogger.ts";
+import { requireScheduledSecret } from "../_shared/scheduledAuth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -92,17 +93,8 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  // Verify scheduled task secret
-  const authHeader = req.headers.get("Authorization");
-  const expectedSecret = Deno.env.get("SCHEDULED_TASK_SECRET");
-  
-  if (!authHeader || authHeader !== `Bearer ${expectedSecret}`) {
-    console.error("Unauthorized scheduled task execution attempt");
-    return new Response(
-      JSON.stringify({ error: "Unauthorized" }),
-      { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
-  }
+  const authError = await requireScheduledSecret(req);
+  if (authError) return authError;
 
   console.log("Processing recurring payments");
 
