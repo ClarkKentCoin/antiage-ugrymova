@@ -112,7 +112,7 @@ serve(async (req) => {
     // If not admin, require telegram_user_id AND validated init_data
     if (!isAdmin) {
       if (!telegram_user_id || !init_data) {
-        console.log("Non-admin request missing telegram_user_id or init_data", { hasTelegramUserId: !!telegram_user_id, hasInitData: !!init_data });
+        console.log("Non-admin request missing telegram_user_id or init_data", { hasTelegramUserId: !!telegram_user_id, hasInitData: !!init_data, initDataLength: init_data?.length ?? 0 });
         return new Response(
           JSON.stringify({ error: "telegram_user_id and init_data are required" }),
           { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
