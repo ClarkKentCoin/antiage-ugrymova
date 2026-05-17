@@ -62,16 +62,7 @@ export default function AdminChat() {
   }, []);
 
   // Helper to get display name for mobile header
-  const getThreadName = (thread: ChatThread): string => {
-    const sub = thread.subscriber;
-    if (sub) {
-      const parts = [sub.first_name, sub.last_name].filter(Boolean);
-      if (parts.length > 0) return parts.join(' ');
-      if (sub.telegram_username) return `@${sub.telegram_username}`;
-      if (sub.email) return sub.email;
-    }
-    return `Telegram #${thread.telegram_user_id}`;
-  };
+  const getThreadName = (thread: ChatThread): string => getThreadDisplayName(thread);
 
   // Mobile: show either list or thread detail
   if (isMobile) {
