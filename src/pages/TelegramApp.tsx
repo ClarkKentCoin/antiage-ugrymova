@@ -505,6 +505,7 @@ function NewUserView({
 
     setGeneratingLink(true);
     try {
+      const tgInitData = (window as any)?.Telegram?.WebApp?.initData ?? '';
       const body: Record<string, unknown> = {
         tier_id: selectedTier,
         is_recurring: autoRenewal,
@@ -512,6 +513,7 @@ function NewUserView({
         user_agent: navigator.userAgent,
         telegram_user_id: telegramUserId,
         tenant_slug: getPublicTenantSlug(),
+        init_data: tgInitData,
       };
 
       // Optional: if subscriber exists (например, в тестовом режиме), передадим его
@@ -544,7 +546,14 @@ function NewUserView({
         } catch {}
       }
 
-      if (errorCode === 'tier_already_purchased_once') {
+      const securityCodes = new Set(['invalid_init_data', 'user_id_mismatch', 'telegram_bot_not_configured']);
+      if (errorCode && (securityCodes.has(errorCode) || errorMessage === 'telegram_user_id and init_data are required' || errorCode === 'telegram_user_id and init_data are required')) {
+        toast({
+          title: 'Ошибка',
+          description: 'Не удалось подтвердить Telegram-сессию. Откройте оплату через кнопку в Telegram-боте.',
+          variant: 'destructive',
+        });
+      } else if (errorCode === 'tier_already_purchased_once') {
         const tierName = tiers.find(t => t.id === selectedTier)?.name;
         toast({
           title: 'Тариф уже использован',
@@ -791,6 +800,7 @@ function GracePeriodView({
 
     setGeneratingLink(true);
     try {
+      const tgInitData = (window as any)?.Telegram?.WebApp?.initData ?? '';
       const { data, error } = await supabase.functions.invoke('create-robokassa-payment', {
         body: {
           subscriber_id: subscriber.id,
@@ -800,6 +810,7 @@ function GracePeriodView({
           user_agent: navigator.userAgent,
           telegram_user_id: telegramUserId,
           tenant_slug: getPublicTenantSlug(),
+          init_data: tgInitData,
         },
       });
 
@@ -818,7 +829,14 @@ function GracePeriodView({
       if (typeof err?.context?.body === 'string') {
         try { const p = JSON.parse(err.context.body); errorCode = p?.error ?? null; errorMessage = p?.message ?? null; } catch {}
       }
-      if (errorCode === 'tier_already_purchased_once') {
+      const securityCodes = new Set(['invalid_init_data', 'user_id_mismatch', 'telegram_bot_not_configured']);
+      if (errorCode && (securityCodes.has(errorCode) || errorCode === 'telegram_user_id and init_data are required')) {
+        toast({
+          title: 'Ошибка',
+          description: 'Не удалось подтвердить Telegram-сессию. Откройте оплату через кнопку в Telegram-боте.',
+          variant: 'destructive',
+        });
+      } else if (errorCode === 'tier_already_purchased_once') {
         const tierName = tiers.find(t => t.id === selectedTier)?.name;
         toast({
           title: 'Тариф уже использован',
@@ -1085,6 +1103,7 @@ function SubscriptionContent({
 
     setGeneratingLink(true);
     try {
+      const tgInitData = (window as any)?.Telegram?.WebApp?.initData ?? '';
       const { data, error } = await supabase.functions.invoke('create-robokassa-payment', {
         body: {
           subscriber_id: subscriber.id,
@@ -1094,6 +1113,7 @@ function SubscriptionContent({
           user_agent: navigator.userAgent,
           telegram_user_id: telegramUserId,
           tenant_slug: getPublicTenantSlug(),
+          init_data: tgInitData,
         },
       });
 
@@ -1111,7 +1131,14 @@ function SubscriptionContent({
       if (typeof err?.context?.body === 'string') {
         try { const p = JSON.parse(err.context.body); errorCode = p?.error ?? null; errorMessage = p?.message ?? null; } catch {}
       }
-      if (errorCode === 'tier_already_purchased_once') {
+      const securityCodes = new Set(['invalid_init_data', 'user_id_mismatch', 'telegram_bot_not_configured']);
+      if (errorCode && (securityCodes.has(errorCode) || errorCode === 'telegram_user_id and init_data are required')) {
+        toast({
+          title: 'Ошибка',
+          description: 'Не удалось подтвердить Telegram-сессию. Откройте оплату через кнопку в Telegram-боте.',
+          variant: 'destructive',
+        });
+      } else if (errorCode === 'tier_already_purchased_once') {
         const tierName = tiers.find(t => t.id === selectedTier)?.name;
         toast({
           title: 'Тариф уже использован',

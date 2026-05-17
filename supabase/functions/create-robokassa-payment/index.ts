@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { resolveTenantIdFromSlug, resolveTenantFromRequest, DEFAULT_TENANT_ID } from "../_shared/tenant.ts";
+import { validateTelegramInitData } from "../_shared/telegramInitData.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -32,9 +33,9 @@ serve(async (req) => {
     );
 
     // Parse request body first to check source
-    const { subscriber_id, tier_id, is_recurring, ip_address, user_agent, telegram_user_id, telegram_username, first_name, last_name, tenant_slug } = await req.json();
+    const { subscriber_id, tier_id, is_recurring, ip_address, user_agent, telegram_user_id, telegram_username, first_name, last_name, tenant_slug, init_data } = await req.json();
 
-    console.log("Request received:", { subscriber_id, tier_id, is_recurring, telegram_user_id, telegram_username, first_name, last_name, tenant_slug });
+    console.log("Request received:", { subscriber_id, tier_id, is_recurring, telegram_user_id, telegram_username, first_name, last_name, tenant_slug, hasInitData: !!init_data });
 
     if (!tier_id) {
       return new Response(
@@ -105,23 +106,59 @@ serve(async (req) => {
       }
     }
 
-    // If not admin, require telegram_user_id for validation
+    // If not admin, require telegram_user_id AND validated init_data
     if (!isAdmin) {
-      if (!telegram_user_id) {
-        console.log("Non-admin request without telegram_user_id");
+      if (!telegram_user_id || !init_data) {
+        console.log("Non-admin request missing telegram_user_id or init_data", { hasTelegramUserId: !!telegram_user_id, hasInitData: !!init_data });
         return new Response(
-          JSON.stringify({ error: "Unauthorized - telegram_user_id required for non-admin requests" }),
+          JSON.stringify({ error: "telegram_user_id and init_data are required" }),
           { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
 
-      console.log(`Telegram user request: ${telegram_user_id}`);
+      // Load bot token for this tenant
+      const { data: settingsForBot } = await supabaseAdmin
+        .from("admin_settings")
+        .select("telegram_bot_token")
+        .eq("tenant_id", tenantId)
+        .maybeSingle();
 
-      // Find or create subscriber by telegram_user_id for this tenant
+      if (!settingsForBot?.telegram_bot_token) {
+        return new Response(
+          JSON.stringify({ error: "telegram_bot_not_configured" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const validation = await validateTelegramInitData(init_data, settingsForBot.telegram_bot_token);
+      if (!validation.ok) {
+        console.log("init_data validation failed:", validation.reason);
+        return new Response(
+          JSON.stringify({ error: "invalid_init_data", reason: validation.reason }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      if (validation.telegramUserId !== Number(telegram_user_id)) {
+        console.log("user_id_mismatch", { validated: validation.telegramUserId, requested: telegram_user_id });
+        return new Response(
+          JSON.stringify({ error: "user_id_mismatch" }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const validatedTelegramUserId = validation.telegramUserId!;
+      const validatedUsername = validation.telegramUsername || null;
+      const validatedFirstName = validation.telegramFirstName || null;
+      const validatedLastName = validation.telegramLastName || null;
+
+      console.log(`Validated Telegram user request: ${validatedTelegramUserId}`);
+
+      // Find subscriber strictly by validated identity
       let { data: subscriber, error: subError } = await supabaseAdmin
         .from("subscribers")
-        .select("id")
-        .eq("telegram_user_id", telegram_user_id)
+        .select("id, telegram_username, first_name, last_name")
+        .eq("telegram_user_id", validatedTelegramUserId)
         .eq("tenant_id", tenantId)
         .maybeSingle();
 
@@ -134,41 +171,31 @@ serve(async (req) => {
       }
 
       if (!subscriber) {
-        // Get admin settings to fetch telegram bot token
-        const { data: settingsForBot } = await supabaseAdmin
-          .from("admin_settings")
-          .select("telegram_bot_token")
-          .eq("tenant_id", tenantId)
-          .maybeSingle();
+        // Optional fallback for missing identity from init_data
+        let tgUsername = validatedUsername;
+        let tgFirstName = validatedFirstName;
+        let tgLastName = validatedLastName;
 
-        // Try to get user info from Telegram API
-        let tgUsername = telegram_username || null;
-        let tgFirstName = first_name || null;
-        let tgLastName = last_name || null;
-
-        if (settingsForBot?.telegram_bot_token) {
+        if ((!tgUsername || !tgFirstName) && settingsForBot.telegram_bot_token) {
           try {
             const telegramResponse = await fetch(
-              `https://api.telegram.org/bot${settingsForBot.telegram_bot_token}/getChat?chat_id=${telegram_user_id}`
+              `https://api.telegram.org/bot${settingsForBot.telegram_bot_token}/getChat?chat_id=${validatedTelegramUserId}`
             );
             const telegramData = await telegramResponse.json();
-            
             if (telegramData.ok && telegramData.result) {
-              tgUsername = telegramData.result.username || tgUsername;
-              tgFirstName = telegramData.result.first_name || tgFirstName;
-              tgLastName = telegramData.result.last_name || tgLastName;
-              console.log(`Got user info from Telegram: @${tgUsername}, ${tgFirstName} ${tgLastName}`);
+              tgUsername = tgUsername || telegramData.result.username || null;
+              tgFirstName = tgFirstName || telegramData.result.first_name || null;
+              tgLastName = tgLastName || telegramData.result.last_name || null;
             }
           } catch (tgError) {
             console.error("Failed to fetch user info from Telegram:", tgError);
           }
         }
 
-        // Create new subscriber with user info and tenant_id
         const { data: newSubscriber, error: createError } = await supabaseAdmin
           .from("subscribers")
           .insert({
-            telegram_user_id: telegram_user_id,
+            telegram_user_id: validatedTelegramUserId,
             telegram_username: tgUsername,
             first_name: tgFirstName,
             last_name: tgLastName,
@@ -187,11 +214,20 @@ serve(async (req) => {
           );
         }
 
-        subscriber = newSubscriber;
-        console.log(`Created new subscriber: ${subscriber.id} for telegram_user_id: ${telegram_user_id} with username: ${tgUsername}, tenant_id: ${tenantId}`);
+        subscriber = { id: newSubscriber.id, telegram_username: tgUsername, first_name: tgFirstName, last_name: tgLastName } as any;
+        console.log(`Created new subscriber: ${subscriber!.id} for telegram_user_id: ${validatedTelegramUserId}, tenant_id: ${tenantId}`);
+      } else {
+        // Refresh non-empty identity fields only
+        const upd: Record<string, any> = {};
+        if (validatedUsername && !subscriber.telegram_username) upd.telegram_username = validatedUsername;
+        if (validatedFirstName && !subscriber.first_name) upd.first_name = validatedFirstName;
+        if (validatedLastName && !subscriber.last_name) upd.last_name = validatedLastName;
+        if (Object.keys(upd).length > 0) {
+          await supabaseAdmin.from("subscribers").update(upd).eq("id", subscriber.id);
+        }
       }
 
-      resolvedSubscriberId = subscriber.id;
+      resolvedSubscriberId = subscriber!.id;
     }
 
     if (!resolvedSubscriberId) {
