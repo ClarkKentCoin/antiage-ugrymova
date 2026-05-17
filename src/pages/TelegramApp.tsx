@@ -505,6 +505,7 @@ function NewUserView({
 
     setGeneratingLink(true);
     try {
+      const tgInitData = (window as any)?.Telegram?.WebApp?.initData ?? '';
       const body: Record<string, unknown> = {
         tier_id: selectedTier,
         is_recurring: autoRenewal,
@@ -512,6 +513,7 @@ function NewUserView({
         user_agent: navigator.userAgent,
         telegram_user_id: telegramUserId,
         tenant_slug: getPublicTenantSlug(),
+        init_data: tgInitData,
       };
 
       // Optional: if subscriber exists (например, в тестовом режиме), передадим его
