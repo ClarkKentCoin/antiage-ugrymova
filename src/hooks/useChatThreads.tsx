@@ -15,6 +15,9 @@ export interface ChatThread {
   admin_unread_count: number;
   bot_blocked: boolean;
   bot_contact_status: string; // 'active' | 'blocked' | 'start_required'
+  telegram_first_name: string | null;
+  telegram_last_name: string | null;
+  telegram_username: string | null;
   created_at: string;
   updated_at: string;
   // joined subscriber data
