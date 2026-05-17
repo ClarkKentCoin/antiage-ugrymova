@@ -78,8 +78,8 @@ export default function AdminChat() {
               </Button>
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-semibold truncate">{getThreadName(selectedThread)}</p>
-                {selectedThread.subscriber?.telegram_username && (
-                  <p className="text-xs text-muted-foreground truncate">@{selectedThread.subscriber.telegram_username}</p>
+                {getThreadUsername(selectedThread) && (
+                  <p className="text-xs text-muted-foreground truncate">@{getThreadUsername(selectedThread)}</p>
                 )}
               </div>
               <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => setMobileInfoOpen(true)}>
