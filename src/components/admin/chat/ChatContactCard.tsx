@@ -55,8 +55,8 @@ export function ChatContactCard({ thread }: ChatContactCardProps) {
           
           <InfoRow icon={Hash} label="Telegram ID" value={String(thread.telegram_user_id)} />
           
-          {sub?.telegram_username && (
-            <InfoRow icon={AtSign} label="Username" value={`@${sub.telegram_username}`} />
+          {username && (
+            <InfoRow icon={AtSign} label="Username" value={`@${username}`} />
           )}
           
           {sub?.email && (
