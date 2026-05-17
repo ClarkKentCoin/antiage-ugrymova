@@ -62,6 +62,9 @@ export function ChatThreadList({ threads, isLoading, selectedThreadId, onSelectT
           sub?.last_name,
           sub?.telegram_username,
           sub?.email,
+          t.telegram_first_name,
+          t.telegram_last_name,
+          t.telegram_username,
           String(t.telegram_user_id),
           t.last_message_preview,
         ].filter(Boolean).join(' ').toLowerCase();
