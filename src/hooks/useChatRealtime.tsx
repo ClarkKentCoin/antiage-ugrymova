@@ -23,8 +23,22 @@ export function useChatRealtime(
   useEffect(() => {
     if (!tenantId) return;
 
+    let cancelled = false;
+
+    const setup = async () => {
+      try {
+        const rt = (supabase as any).realtime;
+        if (rt && typeof rt.setAuth === 'function') {
+          await rt.setAuth();
+        }
+      } catch (err) {
+        console.warn('[chat realtime] setAuth failed', { hasTenant: !!tenantId });
+      }
+
+      if (cancelled) return null;
+
     const channel = supabase
-      .channel(`chat-realtime-${tenantId}`)
+      .channel(`chat-realtime-${tenantId}`, { config: { private: true } })
       .on(
         'postgres_changes',
         {
