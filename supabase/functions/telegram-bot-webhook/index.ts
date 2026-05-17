@@ -160,21 +160,19 @@ serve(async (req) => {
       const buttonText = settings.welcome_message_button_text || "Подробнее";
       const imageUrl = settings.welcome_message_image_url;
 
-      const canonicalBase = (Deno.env.get("PUBLIC_APP_BASE_URL") || "").replace(/\/+$/, "");
+      // Use web_app button (so Telegram injects initData) whenever the URL
+      // points to our Mini App route on HTTPS. This is required for the
+      // create-robokassa-payment init_data validation to succeed.
       let isCanonicalMiniAppUrl = false;
-      if (canonicalBase) {
-        try {
-          const btnParsed = new URL(buttonUrl);
-          const baseParsed = new URL(canonicalBase);
-          isCanonicalMiniAppUrl =
-            btnParsed.origin === baseParsed.origin &&
-            btnParsed.pathname.replace(/\/+$/, "").startsWith("/telegram-app");
-        } catch {
-          // buttonUrl is not a valid URL — treat as external
-          isCanonicalMiniAppUrl = false;
-        }
+      try {
+        const btnParsed = new URL(buttonUrl);
+        const pathOk = btnParsed.pathname.replace(/\/+$/, "").startsWith("/telegram-app");
+        const httpsOk = btnParsed.protocol === "https:";
+        isCanonicalMiniAppUrl = pathOk && httpsOk;
+      } catch {
+        isCanonicalMiniAppUrl = false;
       }
-      console.log("[telegram-bot-webhook] welcome_button_mode", { tenant_slug: tenantSlug, buttonUrl, canonicalBase, mode: isCanonicalMiniAppUrl ? "web_app" : "url" });
+      console.log("[telegram-bot-webhook] welcome_button_mode", { tenant_slug: tenantSlug, buttonUrl, mode: isCanonicalMiniAppUrl ? "web_app" : "url" });
 
       const inlineKeyboard = {
         inline_keyboard: [[

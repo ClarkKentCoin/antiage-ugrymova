@@ -33,9 +33,12 @@ serve(async (req) => {
     );
 
     // Parse request body first to check source
-    const { subscriber_id, tier_id, is_recurring, ip_address, user_agent, telegram_user_id, telegram_username, first_name, last_name, tenant_slug, init_data } = await req.json();
+    const body = await req.json();
+    const { subscriber_id, tier_id, is_recurring, ip_address, user_agent, telegram_user_id, telegram_username, first_name, last_name, tenant_slug } = body;
+    // Accept both snake_case (init_data) and camelCase (initData) from clients
+    const init_data: string = (body.init_data ?? body.initData ?? "") as string;
 
-    console.log("Request received:", { subscriber_id, tier_id, is_recurring, telegram_user_id, telegram_username, first_name, last_name, tenant_slug, hasInitData: !!init_data });
+    console.log("Request received:", { subscriber_id, tier_id, is_recurring, telegram_user_id, telegram_username, first_name, last_name, tenant_slug, hasInitData: !!init_data, initDataLength: init_data?.length ?? 0 });
 
     if (!tier_id) {
       return new Response(
@@ -109,7 +112,7 @@ serve(async (req) => {
     // If not admin, require telegram_user_id AND validated init_data
     if (!isAdmin) {
       if (!telegram_user_id || !init_data) {
-        console.log("Non-admin request missing telegram_user_id or init_data", { hasTelegramUserId: !!telegram_user_id, hasInitData: !!init_data });
+        console.log("Non-admin request missing telegram_user_id or init_data", { hasTelegramUserId: !!telegram_user_id, hasInitData: !!init_data, initDataLength: init_data?.length ?? 0 });
         return new Response(
           JSON.stringify({ error: "telegram_user_id and init_data are required" }),
           { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
