@@ -14,6 +14,7 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { ArrowLeft, Info } from 'lucide-react';
+import { getThreadDisplayName, getThreadUsername } from '@/lib/chatIdentity';
 
 export default function AdminChat() {
   const { tenantId } = useAuth();
