@@ -3,6 +3,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { DateTime } from "https://esm.sh/luxon@3.4.4";
 import { sendAdminNotification } from "../_shared/adminNotifications.ts";
 import { logUserNotification } from "../_shared/userNotificationLogger.ts";
+import { requireScheduledSecret } from "../_shared/scheduledAuth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
