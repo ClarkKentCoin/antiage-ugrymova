@@ -53,56 +53,82 @@ export function useChatNotificationEffects(options?: {
   useEffect(() => {
     if (!tenantId) return;
 
-    const channel = supabase
-      .channel(`chat-sidebar-unread-${tenantId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'chat_threads',
-          filter: `tenant_id=eq.${tenantId}`,
-        },
-        (payload) => {
-          // Invalidate unread count for sidebar badge
-          queryClient.invalidateQueries({ queryKey: ['chat-unread-count', tenantId] });
+    let cancelled = false;
+    let activeChannel: ReturnType<typeof supabase.channel> | null = null;
 
-          const row = payload.new as {
-            id?: string;
-            admin_unread_count?: number;
-            last_message_direction?: string;
-            last_message_preview?: string;
-          };
+    const setup = async () => {
+      try {
+        const rt = (supabase as any).realtime;
+        if (rt && typeof rt.setAuth === 'function') {
+          await rt.setAuth();
+        }
+      } catch {
+        console.warn('[chat unread realtime] setAuth failed', { hasTenant: !!tenantId });
+      }
 
-          // Fire notification only for incoming message that just made thread unread
-          if (
-            row.last_message_direction === 'incoming' &&
-            row.admin_unread_count &&
-            row.admin_unread_count > 0 &&
-            row.id !== lastNotifiedRef.current
-          ) {
-            lastNotifiedRef.current = row.id ?? null;
-            playSound();
-            showBrowserNotification(row.last_message_preview || '');
+      if (cancelled) return;
+
+      const channel = supabase
+        .channel(`chat-sidebar-unread-${tenantId}`, { config: { private: true } })
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'chat_threads',
+            filter: `tenant_id=eq.${tenantId}`,
+          },
+          (payload) => {
+            queryClient.invalidateQueries({ queryKey: ['chat-unread-count', tenantId] });
+
+            const row = payload.new as {
+              id?: string;
+              admin_unread_count?: number;
+              last_message_direction?: string;
+              last_message_preview?: string;
+            };
+
+            if (
+              row.last_message_direction === 'incoming' &&
+              row.admin_unread_count &&
+              row.admin_unread_count > 0 &&
+              row.id !== lastNotifiedRef.current
+            ) {
+              lastNotifiedRef.current = row.id ?? null;
+              playSound();
+              showBrowserNotification(row.last_message_preview || '');
+            }
           }
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'chat_threads',
-          filter: `tenant_id=eq.${tenantId}`,
-        },
-        () => {
-          queryClient.invalidateQueries({ queryKey: ['chat-unread-count', tenantId] });
-        }
-      )
-      .subscribe();
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'chat_threads',
+            filter: `tenant_id=eq.${tenantId}`,
+          },
+          () => {
+            queryClient.invalidateQueries({ queryKey: ['chat-unread-count', tenantId] });
+          }
+        )
+        .subscribe((status) => {
+          console.info('[chat unread realtime] subscription status', { channel: 'chat-sidebar-unread', status });
+          if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+            console.warn('[chat unread realtime] subscription problem', { status, hasTenant: !!tenantId });
+          }
+        });
+
+      activeChannel = channel;
+    };
+
+    setup();
 
     return () => {
-      supabase.removeChannel(channel);
+      cancelled = true;
+      if (activeChannel) {
+        supabase.removeChannel(activeChannel);
+      }
     };
   }, [tenantId, queryClient, playSound, showBrowserNotification]);
 }
