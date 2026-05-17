@@ -3,22 +3,14 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { User, Mail, Phone, AtSign, Hash } from 'lucide-react';
 import type { ChatThread } from '@/hooks/useChatThreads';
+import { getThreadDisplayName, getThreadUsername, getThreadInitials } from '@/lib/chatIdentity';
 
 function getInitials(thread: ChatThread): string {
-  const sub = thread.subscriber;
-  if (sub?.first_name) {
-    return (sub.first_name[0] + (sub.last_name?.[0] ?? '')).toUpperCase();
-  }
-  return 'T';
+  return getThreadInitials(thread);
 }
 
 function getDisplayName(thread: ChatThread): string {
-  const sub = thread.subscriber;
-  if (sub) {
-    const parts = [sub.first_name, sub.last_name].filter(Boolean);
-    if (parts.length > 0) return parts.join(' ');
-  }
-  return `Telegram #${thread.telegram_user_id}`;
+  return getThreadDisplayName(thread);
 }
 
 interface ChatContactCardProps {
