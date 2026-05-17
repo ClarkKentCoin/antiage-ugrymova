@@ -1106,6 +1106,7 @@ function SubscriptionContent({
     setGeneratingLink(true);
     try {
       const tgInitData = (window as any)?.Telegram?.WebApp?.initData ?? '';
+      console.log('[TelegramApp payment] initData available:', Boolean(tgInitData), 'length:', tgInitData.length);
       const { data, error } = await supabase.functions.invoke('create-robokassa-payment', {
         body: {
           subscriber_id: subscriber.id,
