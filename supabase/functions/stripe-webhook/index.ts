@@ -250,6 +250,9 @@ serve(async (req) => {
     return new Response("duplicate_ignored", { status: 200 });
   }
 
+  const metaSubscriberIdEarly: string | null = (metadata.subscriber_id as string) || null;
+  const metaTierIdEarly: string | null = (metadata.tier_id as string) || null;
+
   // Insert (or upsert) webhook event row
   const baseEventRow: Record<string, unknown> = {
     tenant_id: tenantId,
@@ -262,6 +265,9 @@ serve(async (req) => {
     stripe_checkout_session_id: sessionId,
     stripe_payment_intent_id: paymentIntentId,
     stripe_customer_id: dataObject.customer ?? null,
+    payment_id: metaPaymentId,
+    subscriber_id: metaSubscriberIdEarly,
+    tier_id: metaTierIdEarly,
     received_at: new Date().toISOString(),
   };
   if (!existingEvent) {
