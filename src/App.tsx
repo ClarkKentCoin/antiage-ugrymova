@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import Index from "./pages/Index";
 import TelegramApp from "./pages/TelegramApp";
+import { StripePaymentSuccessPage, StripePaymentCancelPage } from "./pages/StripePaymentStatus";
 import AdminLogin from "./pages/admin/AdminLogin";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import AdminSubscribers from "./pages/admin/AdminSubscribers";
@@ -62,6 +63,8 @@ function AppRoutes() {
     <Routes>
       <Route path="/" element={<Index />} />
       <Route path="/telegram-app" element={<TelegramApp />} />
+      <Route path="/telegram-app/payment-success" element={<StripePaymentSuccessPage />} />
+      <Route path="/telegram-app/payment-cancel" element={<StripePaymentCancelPage />} />
       <Route path="/admin/login" element={<AdminLogin />} />
       <Route path="/admin" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
       <Route path="/admin/subscribers" element={<ProtectedRoute><AdminSubscribers /></ProtectedRoute>} />

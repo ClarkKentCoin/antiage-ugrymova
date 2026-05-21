@@ -45,6 +45,150 @@ const openPaymentUrl = (url: string) => {
   window.location.href = url;
 };
 
+type PaymentMethodInfo = {
+  enabled: boolean;
+  label: string;
+  provider: string;
+  mode?: 'test' | 'live' | null;
+};
+type PaymentMethodsConfig = {
+  robokassa: PaymentMethodInfo;
+  stripe: PaymentMethodInfo;
+};
+type SelectedMethod = 'robokassa' | 'stripe';
+
+const DEFAULT_PAYMENT_METHODS: PaymentMethodsConfig = {
+  robokassa: { enabled: true, label: 'Российская карта', provider: 'robokassa' },
+  stripe: { enabled: false, label: 'Зарубежная карта', provider: 'stripe', mode: null },
+};
+
+/** Tier-level Stripe availability check (does NOT include provider gating). */
+function tierSupportsStripe(tier: any): boolean {
+  return (
+    !!tier?.stripe_enabled &&
+    typeof tier?.stripe_price === 'number' &&
+    tier.stripe_price > 0 &&
+    !!tier?.stripe_currency
+  );
+}
+
+function PaymentMethodSelector({
+  tier,
+  paymentMethods,
+  selectedMethod,
+  onChange,
+  autoRenewal,
+}: {
+  tier: any;
+  paymentMethods: PaymentMethodsConfig;
+  selectedMethod: SelectedMethod;
+  onChange: (m: SelectedMethod) => void;
+  autoRenewal: boolean;
+}) {
+  const providerStripeEnabled = paymentMethods.stripe.enabled;
+  const tierStripeOk = tierSupportsStripe(tier);
+  const stripeDisabled = !providerStripeEnabled || !tierStripeOk || autoRenewal;
+
+  let stripeHelper: string | null = null;
+  if (autoRenewal) {
+    stripeHelper = 'Автопродление пока доступно только для российских карт через Robokassa.';
+  } else if (!providerStripeEnabled) {
+    stripeHelper = 'Оплата зарубежной картой скоро будет доступна.';
+  } else if (!tierStripeOk) {
+    stripeHelper = 'Для этого тарифа оплата зарубежной картой недоступна.';
+  }
+
+  const baseCard = 'rounded-lg border p-3 transition-all text-left w-full';
+  const activeCard = 'border-primary ring-2 ring-primary/30 bg-primary/5';
+  const inactiveCard = 'hover:border-primary/50';
+  const disabledCard = 'opacity-50 cursor-not-allowed';
+
+  return (
+    <div className="space-y-3">
+      <p className="text-sm font-medium text-center">Выберите способ оплаты</p>
+      <div className="grid gap-2">
+        <button
+          type="button"
+          className={`${baseCard} ${selectedMethod === 'robokassa' ? activeCard : inactiveCard}`}
+          onClick={() => onChange('robokassa')}
+        >
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="font-semibold">Российская карта</p>
+              <p className="text-xs text-muted-foreground">Robokassa</p>
+            </div>
+            <p className="text-base font-bold whitespace-nowrap">
+              {Number(tier?.price ?? 0).toLocaleString('ru-RU')}₽
+            </p>
+          </div>
+        </button>
+
+        <button
+          type="button"
+          disabled={stripeDisabled}
+          className={`${baseCard} ${stripeDisabled ? disabledCard : selectedMethod === 'stripe' ? activeCard : inactiveCard}`}
+          onClick={() => {
+            if (stripeDisabled) return;
+            onChange('stripe');
+          }}
+        >
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="font-semibold">Зарубежная карта</p>
+              <p className="text-xs text-muted-foreground">Stripe</p>
+            </div>
+            <p className="text-base font-bold whitespace-nowrap">
+              {tierStripeOk
+                ? `${Number(tier.stripe_price).toLocaleString('ru-RU')} ${tier.stripe_currency}`
+                : '—'}
+            </p>
+          </div>
+          {stripeHelper && (
+            <p className="text-xs text-muted-foreground mt-2">{stripeHelper}</p>
+          )}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** Shared Stripe checkout invoker — UI only; never activates subscriptions. */
+async function invokeStripeCheckout(args: {
+  tierId: string;
+  telegramUserId: number;
+  tenantSlug: string | null;
+  initData: string;
+  subscriberId?: string | null;
+}) {
+  const body: Record<string, unknown> = {
+    tier_id: args.tierId,
+    telegram_user_id: args.telegramUserId,
+    tenant_slug: args.tenantSlug,
+    init_data: args.initData,
+  };
+  if (args.subscriberId) body.subscriber_id = args.subscriberId;
+  return supabase.functions.invoke('create-stripe-checkout', { body });
+}
+
+const STRIPE_UNAVAILABLE_CODES = new Set([
+  'stripe_disabled',
+  'stripe_not_configured',
+  'stripe_tier_not_enabled',
+  'invalid_stripe_tier_price',
+]);
+
+function parseEdgeError(error: unknown): { code: string | null; message: string | null } {
+  const err = error as any;
+  if (typeof err?.context?.body === 'string') {
+    try {
+      const parsed = JSON.parse(err.context.body);
+      return { code: parsed?.error ?? null, message: parsed?.message ?? null };
+    } catch {}
+  }
+  return { code: null, message: err?.message ?? null };
+}
+
+
 /** Cache-busting for custom logos from storage CDN. Local fallback is never modified. */
 function resolveLogoSrc(logoUrl: string | null | undefined): string {
   if (!logoUrl) return logoUgrymova;
@@ -135,6 +279,7 @@ export default function TelegramApp() {
   const [channelInfo, setChannelInfo] = useState<{ name: string; description: string } | null>(null);
   const [gracePeriodDays, setGracePeriodDays] = useState<number | null>(null);
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethodsConfig>(DEFAULT_PAYMENT_METHODS);
 
   // Fetch public tenant config via safe edge function (no direct admin_settings read)
   useEffect(() => {
@@ -168,6 +313,21 @@ export default function TelegramApp() {
               'Закрытый Telegram-канал для женщин: мотивация, рецепты, научные подходы к антиэйджу. Всё для энергии и молодости в одном месте.',
           });
           setGracePeriodDays(data.grace_period_days ?? 0);
+          if (data.payment_methods && typeof data.payment_methods === 'object') {
+            setPaymentMethods({
+              robokassa: {
+                enabled: data.payment_methods?.robokassa?.enabled ?? true,
+                label: data.payment_methods?.robokassa?.label ?? 'Российская карта',
+                provider: 'robokassa',
+              },
+              stripe: {
+                enabled: !!data.payment_methods?.stripe?.enabled,
+                label: data.payment_methods?.stripe?.label ?? 'Зарубежная карта',
+                provider: 'stripe',
+                mode: data.payment_methods?.stripe?.mode ?? null,
+              },
+            });
+          }
           console.log('[TelegramApp] Loaded public config:', { tenant_id: data.tenant_id, grace_period_days: data.grace_period_days, logo_url: rawLogoUrl });
         } else {
           setGracePeriodDays(0);
@@ -385,6 +545,7 @@ export default function TelegramApp() {
           onDebugTap={onDebugTap}
           purchasedOnceOnlyTierIds={purchasedOnceOnlyTierIds}
           logoUrl={logoUrl}
+          paymentMethods={paymentMethods}
         />
         {debugBadgeEnabled && <MiniAppBuildBadge serverDebug={null} telegramDebug={telegramDebug} />}
       </main>
@@ -445,6 +606,7 @@ export default function TelegramApp() {
         onDebugTap={onDebugTap}
         purchasedOnceOnlyTierIds={purchasedOnceOnlyTierIds}
         logoUrl={logoUrl}
+        paymentMethods={paymentMethods}
       />
       {debugBadgeEnabled && <MiniAppBuildBadge serverDebug={activeDebugInfo} telegramDebug={telegramDebug} />}
     </div>
@@ -461,6 +623,7 @@ function NewUserView({
   onDebugTap,
   purchasedOnceOnlyTierIds = new Set(),
   logoUrl,
+  paymentMethods,
 }: {
   channelInfo: { name: string; description: string } | null;
   tiers: any[];
@@ -470,26 +633,32 @@ function NewUserView({
   onDebugTap?: () => void;
   purchasedOnceOnlyTierIds?: Set<string>;
   logoUrl?: string | null;
+  paymentMethods: PaymentMethodsConfig;
 }) {
   const [selectedTier, setSelectedTier] = useState<string | null>(null);
   const [autoRenewal, setAutoRenewal] = useState(false);
   const [consentGiven, setConsentGiven] = useState(false);
   const [generatingLink, setGeneratingLink] = useState(false);
+  const [selectedMethod, setSelectedMethod] = useState<SelectedMethod>('robokassa');
   const { toast } = useToast();
+
+  // Force Robokassa when auto-renewal is on (Stripe path has no recurring support here).
+  useEffect(() => {
+    if (autoRenewal && selectedMethod !== 'robokassa') setSelectedMethod('robokassa');
+  }, [autoRenewal, selectedMethod]);
 
   const handleSelectTier = (tierId: string) => {
     if (purchasedOnceOnlyTierIds.has(tierId)) return;
     setSelectedTier(tierId);
-    // Force disable auto-renewal for purchase_once_only tiers
-    const tier = tiers.find((t: any) => t.id === tierId);
     setAutoRenewal(false);
     setConsentGiven(false);
+    setSelectedMethod('robokassa');
   };
 
   const handlePayment = async () => {
     if (!selectedTier) return;
 
-    if (autoRenewal && !consentGiven) {
+    if (selectedMethod === 'robokassa' && autoRenewal && !consentGiven) {
       toast({
         title: 'Необходимо согласие',
         description: 'Пожалуйста, подтвердите согласие на автосписания',
@@ -506,7 +675,28 @@ function NewUserView({
     setGeneratingLink(true);
     try {
       const tgInitData = (window as any)?.Telegram?.WebApp?.initData ?? '';
-      console.log('[TelegramApp payment] initData available:', Boolean(tgInitData), 'length:', tgInitData.length);
+      console.log('[TelegramApp payment] method:', selectedMethod, 'initData len:', tgInitData.length);
+
+      if (selectedMethod === 'stripe') {
+        const { data, error } = await invokeStripeCheckout({
+          tierId: selectedTier,
+          telegramUserId,
+          tenantSlug: getPublicTenantSlug(),
+          initData: tgInitData,
+          subscriberId: subscriber?.id ?? null,
+        });
+        if (error) throw error;
+        if (data?.checkout_url) {
+          toast({ title: 'Переход к оплате Stripe...', description: 'Сейчас откроется страница оплаты' });
+          openPaymentUrl(data.checkout_url);
+          onRefetch?.();
+        } else {
+          toast({ title: 'Ошибка', description: 'Ссылка Stripe не вернулась от сервера', variant: 'destructive' });
+        }
+        return;
+      }
+
+      // Robokassa (default)
       const body: Record<string, unknown> = {
         tier_id: selectedTier,
         is_recurring: autoRenewal,
@@ -516,14 +706,9 @@ function NewUserView({
         tenant_slug: getPublicTenantSlug(),
         init_data: tgInitData,
       };
-
-      // Optional: if subscriber exists (например, в тестовом режиме), передадим его
       if (subscriber?.id) body.subscriber_id = subscriber.id;
 
-      const { data, error } = await supabase.functions.invoke('create-robokassa-payment', {
-        body,
-      });
-
+      const { data, error } = await supabase.functions.invoke('create-robokassa-payment', { body });
       if (error) throw error;
 
       if (data?.payment_url) {
@@ -535,20 +720,16 @@ function NewUserView({
       }
     } catch (error) {
       console.error('Error generating payment link:', error);
-
-      const err = error as any;
-      let errorCode: string | null = null;
-      let errorMessage: string | null = null;
-      if (typeof err?.context?.body === 'string') {
-        try {
-          const parsed = JSON.parse(err.context.body);
-          errorCode = parsed?.error ?? null;
-          errorMessage = parsed?.message ?? null;
-        } catch {}
-      }
-
+      const { code: errorCode, message: errorMessage } = parseEdgeError(error);
       const securityCodes = new Set(['invalid_init_data', 'user_id_mismatch', 'telegram_bot_not_configured']);
-      if (errorCode && (securityCodes.has(errorCode) || errorMessage === 'telegram_user_id and init_data are required' || errorCode === 'telegram_user_id and init_data are required')) {
+
+      if (errorCode && STRIPE_UNAVAILABLE_CODES.has(errorCode)) {
+        toast({
+          title: 'Stripe недоступен',
+          description: 'Оплата зарубежной картой временно недоступна. Выберите российскую карту или попробуйте позже.',
+          variant: 'destructive',
+        });
+      } else if (errorCode && (securityCodes.has(errorCode) || errorMessage === 'telegram_user_id and init_data are required' || errorCode === 'telegram_user_id and init_data are required')) {
         toast({
           title: 'Ошибка',
           description: 'Не удалось подтвердить Telegram-сессию. Откройте оплату через кнопку в Telegram-боте.',
@@ -565,7 +746,7 @@ function NewUserView({
       } else {
         toast({
           title: 'Ошибка',
-          description: errorMessage || err?.message || 'Не удалось создать ссылку для оплаты',
+          description: errorMessage || (error as any)?.message || 'Не удалось создать ссылку для оплаты',
           variant: 'destructive',
         });
       }
@@ -646,34 +827,50 @@ function NewUserView({
       {selectedTier && (
         <Card className="border-primary/30 bg-gradient-to-b from-primary/5 to-background">
           <CardContent className="pt-5 space-y-4">
+            {/* Payment method selector */}
+            <PaymentMethodSelector
+              tier={selectedTierData}
+              paymentMethods={paymentMethods}
+              selectedMethod={selectedMethod}
+              onChange={setSelectedMethod}
+              autoRenewal={autoRenewal}
+            />
+
+            {/* Selected tier summary depends on chosen method */}
             <div className="text-center pb-2">
               <p className="text-sm text-muted-foreground">Вы выбрали:</p>
-              <p className="font-semibold text-lg">{selectedTierData?.name} — {Number(selectedTierData?.price).toLocaleString('ru-RU')}₽</p>
+              {selectedMethod === 'stripe' && tierSupportsStripe(selectedTierData) ? (
+                <p className="font-semibold text-lg">
+                  {selectedTierData?.name} — {Number(selectedTierData.stripe_price).toLocaleString('ru-RU')} {selectedTierData.stripe_currency}
+                </p>
+              ) : (
+                <p className="font-semibold text-lg">
+                  {selectedTierData?.name} — {Number(selectedTierData?.price).toLocaleString('ru-RU')}₽
+                </p>
+              )}
             </div>
 
-            {/* Auto-renewal checkbox - hidden for purchase_once_only tiers */}
-            {!selectedTierData?.purchase_once_only && (
-            <div className="flex items-start space-x-3 p-3 rounded-lg bg-muted/50">
-              <Checkbox 
-                id="auto-renewal-new" 
-                checked={autoRenewal}
-                onCheckedChange={(checked) => {
-                  setAutoRenewal(checked === true);
-                  if (!checked) setConsentGiven(false);
-                }}
-              />
-              <div className="grid gap-1 leading-none">
-                <Label htmlFor="auto-renewal-new" className="font-medium cursor-pointer">
-                  Автоматическое продление
-                </Label>
+            {/* Auto-renewal + consent (Robokassa only, not for purchase_once_only) */}
+            {selectedMethod === 'robokassa' && !selectedTierData?.purchase_once_only && (
+              <div className="flex items-start space-x-3 p-3 rounded-lg bg-muted/50">
+                <Checkbox 
+                  id="auto-renewal-new" 
+                  checked={autoRenewal}
+                  onCheckedChange={(checked) => {
+                    setAutoRenewal(checked === true);
+                    if (!checked) setConsentGiven(false);
+                  }}
+                />
+                <div className="grid gap-1 leading-none">
+                  <Label htmlFor="auto-renewal-new" className="font-medium cursor-pointer">
+                    Автоматическое продление
+                  </Label>
+                </div>
               </div>
-            </div>
             )}
 
-            {/* Info and consent required if auto-renewal is enabled */}
-            {autoRenewal && (
+            {selectedMethod === 'robokassa' && autoRenewal && (
               <>
-                {/* Info bubble about Russian cards only */}
                 <div className="p-4 rounded-lg bg-primary/10 border border-primary/20">
                   <p className="text-sm text-foreground">
                     <span className="font-medium">Важно!</span> Режим Автоматическое продление пока доступен только для оплат с карт РФ. Если вы оплачиваете зарубежными картами и картами стран СНГ — пожалуйста снимите галочку Автоматическое продление. Полные правила оплаты вы можете ознакомиться по{' '}
@@ -689,7 +886,6 @@ function NewUserView({
                   </p>
                 </div>
 
-                {/* Consent block */}
                 <div className="space-y-3 p-4 rounded-lg bg-warning/10 border border-warning/20">
                   <div className="flex items-center gap-2 text-warning">
                     <AlertTriangle className="h-4 w-4" />
@@ -734,7 +930,7 @@ function NewUserView({
             <Button 
               className="w-full" 
               size="lg"
-              disabled={generatingLink || isSelectedTierUsed || (autoRenewal && !consentGiven)}
+              disabled={generatingLink || isSelectedTierUsed || (selectedMethod === 'robokassa' && autoRenewal && !consentGiven)}
               onClick={handlePayment}
             >
               {generatingLink ? (
@@ -745,7 +941,7 @@ function NewUserView({
               ) : (
                 <>
                   <CreditCard className="mr-2 h-4 w-4" />
-                  Оплатить через Robokassa
+                  {selectedMethod === 'stripe' ? 'Оплатить зарубежной картой' : 'Оплатить через Robokassa'}
                 </>
               )}
             </Button>
@@ -767,6 +963,7 @@ function GracePeriodView({
   onDebugTap,
   purchasedOnceOnlyTierIds = new Set(),
   logoUrl,
+  paymentMethods,
 }: {
   channelInfo: { name: string; description: string } | null;
   tiers: any[];
@@ -777,32 +974,65 @@ function GracePeriodView({
   onDebugTap?: () => void;
   purchasedOnceOnlyTierIds?: Set<string>;
   logoUrl?: string | null;
+  paymentMethods: PaymentMethodsConfig;
 }) {
   const [selectedTier, setSelectedTier] = useState<string | null>(null);
   const [autoRenewal, setAutoRenewal] = useState(false);
   const [consentGiven, setConsentGiven] = useState(false);
   const [generatingLink, setGeneratingLink] = useState(false);
+  const [selectedMethod, setSelectedMethod] = useState<SelectedMethod>('robokassa');
   const { toast } = useToast();
+
+  useEffect(() => {
+    if (autoRenewal && selectedMethod !== 'robokassa') setSelectedMethod('robokassa');
+  }, [autoRenewal, selectedMethod]);
 
   const handleSelectTier = (tierId: string) => {
     if (purchasedOnceOnlyTierIds.has(tierId)) return;
     setSelectedTier(tierId);
     setAutoRenewal(false);
     setConsentGiven(false);
+    setSelectedMethod('robokassa');
   };
 
   const handlePayment = async () => {
-    if (!selectedTier || !subscriber?.id) return;
-    
-    if (autoRenewal && !consentGiven) {
+    if (!selectedTier) return;
+    if (selectedMethod === 'robokassa' && !subscriber?.id) return;
+
+    if (selectedMethod === 'robokassa' && autoRenewal && !consentGiven) {
       toast({ title: 'Необходимо согласие', description: 'Пожалуйста, подтвердите согласие на автосписания', variant: 'destructive' });
+      return;
+    }
+
+    if (!telegramUserId) {
+      toast({ title: 'Ошибка', description: 'Не удалось определить Telegram пользователя', variant: 'destructive' });
       return;
     }
 
     setGeneratingLink(true);
     try {
       const tgInitData = (window as any)?.Telegram?.WebApp?.initData ?? '';
-      console.log('[TelegramApp payment] initData available:', Boolean(tgInitData), 'length:', tgInitData.length);
+      console.log('[TelegramApp grace payment] method:', selectedMethod, 'initData len:', tgInitData.length);
+
+      if (selectedMethod === 'stripe') {
+        const { data, error } = await invokeStripeCheckout({
+          tierId: selectedTier,
+          telegramUserId,
+          tenantSlug: getPublicTenantSlug(),
+          initData: tgInitData,
+          subscriberId: subscriber?.id ?? null,
+        });
+        if (error) throw error;
+        if (data?.checkout_url) {
+          toast({ title: 'Переход к оплате Stripe...', description: 'Сейчас откроется страница оплаты' });
+          openPaymentUrl(data.checkout_url);
+          onRefetch?.();
+        } else {
+          toast({ title: 'Ошибка', description: 'Ссылка Stripe не вернулась от сервера', variant: 'destructive' });
+        }
+        return;
+      }
+
       const { data, error } = await supabase.functions.invoke('create-robokassa-payment', {
         body: {
           subscriber_id: subscriber.id,
@@ -825,14 +1055,15 @@ function GracePeriodView({
       }
     } catch (error) {
       console.error('Error generating payment link:', error);
-      const err = error as any;
-      let errorCode: string | null = null;
-      let errorMessage: string | null = null;
-      if (typeof err?.context?.body === 'string') {
-        try { const p = JSON.parse(err.context.body); errorCode = p?.error ?? null; errorMessage = p?.message ?? null; } catch {}
-      }
+      const { code: errorCode, message: errorMessage } = parseEdgeError(error);
       const securityCodes = new Set(['invalid_init_data', 'user_id_mismatch', 'telegram_bot_not_configured']);
-      if (errorCode && (securityCodes.has(errorCode) || errorCode === 'telegram_user_id and init_data are required')) {
+      if (errorCode && STRIPE_UNAVAILABLE_CODES.has(errorCode)) {
+        toast({
+          title: 'Stripe недоступен',
+          description: 'Оплата зарубежной картой временно недоступна. Выберите российскую карту или попробуйте позже.',
+          variant: 'destructive',
+        });
+      } else if (errorCode && (securityCodes.has(errorCode) || errorCode === 'telegram_user_id and init_data are required')) {
         toast({
           title: 'Ошибка',
           description: 'Не удалось подтвердить Telegram-сессию. Откройте оплату через кнопку в Telegram-боте.',
@@ -938,34 +1169,47 @@ function GracePeriodView({
       {selectedTier && (
         <Card className="border-primary/30 bg-gradient-to-b from-primary/5 to-background">
           <CardContent className="pt-5 space-y-4">
+            <PaymentMethodSelector
+              tier={selectedTierData}
+              paymentMethods={paymentMethods}
+              selectedMethod={selectedMethod}
+              onChange={setSelectedMethod}
+              autoRenewal={autoRenewal}
+            />
+
             <div className="text-center pb-2">
               <p className="text-sm text-muted-foreground">Вы выбрали:</p>
-              <p className="font-semibold text-lg">{selectedTierData?.name} — {Number(selectedTierData?.price).toLocaleString('ru-RU')}₽</p>
+              {selectedMethod === 'stripe' && tierSupportsStripe(selectedTierData) ? (
+                <p className="font-semibold text-lg">
+                  {selectedTierData?.name} — {Number(selectedTierData.stripe_price).toLocaleString('ru-RU')} {selectedTierData.stripe_currency}
+                </p>
+              ) : (
+                <p className="font-semibold text-lg">
+                  {selectedTierData?.name} — {Number(selectedTierData?.price).toLocaleString('ru-RU')}₽
+                </p>
+              )}
             </div>
 
-            {/* Auto-renewal checkbox - hidden for purchase_once_only tiers */}
-            {!selectedTierData?.purchase_once_only && (
-            <div className="flex items-start space-x-3 p-3 rounded-lg bg-muted/50">
-              <Checkbox 
-                id="auto-renewal-grace" 
-                checked={autoRenewal}
-                onCheckedChange={(checked) => {
-                  setAutoRenewal(checked === true);
-                  if (!checked) setConsentGiven(false);
-                }}
-              />
-              <div className="grid gap-1 leading-none">
-                <Label htmlFor="auto-renewal-grace" className="font-medium cursor-pointer">
-                  Автоматическое продление
-                </Label>
+            {selectedMethod === 'robokassa' && !selectedTierData?.purchase_once_only && (
+              <div className="flex items-start space-x-3 p-3 rounded-lg bg-muted/50">
+                <Checkbox 
+                  id="auto-renewal-grace" 
+                  checked={autoRenewal}
+                  onCheckedChange={(checked) => {
+                    setAutoRenewal(checked === true);
+                    if (!checked) setConsentGiven(false);
+                  }}
+                />
+                <div className="grid gap-1 leading-none">
+                  <Label htmlFor="auto-renewal-grace" className="font-medium cursor-pointer">
+                    Автоматическое продление
+                  </Label>
+                </div>
               </div>
-            </div>
             )}
 
-            {/* Info and consent required if auto-renewal is enabled */}
-            {autoRenewal && (
+            {selectedMethod === 'robokassa' && autoRenewal && (
               <>
-                {/* Info bubble about Russian cards only */}
                 <div className="p-4 rounded-lg bg-primary/10 border border-primary/20">
                   <p className="text-sm text-foreground">
                     <span className="font-medium">Важно!</span> Режим Автоматическое продление пока доступен только для оплат с карт РФ. Если вы оплачиваете зарубежными картами и картами стран СНГ — пожалуйста снимите галочку Автоматическое продление. Полные правила оплаты вы можете ознакомиться по{' '}
@@ -981,7 +1225,6 @@ function GracePeriodView({
                   </p>
                 </div>
 
-                {/* Consent block */}
                 <div className="space-y-3 p-4 rounded-lg bg-warning/10 border border-warning/20">
                   <div className="flex items-center gap-2 text-warning">
                     <AlertTriangle className="h-4 w-4" />
@@ -1026,7 +1269,7 @@ function GracePeriodView({
             <Button 
               className="w-full" 
               size="lg"
-              disabled={generatingLink || isSelectedTierUsed || (autoRenewal && !consentGiven)}
+              disabled={generatingLink || isSelectedTierUsed || (selectedMethod === 'robokassa' && autoRenewal && !consentGiven)}
               onClick={handlePayment}
             >
               {generatingLink ? (
@@ -1037,7 +1280,7 @@ function GracePeriodView({
               ) : (
                 <>
                   <CreditCard className="mr-2 h-4 w-4" />
-                  Продлить подписку
+                  {selectedMethod === 'stripe' ? 'Оплатить зарубежной картой' : 'Продлить подписку'}
                 </>
               )}
             </Button>
@@ -1067,6 +1310,7 @@ function SubscriptionContent({
   onDebugTap,
   purchasedOnceOnlyTierIds = new Set(),
   logoUrl,
+  paymentMethods = DEFAULT_PAYMENT_METHODS,
 }: {
   subscriber: any; 
   isLoading: boolean;
@@ -1086,6 +1330,7 @@ function SubscriptionContent({
   onDebugTap?: () => void;
   purchasedOnceOnlyTierIds?: Set<string>;
   logoUrl?: string | null;
+  paymentMethods?: PaymentMethodsConfig;
 }) {
   const [selectedTier, setSelectedTier] = useState<string | null>(null);
   const [autoRenewal, setAutoRenewal] = useState(false);
@@ -1243,6 +1488,7 @@ function SubscriptionContent({
         onDebugTap={onDebugTap}
         purchasedOnceOnlyTierIds={purchasedOnceOnlyTierIds}
         logoUrl={logoUrl}
+        paymentMethods={paymentMethods}
       />
     );
   }
@@ -1259,6 +1505,7 @@ function SubscriptionContent({
         onDebugTap={onDebugTap}
         purchasedOnceOnlyTierIds={purchasedOnceOnlyTierIds}
         logoUrl={logoUrl}
+        paymentMethods={paymentMethods}
       />
     );
   }
