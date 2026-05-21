@@ -11,6 +11,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { Loader2, Copy, Check, Upload, X } from 'lucide-react';
 import logoFallback from '@/assets/logo-ugrymova.png';
+import { StripeProviderSettings } from '@/components/admin/StripeProviderSettings';
 
 
 interface AdminSettingsData {
@@ -852,6 +853,9 @@ export default function AdminSettings() {
               </div>
             </CardContent>
           </Card>
+
+          <StripeProviderSettings tenantId={tenantId} tenantSlug={tenantSlug} />
+
 
           {/* Welcome Message */}
           <Card>
