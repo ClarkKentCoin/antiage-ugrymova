@@ -68,7 +68,7 @@ function paymentMethodLabel(method: string | null | undefined): string | null {
     case 'stripe_single':
       return 'Зарубежная карта (Stripe)';
     case 'manual':
-      return 'Вручную';
+      return 'Ручное продление';
     default:
       return null;
   }
