@@ -1146,6 +1146,10 @@ export type Database = {
         }[]
       }
       generate_tenant_slug: { Args: never; Returns: string }
+      get_tenant_payment_provider_secret: {
+        Args: { p_provider_code?: string; p_tenant_id: string }
+        Returns: Json
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]

@@ -56,3 +56,6 @@ verify_jwt = false
 
 [functions.save-payment-provider-secrets]
 verify_jwt = false
+
+[functions.create-stripe-checkout]
+verify_jwt = false
