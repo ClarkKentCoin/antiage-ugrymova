@@ -88,6 +88,9 @@ export function EditTierDialog({ tier, open, onOpenChange }: EditTierDialogProps
         grace_period_enabled: tier.grace_period_enabled ?? true,
         show_in_dashboard: tier.show_in_dashboard ?? false,
         purchase_once_only: tier.purchase_once_only ?? false,
+        stripe_enabled: tier.stripe_enabled ?? false,
+        stripe_price: tier.stripe_price != null ? String(tier.stripe_price) : '',
+        stripe_currency: ((tier.stripe_currency as StripeCurrency) ?? 'EUR'),
       });
     }
   }, [tier]);
@@ -107,6 +110,21 @@ export function EditTierDialog({ tier, open, onOpenChange }: EditTierDialogProps
       is_active: tier.is_active,
     };
 
+    // Validate Stripe pricing
+    let stripePriceValue: number | null = null;
+    if (formData.stripe_enabled) {
+      const parsed = parseFloat(formData.stripe_price);
+      if (!parsed || isNaN(parsed) || parsed <= 0) {
+        toast({
+          title: 'Ошибка',
+          description: 'Укажите цену Stripe больше 0 или отключите оплату зарубежными картами.',
+          variant: 'destructive',
+        });
+        return;
+      }
+      stripePriceValue = parsed;
+    }
+
     updateTier.mutate({
       id: tier.id,
       name: formData.name,
@@ -120,6 +138,9 @@ export function EditTierDialog({ tier, open, onOpenChange }: EditTierDialogProps
       interval_unit: formData.interval_unit,
       interval_count: intervalCount,
       billing_timezone: formData.billing_timezone,
+      stripe_enabled: formData.stripe_enabled,
+      stripe_price: stripePriceValue,
+      stripe_currency: formData.stripe_currency,
     }, {
       onSuccess: () => {
         logEvent({
