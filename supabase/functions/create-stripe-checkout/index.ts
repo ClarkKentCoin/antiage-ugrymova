@@ -337,6 +337,7 @@ serve(async (req) => {
         stripe_data: {
           created_at: new Date().toISOString(),
           mode: provider.mode,
+          legal_acceptance: safeLegalAcceptance,
         },
       })
       .select("id")
