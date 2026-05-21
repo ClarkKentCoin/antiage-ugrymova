@@ -757,6 +757,15 @@ function NewUserView({
       return;
     }
 
+    if (selectedMethod === 'stripe' && (!stripeTermsAccepted || !stripeImmediateAccepted)) {
+      toast({
+        title: 'Требуется согласие',
+        description: 'Подтвердите условия оплаты и доступа перед переходом к Stripe.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     if (!telegramUserId) {
       toast({ title: 'Ошибка', description: 'Не удалось определить Telegram пользователя', variant: 'destructive' });
       return;
@@ -774,6 +783,7 @@ function NewUserView({
           tenantSlug: getPublicTenantSlug(),
           initData: tgInitData,
           subscriberId: subscriber?.id ?? null,
+          legalAcceptance: buildStripeLegalAcceptance(),
         });
         if (error) throw error;
         if (data?.checkout_url) {
@@ -785,6 +795,7 @@ function NewUserView({
         }
         return;
       }
+
 
       // Robokassa (default)
       const body: Record<string, unknown> = {
