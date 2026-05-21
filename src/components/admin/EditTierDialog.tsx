@@ -21,10 +21,12 @@ import {
   SubscriptionTier, 
   useUpdateTier, 
   IntervalUnit, 
+  StripeCurrency,
   deriveIntervalFromDays,
   computeDurationDays 
 } from '@/hooks/useSubscriptionTiers';
 import { logEvent, generateRequestId } from '@/lib/logger';
+import { useToast } from '@/hooks/use-toast';
 
 interface EditTierDialogProps {
   tier: SubscriptionTier;
