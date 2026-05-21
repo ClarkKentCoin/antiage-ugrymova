@@ -133,7 +133,8 @@ serve(async (req) => {
         event_type: unverifiedEvent.type ?? null,
         service: metadata.service ?? null,
         delivery_platform: metadata.delivery_platform ?? null,
-        product: metadata.product ?? null,
+        product_type: metadata.product_type ?? null,
+        product_name: metadata.product_name ?? null,
       },
     });
     return new Response("ignored_foreign_service", { status: 200 });
@@ -265,7 +266,8 @@ serve(async (req) => {
         event_type: eventType ?? null,
         service: metadata.service ?? null,
         delivery_platform: metadata.delivery_platform ?? null,
-        product: metadata.product ?? null,
+        product_type: metadata.product_type ?? null,
+        product_name: metadata.product_name ?? null,
         stripe_checkout_session_id: sessionId,
         stripe_payment_intent_id: paymentIntentId,
       },
