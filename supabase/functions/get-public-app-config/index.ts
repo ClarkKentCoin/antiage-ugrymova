@@ -55,6 +55,28 @@ serve(async (req) => {
       );
     }
 
+    // Safe public payment method availability. Never expose secrets/Vault.
+    let stripeEnabled = false;
+    let stripeMode: "test" | "live" | null = null;
+    try {
+      const { data: stripeProvider } = await supabaseAdmin
+        .from("tenant_payment_providers")
+        .select("is_enabled, mode, public_config")
+        .eq("tenant_id", tenantId)
+        .eq("provider_code", "stripe")
+        .maybeSingle();
+      if (stripeProvider) {
+        const pub = (stripeProvider.public_config ?? {}) as Record<string, unknown>;
+        const hasPk = typeof pub.publishable_key === "string" && (pub.publishable_key as string).length > 0;
+        const hasSk = pub.has_secret_key === true;
+        const hasWs = pub.has_webhook_secret === true;
+        stripeEnabled = !!stripeProvider.is_enabled && hasPk && hasSk && hasWs;
+        stripeMode = (stripeProvider.mode as "test" | "live") ?? null;
+      }
+    } catch (e) {
+      console.error("[get-public-app-config] stripe provider lookup failed:", e);
+    }
+
     return new Response(
       JSON.stringify({
         tenant_id: tenantId,
@@ -65,6 +87,19 @@ serve(async (req) => {
         payment_link: settings?.payment_link ?? null,
         logo_url: settings?.logo_url ?? null,
         canonical_base_url: getCanonicalAppBaseUrl(),
+        payment_methods: {
+          robokassa: {
+            enabled: true,
+            label: "Российская карта",
+            provider: "robokassa",
+          },
+          stripe: {
+            enabled: stripeEnabled,
+            label: "Зарубежная карта",
+            provider: "stripe",
+            mode: stripeMode,
+          },
+        },
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
