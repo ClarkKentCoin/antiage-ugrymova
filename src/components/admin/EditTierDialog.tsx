@@ -21,10 +21,12 @@ import {
   SubscriptionTier, 
   useUpdateTier, 
   IntervalUnit, 
+  StripeCurrency,
   deriveIntervalFromDays,
   computeDurationDays 
 } from '@/hooks/useSubscriptionTiers';
 import { logEvent, generateRequestId } from '@/lib/logger';
+import { useToast } from '@/hooks/use-toast';
 
 interface EditTierDialogProps {
   tier: SubscriptionTier;
@@ -41,6 +43,7 @@ const INTERVAL_UNIT_OPTIONS: { value: IntervalUnit; label: string }[] = [
 
 export function EditTierDialog({ tier, open, onOpenChange }: EditTierDialogProps) {
   const updateTier = useUpdateTier();
+  const { toast } = useToast();
 
   const [formData, setFormData] = useState({
     name: '',
@@ -53,6 +56,9 @@ export function EditTierDialog({ tier, open, onOpenChange }: EditTierDialogProps
     grace_period_enabled: true,
     show_in_dashboard: false,
     purchase_once_only: false,
+    stripe_enabled: false,
+    stripe_price: '',
+    stripe_currency: 'EUR' as StripeCurrency,
   });
 
   useEffect(() => {
@@ -82,6 +88,9 @@ export function EditTierDialog({ tier, open, onOpenChange }: EditTierDialogProps
         grace_period_enabled: tier.grace_period_enabled ?? true,
         show_in_dashboard: tier.show_in_dashboard ?? false,
         purchase_once_only: tier.purchase_once_only ?? false,
+        stripe_enabled: tier.stripe_enabled ?? false,
+        stripe_price: tier.stripe_price != null ? String(tier.stripe_price) : '',
+        stripe_currency: ((tier.stripe_currency as StripeCurrency) ?? 'EUR'),
       });
     }
   }, [tier]);
@@ -101,6 +110,21 @@ export function EditTierDialog({ tier, open, onOpenChange }: EditTierDialogProps
       is_active: tier.is_active,
     };
 
+    // Validate Stripe pricing
+    let stripePriceValue: number | null = null;
+    if (formData.stripe_enabled) {
+      const parsed = parseFloat(formData.stripe_price);
+      if (!parsed || isNaN(parsed) || parsed <= 0) {
+        toast({
+          title: 'Ошибка',
+          description: 'Укажите цену Stripe больше 0 или отключите оплату зарубежными картами.',
+          variant: 'destructive',
+        });
+        return;
+      }
+      stripePriceValue = parsed;
+    }
+
     updateTier.mutate({
       id: tier.id,
       name: formData.name,
@@ -114,6 +138,9 @@ export function EditTierDialog({ tier, open, onOpenChange }: EditTierDialogProps
       interval_unit: formData.interval_unit,
       interval_count: intervalCount,
       billing_timezone: formData.billing_timezone,
+      stripe_enabled: formData.stripe_enabled,
+      stripe_price: stripePriceValue,
+      stripe_currency: formData.stripe_currency,
     }, {
       onSuccess: () => {
         logEvent({
@@ -205,7 +232,7 @@ export function EditTierDialog({ tier, open, onOpenChange }: EditTierDialogProps
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="price">Цена (₽) *</Label>
+            <Label htmlFor="price">Цена Robokassa (₽) *</Label>
             <Input
               id="price"
               type="number"
@@ -215,7 +242,61 @@ export function EditTierDialog({ tier, open, onOpenChange }: EditTierDialogProps
               min="0"
               step="0.01"
             />
+            <p className="text-xs text-muted-foreground">
+              Цена для российских карт / Robokassa
+            </p>
           </div>
+
+          <div className="rounded-md border border-border p-4 space-y-3">
+            <div>
+              <h4 className="text-sm font-semibold">Зарубежные карты / Stripe</h4>
+              <p className="text-xs text-muted-foreground mt-1">
+                Отдельная цена для оплаты зарубежными картами через Stripe. Основная цена тарифа в рублях не изменяется.
+              </p>
+            </div>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="stripe_enabled" className="pr-3">
+                Принимать оплату зарубежными картами через Stripe
+              </Label>
+              <Switch
+                id="stripe_enabled"
+                checked={formData.stripe_enabled}
+                onCheckedChange={(checked) => setFormData({ ...formData, stripe_enabled: checked })}
+              />
+            </div>
+            {formData.stripe_enabled && (
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-2">
+                  <Label htmlFor="stripe_price">Цена Stripe</Label>
+                  <Input
+                    id="stripe_price"
+                    type="number"
+                    placeholder="49.00"
+                    value={formData.stripe_price}
+                    onChange={(e) => setFormData({ ...formData, stripe_price: e.target.value })}
+                    min="0"
+                    step="0.01"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="stripe_currency">Валюта</Label>
+                  <Select
+                    value={formData.stripe_currency}
+                    onValueChange={(value: StripeCurrency) => setFormData({ ...formData, stripe_currency: value })}
+                  >
+                    <SelectTrigger id="stripe_currency">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="EUR">EUR</SelectItem>
+                      <SelectItem value="USD">USD</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            )}
+          </div>
+
 
           <div className="space-y-2">
             <Label htmlFor="billing_timezone">Часовой пояс</Label>

@@ -17,8 +17,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { useCreateTier, IntervalUnit, computeDurationDays } from '@/hooks/useSubscriptionTiers';
+import { useCreateTier, IntervalUnit, StripeCurrency, computeDurationDays } from '@/hooks/useSubscriptionTiers';
 import { logEvent, generateRequestId } from '@/lib/logger';
+import { useToast } from '@/hooks/use-toast';
 
 interface CreateTierDialogProps {
   open: boolean;
@@ -34,6 +35,7 @@ const INTERVAL_UNIT_OPTIONS: { value: IntervalUnit; label: string }[] = [
 
 export function CreateTierDialog({ open, onOpenChange }: CreateTierDialogProps) {
   const createTier = useCreateTier();
+  const { toast } = useToast();
 
   const [formData, setFormData] = useState({
     name: '',
@@ -46,6 +48,9 @@ export function CreateTierDialog({ open, onOpenChange }: CreateTierDialogProps) 
     grace_period_enabled: true,
     show_in_dashboard: false,
     purchase_once_only: false,
+    stripe_enabled: false,
+    stripe_price: '',
+    stripe_currency: 'EUR' as StripeCurrency,
   });
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -54,6 +59,21 @@ export function CreateTierDialog({ open, onOpenChange }: CreateTierDialogProps) 
     const intervalCount = parseInt(formData.interval_count) || 1;
     const durationDays = computeDurationDays(formData.interval_unit, intervalCount);
     const requestId = generateRequestId();
+
+    // Validate Stripe pricing
+    let stripePriceValue: number | null = null;
+    if (formData.stripe_enabled) {
+      const parsed = parseFloat(formData.stripe_price);
+      if (!parsed || isNaN(parsed) || parsed <= 0) {
+        toast({
+          title: 'Ошибка',
+          description: 'Укажите цену Stripe больше 0 или отключите оплату зарубежными картами.',
+          variant: 'destructive',
+        });
+        return;
+      }
+      stripePriceValue = parsed;
+    }
 
     createTier.mutate({
       name: formData.name,
@@ -67,6 +87,9 @@ export function CreateTierDialog({ open, onOpenChange }: CreateTierDialogProps) 
       interval_unit: formData.interval_unit,
       interval_count: intervalCount,
       billing_timezone: formData.billing_timezone,
+      stripe_enabled: formData.stripe_enabled,
+      stripe_price: stripePriceValue,
+      stripe_currency: formData.stripe_currency,
     }, {
       onSuccess: (data) => {
         logEvent({
@@ -81,6 +104,9 @@ export function CreateTierDialog({ open, onOpenChange }: CreateTierDialogProps) 
             interval_unit: formData.interval_unit,
             interval_count: intervalCount,
             is_active: formData.is_active,
+            stripe_enabled: formData.stripe_enabled,
+            stripe_price: stripePriceValue,
+            stripe_currency: formData.stripe_currency,
           },
         });
         onOpenChange(false);
@@ -95,6 +121,9 @@ export function CreateTierDialog({ open, onOpenChange }: CreateTierDialogProps) 
           grace_period_enabled: true,
           show_in_dashboard: false,
           purchase_once_only: false,
+          stripe_enabled: false,
+          stripe_price: '',
+          stripe_currency: 'EUR',
         });
       },
       onError: (error) => {
@@ -169,7 +198,7 @@ export function CreateTierDialog({ open, onOpenChange }: CreateTierDialogProps) 
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="price">Цена (₽) *</Label>
+            <Label htmlFor="price">Цена Robokassa (₽) *</Label>
             <Input
               id="price"
               type="number"
@@ -180,7 +209,61 @@ export function CreateTierDialog({ open, onOpenChange }: CreateTierDialogProps) 
               min="0"
               step="0.01"
             />
+            <p className="text-xs text-muted-foreground">
+              Цена для российских карт / Robokassa
+            </p>
           </div>
+
+          <div className="rounded-md border border-border p-4 space-y-3">
+            <div>
+              <h4 className="text-sm font-semibold">Зарубежные карты / Stripe</h4>
+              <p className="text-xs text-muted-foreground mt-1">
+                Отдельная цена для оплаты зарубежными картами через Stripe. Основная цена тарифа в рублях не изменяется.
+              </p>
+            </div>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="stripe_enabled" className="pr-3">
+                Принимать оплату зарубежными картами через Stripe
+              </Label>
+              <Switch
+                id="stripe_enabled"
+                checked={formData.stripe_enabled}
+                onCheckedChange={(checked) => setFormData({ ...formData, stripe_enabled: checked })}
+              />
+            </div>
+            {formData.stripe_enabled && (
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-2">
+                  <Label htmlFor="stripe_price">Цена Stripe</Label>
+                  <Input
+                    id="stripe_price"
+                    type="number"
+                    placeholder="49.00"
+                    value={formData.stripe_price}
+                    onChange={(e) => setFormData({ ...formData, stripe_price: e.target.value })}
+                    min="0"
+                    step="0.01"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="stripe_currency">Валюта</Label>
+                  <Select
+                    value={formData.stripe_currency}
+                    onValueChange={(value: StripeCurrency) => setFormData({ ...formData, stripe_currency: value })}
+                  >
+                    <SelectTrigger id="stripe_currency">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="EUR">EUR</SelectItem>
+                      <SelectItem value="USD">USD</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            )}
+          </div>
+
 
           <div className="space-y-2">
             <Label htmlFor="billing_timezone">Часовой пояс</Label>
