@@ -227,12 +227,23 @@ serve(async (req) => {
 
     const { data: tier, error: tierErr } = await supabaseAdmin
       .from("subscription_tiers")
-      .select("id, name, description, price, purchase_once_only, is_active")
+      .select("id, name, description, price, purchase_once_only, is_active, stripe_enabled, stripe_price, stripe_currency")
       .eq("id", tier_id)
       .eq("tenant_id", tenantId)
       .maybeSingle();
     if (tierErr || !tier) return json({ error: "Subscription tier not found" }, 404);
     if (!tier.is_active) return json({ error: "tier_inactive" }, 400);
+
+    if (tier.stripe_enabled !== true) {
+      return json({ error: "stripe_tier_not_enabled", message: "Stripe is not enabled for this tariff." }, 400);
+    }
+    const stripeAmount = Number(tier.stripe_price);
+    if (!Number.isFinite(stripeAmount) || stripeAmount <= 0) {
+      return json({ error: "invalid_stripe_tier_price", message: "Stripe price is not configured for this tariff." }, 400);
+    }
+    if (!tier.stripe_currency || !String(tier.stripe_currency).trim()) {
+      return json({ error: "invalid_stripe_currency", message: "Stripe currency is not configured for this tariff." }, 400);
+    }
 
     // purchase_once_only check
     if (tier.purchase_once_only) {
