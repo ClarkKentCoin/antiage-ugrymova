@@ -623,6 +623,7 @@ function NewUserView({
   onDebugTap,
   purchasedOnceOnlyTierIds = new Set(),
   logoUrl,
+  paymentMethods,
 }: {
   channelInfo: { name: string; description: string } | null;
   tiers: any[];
@@ -632,6 +633,7 @@ function NewUserView({
   onDebugTap?: () => void;
   purchasedOnceOnlyTierIds?: Set<string>;
   logoUrl?: string | null;
+  paymentMethods: PaymentMethodsConfig;
 }) {
   const [selectedTier, setSelectedTier] = useState<string | null>(null);
   const [autoRenewal, setAutoRenewal] = useState(false);
