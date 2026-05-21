@@ -386,9 +386,20 @@ serve(async (req) => {
       tier_id: tier_id,
       payment_id: payment.id,
       invoice_id: invoiceId,
+      legal_terms_accepted: "true",
+      immediate_access_accepted: "true",
+      terms_url: safeLegalAcceptance.terms_url,
+      refund_policy_url: safeLegalAcceptance.refund_policy_url,
+      subscription_terms_url: safeLegalAcceptance.subscription_terms_url,
     };
 
     // Create Stripe Checkout Session via REST
+    // NOTE: Stripe Dashboard should also be configured manually:
+    //   - Public details: website / support info
+    //   - Terms of Service URL
+    //   - Privacy Policy URL
+    //   - Refund Policy URL
+    //   - Legal policies enabled in Checkout Settings
     const form = new URLSearchParams();
     form.set("mode", "payment");
     form.set("payment_method_types[0]", "card");
@@ -405,6 +416,17 @@ serve(async (req) => {
     const desc = (tier.description && String(tier.description).trim())
       || "Telegram channel subscription";
     form.set("line_items[0][price_data][product_data][description]", desc);
+
+    // Require Terms of Service acceptance on Stripe Checkout
+    form.set("consent_collection[terms_of_service]", "required");
+    form.set(
+      "custom_text[terms_of_service_acceptance][message]",
+      "I agree to the [Terms of Service](https://club.ugrymova.ru/en/terms), [Subscription Terms](https://club.ugrymova.ru/en/subscription-terms), [Privacy Policy](https://club.ugrymova.ru/en/privacy-policy), and [Refund Policy](https://club.ugrymova.ru/en/refund-policy). I request immediate access to the digital Telegram club after payment confirmation.",
+    );
+    form.set(
+      "custom_text[submit][message]",
+      "After payment confirmation, access is provided through the Telegram bot / Mini App. Please review the refund and subscription terms before paying.",
+    );
 
     for (const [k, v] of Object.entries(metadata)) {
       form.set(`metadata[${k}]`, v);
