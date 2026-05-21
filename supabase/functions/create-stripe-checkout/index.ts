@@ -525,6 +525,19 @@ serve(async (req) => {
           created_at: new Date().toISOString(),
           mode: provider.mode,
           legal_acceptance: safeLegalAcceptance,
+          service_routing: {
+            service: SERVICE_ROUTING.service,
+            delivery_platform: SERVICE_ROUTING.delivery_platform,
+            product: SERVICE_ROUTING.product,
+            metadata_version: 1,
+            tenant_id: tenantId,
+            subscriber_id: resolvedSubscriberId,
+            tier_id,
+            payment_id: payment.id,
+            telegram_user_id: subscriber.telegram_user_id ? String(subscriber.telegram_user_id) : null,
+            channel_name: channelName || null,
+            telegram_channel_id: telegramChannelId || null,
+          },
         },
       })
       .eq("id", payment.id);
