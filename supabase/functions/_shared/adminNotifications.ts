@@ -20,6 +20,7 @@ export type AdminNotificationEventType =
 
 export type AdminNotificationSource =
   | "robokassa-webhook"
+  | "stripe-webhook"
   | "notify-upcoming-payments"
   | "check-expired-subscriptions"
   | "process-recurring-payments"
