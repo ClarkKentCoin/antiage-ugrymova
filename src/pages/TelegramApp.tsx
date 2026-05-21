@@ -639,15 +639,20 @@ function NewUserView({
   const [autoRenewal, setAutoRenewal] = useState(false);
   const [consentGiven, setConsentGiven] = useState(false);
   const [generatingLink, setGeneratingLink] = useState(false);
+  const [selectedMethod, setSelectedMethod] = useState<SelectedMethod>('robokassa');
   const { toast } = useToast();
+
+  // Force Robokassa when auto-renewal is on (Stripe path has no recurring support here).
+  useEffect(() => {
+    if (autoRenewal && selectedMethod !== 'robokassa') setSelectedMethod('robokassa');
+  }, [autoRenewal, selectedMethod]);
 
   const handleSelectTier = (tierId: string) => {
     if (purchasedOnceOnlyTierIds.has(tierId)) return;
     setSelectedTier(tierId);
-    // Force disable auto-renewal for purchase_once_only tiers
-    const tier = tiers.find((t: any) => t.id === tierId);
     setAutoRenewal(false);
     setConsentGiven(false);
+    setSelectedMethod('robokassa');
   };
 
   const handlePayment = async () => {
