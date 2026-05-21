@@ -63,16 +63,14 @@ export function StripePaymentSuccessPage() {
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            Спасибо! Платёж принят. Доступ к закрытому каналу выдаётся автоматически только
-            после подтверждения платежа банком и нашей системой.
+            Оплата успешна. Если доступ уже подтвержден, ссылка для входа в канал отправлена вам в Telegram-бот.
           </p>
           <p className="text-sm text-muted-foreground">
-            Как только оплата будет подтверждена, ссылка-приглашение придёт вам прямо в чат
-            с Telegram-ботом. Пожалуйста, вернитесь в Telegram-бот, чтобы получить доступ.
+            Вернитесь в Telegram-бот: доступ и ссылка-приглашение выдаются только после серверного подтверждения платежа.
           </p>
           {botUrl ? (
             <Button asChild className="w-full">
-              <a href={botUrl}>Открыть Telegram-бот</a>
+              <a href={botUrl}>Вернуться в Telegram-бот</a>
             </Button>
           ) : (
             <div className="rounded-md border bg-muted/40 p-3 text-sm text-center">
