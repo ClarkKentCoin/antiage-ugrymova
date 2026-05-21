@@ -1229,6 +1229,7 @@ function SubscriptionContent({
   onDebugTap,
   purchasedOnceOnlyTierIds = new Set(),
   logoUrl,
+  paymentMethods = DEFAULT_PAYMENT_METHODS,
 }: {
   subscriber: any; 
   isLoading: boolean;
@@ -1248,6 +1249,7 @@ function SubscriptionContent({
   onDebugTap?: () => void;
   purchasedOnceOnlyTierIds?: Set<string>;
   logoUrl?: string | null;
+  paymentMethods?: PaymentMethodsConfig;
 }) {
   const [selectedTier, setSelectedTier] = useState<string | null>(null);
   const [autoRenewal, setAutoRenewal] = useState(false);
