@@ -294,10 +294,8 @@ serve(async (req) => {
     const stripeSecretKey = (secretData as any)?.stripe_secret_key as string | undefined;
     if (!stripeSecretKey) return json({ error: "stripe_not_configured" }, 400);
 
-    // Build invoice id and price
-    const price = Number(tier.price);
-    if (!Number.isFinite(price) || price <= 0) return json({ error: "invalid_tier_price" }, 400);
-    const unitAmount = Math.round(price * 100);
+    // Build invoice id and Stripe price (separate from Robokassa/RUB price)
+    const unitAmount = Math.round(stripeAmount * 100);
 
     const invoiceId = `stripe_${Date.now()}_${Math.floor(Math.random() * 1_000_000)}`;
 
@@ -307,7 +305,7 @@ serve(async (req) => {
       .insert({
         subscriber_id: resolvedSubscriberId,
         tier_id,
-        amount: price,
+        amount: stripeAmount,
         currency: currencyUpper,
         invoice_id: invoiceId,
         transaction_type: "initial",
