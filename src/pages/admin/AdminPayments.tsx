@@ -35,8 +35,22 @@ const paymentMethodLabels: Record<string, string> = {
   robokassa: 'Robokassa',
   robokassa_single: 'Robokassa',
   robokassa_recurring: 'Robokassa (рек.)',
+  stripe_single: 'Stripe',
   other: 'Other',
 };
+
+function formatPaymentAmount(amount: number | string, currency?: string | null): string {
+  const num = Number(amount);
+  const cur = (currency || 'RUB').toUpperCase();
+  if (cur === 'RUB') {
+    return `${num.toLocaleString('ru-RU')}₽`;
+  }
+  if (cur === 'EUR' || cur === 'USD') {
+    return `${num} ${cur}`;
+  }
+  return `${num} ${cur}`;
+}
+
 
 const statusConfig: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
   completed: { label: 'Оплачено', variant: 'default' },
