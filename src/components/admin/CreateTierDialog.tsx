@@ -60,6 +60,21 @@ export function CreateTierDialog({ open, onOpenChange }: CreateTierDialogProps) 
     const durationDays = computeDurationDays(formData.interval_unit, intervalCount);
     const requestId = generateRequestId();
 
+    // Validate Stripe pricing
+    let stripePriceValue: number | null = null;
+    if (formData.stripe_enabled) {
+      const parsed = parseFloat(formData.stripe_price);
+      if (!parsed || isNaN(parsed) || parsed <= 0) {
+        toast({
+          title: 'Ошибка',
+          description: 'Укажите цену Stripe больше 0 или отключите оплату зарубежными картами.',
+          variant: 'destructive',
+        });
+        return;
+      }
+      stripePriceValue = parsed;
+    }
+
     createTier.mutate({
       name: formData.name,
       description: formData.description || undefined,
@@ -72,6 +87,9 @@ export function CreateTierDialog({ open, onOpenChange }: CreateTierDialogProps) 
       interval_unit: formData.interval_unit,
       interval_count: intervalCount,
       billing_timezone: formData.billing_timezone,
+      stripe_enabled: formData.stripe_enabled,
+      stripe_price: stripePriceValue,
+      stripe_currency: formData.stripe_currency,
     }, {
       onSuccess: (data) => {
         logEvent({
@@ -86,6 +104,9 @@ export function CreateTierDialog({ open, onOpenChange }: CreateTierDialogProps) 
             interval_unit: formData.interval_unit,
             interval_count: intervalCount,
             is_active: formData.is_active,
+            stripe_enabled: formData.stripe_enabled,
+            stripe_price: stripePriceValue,
+            stripe_currency: formData.stripe_currency,
           },
         });
         onOpenChange(false);
@@ -100,6 +121,9 @@ export function CreateTierDialog({ open, onOpenChange }: CreateTierDialogProps) 
           grace_period_enabled: true,
           show_in_dashboard: false,
           purchase_once_only: false,
+          stripe_enabled: false,
+          stripe_price: '',
+          stripe_currency: 'EUR',
         });
       },
       onError: (error) => {
