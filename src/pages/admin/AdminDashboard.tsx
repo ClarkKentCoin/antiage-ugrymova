@@ -66,15 +66,19 @@ export default function AdminDashboard() {
   const thisMonthRevenueByCurrency = sumByCurrency(thisMonthPayments as any);
   const totalRevenueByCurrency = sumByCurrency((payments || []) as any);
 
-  const currencyOrder = Array.from(
-    new Set([
-      'RUB',
-      'EUR',
-      'USD',
-      ...Object.keys(thisMonthRevenueByCurrency),
-      ...Object.keys(totalRevenueByCurrency),
-    ])
-  );
+  const isRub = (p: any) => {
+    const c = (p.currency || 'RUB').toUpperCase();
+    return c === 'RUB';
+  };
+  const isEur = (p: any) => (p.currency || '').toUpperCase() === 'EUR';
+
+  const paymentsList = payments || [];
+  const rubOneTimeCount = paymentsList.filter(p => isRub(p) && (p.payment_method === 'manual' || p.payment_method === 'robokassa_single')).length;
+  const rubRecurringCount = paymentsList.filter(p => isRub(p) && p.payment_method === 'robokassa_recurring').length;
+  const eurOneTimeCount = paymentsList.filter(p => isEur(p) && p.payment_method === 'stripe_single').length;
+  const eurRecurringCount = paymentsList.filter(p => isEur(p) && p.payment_method === 'stripe_recurring').length;
+  const totalOneTimeCount = paymentsList.filter(p => ['manual', 'robokassa_single', 'stripe_single'].includes(p.payment_method)).length;
+  const totalRecurringCount = paymentsList.filter(p => ['robokassa_recurring', 'stripe_recurring'].includes(p.payment_method)).length;
 
   if (loadingSubscribers || loadingPayments || loadingTiers) {
     return (
@@ -113,7 +117,7 @@ export default function AdminDashboard() {
             icon={AlertTriangle}
             trend={expiringSoon > 0 ? 'down' : 'neutral'}
           />
-          {currencyOrder.map(cur => (
+          {(['RUB', 'EUR'] as const).map(cur => (
             <StatsCard
               key={`month-${cur}`}
               title={`This Month ${cur}`}
@@ -122,7 +126,7 @@ export default function AdminDashboard() {
               icon={cur === 'RUB' ? Banknote : CreditCard}
             />
           ))}
-          {currencyOrder.map(cur => (
+          {(['RUB', 'EUR'] as const).map(cur => (
             <StatsCard
               key={`total-${cur}`}
               title={`Total ${cur}`}
@@ -135,15 +139,39 @@ export default function AdminDashboard() {
 
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <StatsCard
-            title="Single Payment"
-            value={singlePaymentUsers}
-            description="Manual / one-time"
+            title="RUB One-time"
+            value={rubOneTimeCount}
+            description="Robokassa / manual"
             icon={Banknote}
           />
           <StatsCard
-            title="Recurrent Payment"
-            value={recurrentPaymentUsers}
-            description="Auto-renewal"
+            title="RUB Recurring"
+            value={rubRecurringCount}
+            description="Robokassa auto-renewal"
+            icon={Repeat}
+          />
+          <StatsCard
+            title="EUR One-time"
+            value={eurOneTimeCount}
+            description="Stripe"
+            icon={CreditCard}
+          />
+          <StatsCard
+            title="EUR Recurring"
+            value={eurRecurringCount}
+            description="Stripe auto-renewal"
+            icon={Repeat}
+          />
+          <StatsCard
+            title="Total One-time"
+            value={totalOneTimeCount}
+            description="All one-time payments"
+            icon={Banknote}
+          />
+          <StatsCard
+            title="Total Recurring"
+            value={totalRecurringCount}
+            description="All recurring payments"
             icon={Repeat}
           />
         </div>
