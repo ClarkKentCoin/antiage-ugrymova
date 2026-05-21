@@ -1198,7 +1198,13 @@ function GracePeriodView({
       console.error('Error generating payment link:', error);
       const { code: errorCode, message: errorMessage } = parseEdgeError(error);
       const securityCodes = new Set(['invalid_init_data', 'user_id_mismatch', 'telegram_bot_not_configured']);
-      if (errorCode && STRIPE_UNAVAILABLE_CODES.has(errorCode)) {
+      if (errorCode === 'legal_consent_required') {
+        toast({
+          title: 'Требуется согласие',
+          description: 'Подтвердите условия оплаты и доступа перед переходом к Stripe.',
+          variant: 'destructive',
+        });
+      } else if (errorCode && STRIPE_UNAVAILABLE_CODES.has(errorCode)) {
         toast({
           title: 'Stripe недоступен',
           description: 'Оплата зарубежной картой временно недоступна. Выберите российскую карту или попробуйте позже.',
