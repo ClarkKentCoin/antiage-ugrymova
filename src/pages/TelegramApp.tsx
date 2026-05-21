@@ -159,6 +159,7 @@ async function invokeStripeCheckout(args: {
   tenantSlug: string | null;
   initData: string;
   subscriberId?: string | null;
+  legalAcceptance?: Record<string, unknown> | null;
 }) {
   const body: Record<string, unknown> = {
     tier_id: args.tierId,
@@ -167,7 +168,84 @@ async function invokeStripeCheckout(args: {
     init_data: args.initData,
   };
   if (args.subscriberId) body.subscriber_id = args.subscriberId;
+  if (args.legalAcceptance) body.legal_acceptance = args.legalAcceptance;
   return supabase.functions.invoke('create-stripe-checkout', { body });
+}
+
+const STRIPE_LEGAL_URLS = {
+  terms_url: 'https://club.ugrymova.ru/en/terms',
+  subscription_terms_url: 'https://club.ugrymova.ru/en/subscription-terms',
+  privacy_policy_url: 'https://club.ugrymova.ru/en/privacy-policy',
+  refund_policy_url: 'https://club.ugrymova.ru/en/refund-policy',
+  legal_notice_url: 'https://club.ugrymova.ru/en/legal-notice',
+  international_payments_url: 'https://club.ugrymova.ru/en/international-payments',
+} as const;
+
+function buildStripeLegalAcceptance() {
+  return {
+    terms_accepted: true,
+    immediate_access_accepted: true,
+    accepted_at: new Date().toISOString(),
+    ...STRIPE_LEGAL_URLS,
+  };
+}
+
+function StripeLegalBlock({
+  idPrefix,
+  termsAccepted,
+  immediateAccessAccepted,
+  onTermsChange,
+  onImmediateChange,
+}: {
+  idPrefix: string;
+  termsAccepted: boolean;
+  immediateAccessAccepted: boolean;
+  onTermsChange: (v: boolean) => void;
+  onImmediateChange: (v: boolean) => void;
+}) {
+  const linkCls = 'text-primary underline';
+  const link = (href: string, label: string) => (
+    <a href={href} target="_blank" rel="noopener noreferrer" className={linkCls} onClick={(e) => e.stopPropagation()}>
+      {label}
+    </a>
+  );
+  return (
+    <div className="space-y-3 p-4 rounded-lg bg-muted/40 border border-border">
+      <p className="text-sm font-medium">Перед оплатой зарубежной картой</p>
+      <p className="text-xs text-muted-foreground leading-relaxed">
+        Оплата зарубежной картой проходит через Stripe. Доступ к Telegram-клубу будет выдан после подтверждения платежа.
+      </p>
+      <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs">
+        {link(STRIPE_LEGAL_URLS.terms_url, 'Terms of Service')}
+        {link(STRIPE_LEGAL_URLS.subscription_terms_url, 'Subscription Terms')}
+        {link(STRIPE_LEGAL_URLS.privacy_policy_url, 'Privacy Policy')}
+        {link(STRIPE_LEGAL_URLS.refund_policy_url, 'Refund Policy')}
+        {link(STRIPE_LEGAL_URLS.legal_notice_url, 'Legal Notice')}
+        {link(STRIPE_LEGAL_URLS.international_payments_url, 'International Payments')}
+      </div>
+      <div className="flex items-start space-x-3">
+        <Checkbox
+          id={`${idPrefix}-stripe-terms`}
+          checked={termsAccepted}
+          onCheckedChange={(c) => onTermsChange(c === true)}
+        />
+        <Label htmlFor={`${idPrefix}-stripe-terms`} className="text-xs cursor-pointer leading-snug">
+          I have read and agree to the Terms of Service, Subscription Terms, Privacy Policy and Refund Policy.
+        </Label>
+      </div>
+      <div className="flex items-start space-x-3">
+        <Checkbox
+          id={`${idPrefix}-stripe-immediate`}
+          checked={immediateAccessAccepted}
+          onCheckedChange={(c) => onImmediateChange(c === true)}
+        />
+        <Label htmlFor={`${idPrefix}-stripe-immediate`} className="text-xs cursor-pointer leading-snug">
+          I request immediate access to the digital Telegram club after payment confirmation and acknowledge that
+          refund/withdrawal conditions are described in the Refund Policy and Subscription Terms.
+        </Label>
+      </div>
+    </div>
+  );
 }
 
 const STRIPE_UNAVAILABLE_CODES = new Set([
