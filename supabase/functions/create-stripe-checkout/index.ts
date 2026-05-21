@@ -344,7 +344,7 @@ serve(async (req) => {
       tier_id,
       tenant_id: tenantId,
       message: "Stripe pending payment created",
-      payload: { payment_id: payment.id, invoice_id: invoiceId, amount: price, currency: currencyUpper, mode: provider.mode },
+      payload: { payment_id: payment.id, invoice_id: invoiceId, amount: stripeAmount, currency: currencyUpper, mode: provider.mode },
     });
 
     // Build URLs
