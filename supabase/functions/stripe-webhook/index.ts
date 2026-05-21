@@ -415,10 +415,7 @@ serve(async (req) => {
       return new Response("payment_not_found", { status: 200 });
     }
 
-    if (payment.status === "completed") {
-      await markEvent("processed", "already_completed");
-      return new Response("already_completed", { status: 200 });
-    }
+    // If payment is in terminal non-completed state — abort
     if (payment.status === "failed" || payment.status === "cancelled") {
       await safeLog(supabaseAdmin, {
         level: "warn", event_type: "payment.webhook_error", source: "stripe", tenant_id: tenantId,
@@ -429,36 +426,52 @@ serve(async (req) => {
       return new Response("payment_not_pending", { status: 200 });
     }
 
-    // Amount/currency validation
-    const expectedCents = Math.round(Number(payment.amount) * 100);
-    const stripeCents = Number(session.amount_total);
-    const amountMatch = expectedCents === stripeCents;
-    const currencyMatch = String(payment.currency || "").toLowerCase() === String(session.currency || "").toLowerCase();
-    if (!amountMatch || !currencyMatch) {
-      const mergedStripe = {
-        ...(payment.stripe_data as Record<string, unknown> ?? {}),
-        webhook_event_id: eventId,
-        amount_mismatch: !amountMatch,
-        currency_mismatch: !currencyMatch,
-        expected_amount_cents: expectedCents,
-        stripe_amount_total: stripeCents,
-        expected_currency: payment.currency,
-        stripe_currency: session.currency,
-        mismatch_at: new Date().toISOString(),
-      };
-      await supabaseAdmin.from("payment_history")
-        .update({ status: "failed", stripe_data: mergedStripe }).eq("id", payment.id);
-      await safeLog(supabaseAdmin, {
-        level: "error", event_type: "payment.webhook_error", source: "stripe",
-        subscriber_id: payment.subscriber_id, tier_id: payment.tier_id, tenant_id: tenantId,
-        message: "Amount/currency mismatch with Stripe session",
-        payload: { event_id: eventId, payment_id: payment.id, expected_amount_cents: expectedCents, stripe_amount_total: stripeCents, expected_currency: payment.currency, stripe_currency: session.currency },
-      });
-      await markEvent("ignored", "amount_or_currency_mismatch");
-      return new Response("amount_mismatch", { status: 200 });
+    const existingStripeData: Record<string, unknown> =
+      (payment.stripe_data as Record<string, unknown>) ?? {};
+    const hasActivationMarker = Boolean(
+      existingStripeData.subscriber_activated_at &&
+        (existingStripeData.computed_subscription_end || existingStripeData.subscription_end),
+    );
+
+    // Fully completed AND activated → safe to return already_completed
+    if (payment.status === "completed" && hasActivationMarker) {
+      await markEvent("processed", "already_completed");
+      return new Response("already_completed", { status: 200 });
     }
 
-    // Livemode vs provider mode
+    // Amount/currency validation — only when payment is still pending (already validated on prior run otherwise)
+    if (payment.status !== "completed") {
+      const expectedCents = Math.round(Number(payment.amount) * 100);
+      const stripeCents = Number(session.amount_total);
+      const amountMatch = expectedCents === stripeCents;
+      const currencyMatch =
+        String(payment.currency || "").toLowerCase() === String(session.currency || "").toLowerCase();
+      if (!amountMatch || !currencyMatch) {
+        const mergedStripe = {
+          ...existingStripeData,
+          webhook_event_id: eventId,
+          amount_mismatch: !amountMatch,
+          currency_mismatch: !currencyMatch,
+          expected_amount_cents: expectedCents,
+          stripe_amount_total: stripeCents,
+          expected_currency: payment.currency,
+          stripe_currency: session.currency,
+          mismatch_at: new Date().toISOString(),
+        };
+        await supabaseAdmin.from("payment_history")
+          .update({ status: "failed", stripe_data: mergedStripe }).eq("id", payment.id);
+        await safeLog(supabaseAdmin, {
+          level: "error", event_type: "payment.webhook_error", source: "stripe",
+          subscriber_id: payment.subscriber_id, tier_id: payment.tier_id, tenant_id: tenantId,
+          message: "Amount/currency mismatch with Stripe session",
+          payload: { event_id: eventId, payment_id: payment.id, expected_amount_cents: expectedCents, stripe_amount_total: stripeCents, expected_currency: payment.currency, stripe_currency: session.currency },
+        });
+        await markEvent("ignored", "amount_or_currency_mismatch");
+        return new Response("amount_mismatch", { status: 200 });
+      }
+    }
+
+    // Livemode vs provider mode (always)
     if (providerMode === "test" && session.livemode === true) {
       await safeLog(supabaseAdmin, {
         level: "error", event_type: "payment.webhook_error", source: "stripe", tenant_id: tenantId,
@@ -478,7 +491,7 @@ serve(async (req) => {
       return new Response("mode_mismatch", { status: 200 });
     }
 
-    // ---------- All validations passed: mark completed + activate ----------
+    // ---------- All validations passed: idempotent fulfillment ----------
     const subscriber = payment.subscribers as any;
     const tier = payment.subscription_tiers as any;
     if (!subscriber || !tier) {
@@ -492,77 +505,58 @@ serve(async (req) => {
     }
 
     const customerEmail = session?.customer_details?.email ?? null;
-    const completedAtISO = new Date().toISOString();
-
-    const mergedStripeData = {
-      ...(payment.stripe_data as Record<string, unknown> ?? {}),
-      webhook_event_id: eventId,
-      checkout_session_id: session.id,
-      payment_intent_id: session.payment_intent ?? null,
-      customer_id: session.customer ?? null,
-      customer_email: customerEmail,
-      payment_status: session.payment_status,
-      session_status: session.status,
-      amount_total: session.amount_total,
-      currency: session.currency,
-      consent_terms_of_service: consentTos,
-      livemode: Boolean(session.livemode),
-      completed_at: completedAtISO,
-      processed_by: "stripe-webhook",
-    };
-
-    const { error: updatePayErr } = await supabaseAdmin
-      .from("payment_history")
-      .update({
-        status: "completed",
-        stripe_checkout_session_id: session.id,
-        stripe_payment_intent_id: session.payment_intent ?? null,
-        stripe_customer_id: session.customer ?? null,
-        payment_date: completedAtISO,
-        stripe_data: mergedStripeData,
-      })
-      .eq("id", payment.id);
-
-    if (updatePayErr) {
-      await safeLog(supabaseAdmin, {
-        level: "error", event_type: "payment.webhook_error", source: "stripe", tenant_id: tenantId,
-        message: "Failed to update payment_history to completed",
-        payload: { event_id: eventId, payment_id: payment.id, error: updatePayErr.message },
-      });
-      await markEvent("error", updatePayErr.message);
-      return new Response("internal_error", { status: 500 });
-    }
-
-    // Update stripe_checkout_sessions
-    if (sessionId) {
-      try {
-        await supabaseAdmin.from("stripe_checkout_sessions").update({
-          status: session.status ?? "complete",
-          stripe_payment_intent_id: session.payment_intent ?? null,
-          stripe_customer_id: session.customer ?? null,
-          updated_at: new Date().toISOString(),
-        }).eq("stripe_checkout_session_id", sessionId);
-      } catch (e) {
-        console.warn("[stripe-webhook] failed to update stripe_checkout_sessions:", e);
-      }
-    }
-
-    // Compute new subscription end
     const nowISO = new Date().toISOString();
+
+    // Load current subscriber state for stacking + telegram flow
     const { data: currentSubscriber } = await supabaseAdmin
       .from("subscribers")
       .select("subscription_start, subscription_end, email, is_in_channel, telegram_user_id, first_name, last_name, telegram_username, status")
       .eq("id", payment.subscriber_id)
       .maybeSingle();
 
+    // Compute OR reuse subscription end (never double-extend on retries)
+    let newEndISO: string;
+    let reusedComputedEnd = false;
+    if (typeof existingStripeData.computed_subscription_end === "string" && existingStripeData.computed_subscription_end) {
+      newEndISO = existingStripeData.computed_subscription_end as string;
+      reusedComputedEnd = true;
+    } else {
+      const currentEndISO = currentSubscriber?.subscription_end ?? null;
+      const intervalUnit = tier.interval_unit || "day";
+      const intervalCount = tier.interval_count || tier.duration_days || 30;
+      const billingTimezone = tier.billing_timezone || "Europe/Moscow";
+      newEndISO = computeNextEndISO(nowISO, currentEndISO, intervalUnit, intervalCount, billingTimezone);
+    }
+
+    // Persist activation plan BEFORE touching the subscriber, so retries reuse the same end
+    let workingStripeData: Record<string, unknown> = { ...existingStripeData };
+    if (!reusedComputedEnd) {
+      workingStripeData = {
+        ...existingStripeData,
+        activation_started_at: existingStripeData.activation_started_at ?? nowISO,
+        activation_base_subscription_end: currentSubscriber?.subscription_end ?? null,
+        computed_subscription_end: newEndISO,
+        activation_plan_created_by: "stripe-webhook",
+        webhook_event_id: eventId,
+        checkout_session_id: session.id,
+      };
+      const { error: planErr } = await supabaseAdmin
+        .from("payment_history")
+        .update({ stripe_data: workingStripeData })
+        .eq("id", payment.id);
+      if (planErr) {
+        await safeLog(supabaseAdmin, {
+          level: "error", event_type: "payment.webhook_error", source: "stripe", tenant_id: tenantId,
+          message: "Failed to persist activation plan",
+          payload: { event_id: eventId, payment_id: payment.id, error: planErr.message },
+        });
+        await markEvent("error", planErr.message);
+        return new Response("internal_error", { status: 500 });
+      }
+    }
+
+    // Activate subscriber FIRST (idempotent: subscription_end is fixed)
     const currentStartISO = currentSubscriber?.subscription_start ?? null;
-    const currentEndISO = currentSubscriber?.subscription_end ?? null;
-    const intervalUnit = tier.interval_unit || "day";
-    const intervalCount = tier.interval_count || tier.duration_days || 30;
-    const billingTimezone = tier.billing_timezone || "Europe/Moscow";
-
-    const newEndISO = computeNextEndISO(nowISO, currentEndISO, intervalUnit, intervalCount, billingTimezone);
-
     const subUpdate: Record<string, unknown> = {
       status: "active",
       tier_id: payment.tier_id,
@@ -587,6 +581,70 @@ serve(async (req) => {
       return new Response("internal_error", { status: 500 });
     }
 
+    // Only AFTER subscriber update succeeds → mark payment completed with activation marker
+    const completedAtISO = new Date().toISOString();
+    const finalStripeData = {
+      ...workingStripeData,
+      webhook_event_id: eventId,
+      checkout_session_id: session.id,
+      payment_intent_id: session.payment_intent ?? null,
+      customer_id: session.customer ?? null,
+      customer_email: customerEmail,
+      payment_status: session.payment_status,
+      session_status: session.status,
+      amount_total: session.amount_total,
+      currency: session.currency,
+      consent_terms_of_service: consentTos,
+      livemode: Boolean(session.livemode),
+      completed_at: workingStripeData.completed_at ?? completedAtISO,
+      subscriber_activated_at: completedAtISO,
+      subscription_end: newEndISO,
+      processed_by: "stripe-webhook",
+    };
+
+    if (payment.status !== "completed") {
+      const { error: updatePayErr } = await supabaseAdmin
+        .from("payment_history")
+        .update({
+          status: "completed",
+          stripe_checkout_session_id: session.id,
+          stripe_payment_intent_id: session.payment_intent ?? null,
+          stripe_customer_id: session.customer ?? null,
+          payment_date: completedAtISO,
+          stripe_data: finalStripeData,
+        })
+        .eq("id", payment.id);
+      if (updatePayErr) {
+        // Subscriber already activated; do NOT mark webhook processed so Stripe retries
+        await safeLog(supabaseAdmin, {
+          level: "error", event_type: "payment.webhook_error", source: "stripe", tenant_id: tenantId,
+          message: "Failed to update payment_history to completed after subscriber activation",
+          payload: { event_id: eventId, payment_id: payment.id, error: updatePayErr.message },
+        });
+        await markEvent("error", updatePayErr.message);
+        return new Response("internal_error", { status: 500 });
+      }
+    } else {
+      // Payment was already completed but missing activation marker — backfill marker only
+      await supabaseAdmin.from("payment_history")
+        .update({ stripe_data: { ...finalStripeData, recovered_by: "stripe-webhook" } })
+        .eq("id", payment.id);
+    }
+
+    // Update stripe_checkout_sessions
+    if (sessionId) {
+      try {
+        await supabaseAdmin.from("stripe_checkout_sessions").update({
+          status: session.status ?? "complete",
+          stripe_payment_intent_id: session.payment_intent ?? null,
+          stripe_customer_id: session.customer ?? null,
+          updated_at: new Date().toISOString(),
+        }).eq("stripe_checkout_session_id", sessionId);
+      } catch (e) {
+        console.warn("[stripe-webhook] failed to update stripe_checkout_sessions:", e);
+      }
+    }
+
     await safeLog(supabaseAdmin, {
       level: "info", event_type: "payment.succeeded", source: "stripe",
       subscriber_id: payment.subscriber_id,
@@ -603,11 +661,15 @@ serve(async (req) => {
         subscription_end: newEndISO,
         livemode: Boolean(session.livemode),
         consent_terms_of_service: consentTos,
+        reused_computed_end: reusedComputedEnd,
       },
     });
 
-    // Admin notification
+    // Admin notification — numeric amount + currency in note
     try {
+      const stripeNoteParts: string[] = [];
+      if (payment.payment_note) stripeNoteParts.push(String(payment.payment_note));
+      stripeNoteParts.push(`Stripe payment, currency: ${payment.currency}`);
       await sendAdminNotification({
         supabaseAdmin,
         tenantId,
@@ -622,16 +684,18 @@ serve(async (req) => {
         plan: tier.name ?? null,
         status: "active",
         method: "stripe_single",
-        amount: `${payment.amount} ${payment.currency}`,
+        amount: Number(payment.amount),
         subscriptionEndISO: newEndISO,
-        note: payment.payment_note ?? null,
+        note: stripeNoteParts.join(" — "),
         paymentId: payment.id,
         relatedAtISO: newEndISO,
-        source: "robokassa-webhook", // helper source enum — reuse closest available
-      } as any);
+        source: "stripe-webhook",
+      });
     } catch (e) {
       console.warn("[stripe-webhook] admin notification failed:", e);
     }
+
+
 
     // ----- Telegram success message + invite -----
     try {
