@@ -62,6 +62,7 @@ serve(async (req) => {
     // Admin detection
     const authHeader = req.headers.get("Authorization");
     let isAdmin = false;
+    let adminUserId: string | null = null;
     let resolvedSubscriberId: string | undefined = subscriber_id;
 
     if (authHeader) {
@@ -79,8 +80,22 @@ serve(async (req) => {
           .eq("role", "admin")
           .maybeSingle();
         isAdmin = !!roleData;
+        if (isAdmin) adminUserId = user.id;
       }
     }
+
+    // Admin tenant ownership check: admin can only act on their own tenant
+    if (isAdmin && adminUserId) {
+      const { data: tenantRow } = await supabaseAdmin
+        .from("tenants")
+        .select("id, owner_id")
+        .eq("id", tenantId)
+        .maybeSingle();
+      if (!tenantRow || tenantRow.owner_id !== adminUserId) {
+        return json({ error: "forbidden_tenant" }, 403);
+      }
+    }
+
 
     // Non-admin: require validated init_data
     if (!isAdmin) {
@@ -451,7 +466,41 @@ serve(async (req) => {
       });
     if (scsErr) {
       console.error("[create-stripe-checkout] stripe_checkout_sessions insert error:", scsErr);
+      await supabaseAdmin
+        .from("payment_history")
+        .update({
+          status: "failed",
+          stripe_data: {
+            checkout_session_id: session.id,
+            payment_intent_id: session.payment_intent ?? null,
+            customer_id: session.customer ?? null,
+            payment_status: session.payment_status ?? null,
+            session_status: session.status ?? null,
+            url_created: true,
+            livemode: Boolean(session.livemode),
+            created_at: new Date().toISOString(),
+            mapping_error: scsErr.message ?? "stripe_checkout_sessions insert failed",
+          },
+        })
+        .eq("id", payment.id);
+      await supabaseAdmin.from("system_logs").insert({
+        level: "error",
+        event_type: "payment.checkout_mapping_error",
+        source: "stripe",
+        subscriber_id: resolvedSubscriberId,
+        telegram_user_id: subscriber.telegram_user_id,
+        tier_id,
+        tenant_id: tenantId,
+        message: "Failed to insert stripe_checkout_sessions mapping",
+        payload: {
+          payment_id: payment.id,
+          checkout_session_id: session.id,
+          error: scsErr.message ?? null,
+        },
+      });
+      return json({ error: "stripe_mapping_failed" }, 500);
     }
+
 
     await supabaseAdmin.from("system_logs").insert({
       level: "info",
