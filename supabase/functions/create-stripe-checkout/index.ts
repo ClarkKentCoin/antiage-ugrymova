@@ -278,11 +278,8 @@ serve(async (req) => {
       return json({ error: "stripe_not_configured" }, 400);
     }
 
-    // Currency: prefer provider public_config.currency, else EUR
-    const currencyUpper =
-      (typeof pubConfig.currency === "string" && pubConfig.currency.trim()
-        ? String(pubConfig.currency).trim().toUpperCase()
-        : "EUR");
+    // Currency: from tier.stripe_currency
+    const currencyUpper = String(tier.stripe_currency || "EUR").toUpperCase();
     const currencyLower = currencyUpper.toLowerCase();
 
     // Load Stripe secret via RPC
