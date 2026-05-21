@@ -532,6 +532,8 @@ serve(async (req) => {
             url_created: true,
             livemode: Boolean(session.livemode),
             created_at: new Date().toISOString(),
+            mode: provider.mode,
+            legal_acceptance: safeLegalAcceptance,
             mapping_error: scsErr.message ?? "stripe_checkout_sessions insert failed",
           },
         })
