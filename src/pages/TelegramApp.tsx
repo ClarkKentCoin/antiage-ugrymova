@@ -997,7 +997,10 @@ function GracePeriodView({
 
   const handlePayment = async () => {
     if (!selectedTier) return;
-    if (selectedMethod === 'robokassa' && !subscriber?.id) return;
+    if (!subscriber?.id) {
+      toast({ title: 'Ошибка', description: 'Не удалось определить подписчика', variant: 'destructive' });
+      return;
+    }
 
     if (selectedMethod === 'robokassa' && autoRenewal && !consentGiven) {
       toast({ title: 'Необходимо согласие', description: 'Пожалуйста, подтвердите согласие на автосписания', variant: 'destructive' });
