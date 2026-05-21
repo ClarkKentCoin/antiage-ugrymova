@@ -1524,20 +1524,67 @@ function SubscriptionContent({
   const [generatingLink, setGeneratingLink] = useState(false);
   const [disableAutoRenewalOpen, setDisableAutoRenewalOpen] = useState(false);
   const [disablingAutoRenewal, setDisablingAutoRenewal] = useState(false);
+  const [selectedMethod, setSelectedMethod] = useState<SelectedMethod>('robokassa');
+  const [stripeTermsAccepted, setStripeTermsAccepted] = useState(false);
+  const [stripeImmediateAccepted, setStripeImmediateAccepted] = useState(false);
   const { toast } = useToast();
+
+  // Stripe recurring is not implemented yet — force Robokassa when auto-renewal is on.
+  useEffect(() => {
+    if (autoRenewal && selectedMethod !== 'robokassa') setSelectedMethod('robokassa');
+  }, [autoRenewal, selectedMethod]);
+
+  // Reset Stripe consents when method changes away from Stripe.
+  useEffect(() => {
+    if (selectedMethod !== 'stripe') {
+      setStripeTermsAccepted(false);
+      setStripeImmediateAccepted(false);
+    }
+  }, [selectedMethod]);
+
+  const selectedTierData = selectedTier ? tiers.find((t: any) => t.id === selectedTier) : null;
 
   const handleGeneratePaymentLink = async () => {
     if (!selectedTier || !subscriber?.id) return;
-    
-    if (autoRenewal && !consentGiven) {
+
+    if (selectedMethod === 'robokassa' && autoRenewal && !consentGiven) {
       toast({ title: 'Необходимо согласие', description: 'Пожалуйста, подтвердите согласие на автосписания', variant: 'destructive' });
+      return;
+    }
+
+    if (selectedMethod === 'stripe' && (!stripeTermsAccepted || !stripeImmediateAccepted)) {
+      toast({
+        title: 'Требуется согласие',
+        description: 'Подтвердите условия оплаты и доступа перед переходом к Stripe.',
+        variant: 'destructive',
+      });
       return;
     }
 
     setGeneratingLink(true);
     try {
       const tgInitData = (window as any)?.Telegram?.WebApp?.initData ?? '';
-      console.log('[TelegramApp payment] initData available:', Boolean(tgInitData), 'length:', tgInitData.length);
+      console.log('[TelegramApp extend payment] method:', selectedMethod, 'initData len:', tgInitData.length);
+
+      if (selectedMethod === 'stripe') {
+        const { data, error } = await invokeStripeCheckout({
+          tierId: selectedTier,
+          telegramUserId: telegramUserId ?? 0,
+          tenantSlug: getPublicTenantSlug(),
+          initData: tgInitData,
+          subscriberId: subscriber.id,
+          legalAcceptance: buildStripeLegalAcceptance(),
+        });
+        if (error) throw error;
+        if (data?.checkout_url) {
+          toast({ title: 'Переход к оплате Stripe...', description: 'Сейчас откроется страница оплаты' });
+          openPaymentUrl(data.checkout_url);
+        } else {
+          toast({ title: 'Ошибка', description: 'Ссылка Stripe не вернулась от сервера', variant: 'destructive' });
+        }
+        return;
+      }
+
       const { data, error } = await supabase.functions.invoke('create-robokassa-payment', {
         body: {
           subscriber_id: subscriber.id,
@@ -1552,19 +1599,14 @@ function SubscriptionContent({
       });
 
       if (error) throw error;
-      
+
       if (data?.payment_url) {
         toast({ title: 'Переход к оплате...', description: 'Сейчас откроется страница оплаты' });
         openPaymentUrl(data.payment_url);
       }
     } catch (error) {
       console.error('Error generating payment link:', error);
-      const err = error as any;
-      let errorCode: string | null = null;
-      let errorMessage: string | null = null;
-      if (typeof err?.context?.body === 'string') {
-        try { const p = JSON.parse(err.context.body); errorCode = p?.error ?? null; errorMessage = p?.message ?? null; } catch {}
-      }
+      const { code: errorCode, message: errorMessage } = parseEdgeError(error);
       const securityCodes = new Set(['invalid_init_data', 'user_id_mismatch', 'telegram_bot_not_configured']);
       if (errorCode && (securityCodes.has(errorCode) || errorCode === 'telegram_user_id and init_data are required')) {
         toast({
@@ -1579,6 +1621,18 @@ function SubscriptionContent({
           description: tierName
             ? `Тариф «${tierName}» уже был использован. Пожалуйста, выберите другой тариф.`
             : 'Этот тариф можно купить только один раз. Пожалуйста, выберите другой тариф.',
+        });
+      } else if (errorCode === 'legal_consent_required') {
+        toast({
+          title: 'Требуется согласие',
+          description: 'Подтвердите условия оплаты и доступа перед переходом к Stripe.',
+          variant: 'destructive',
+        });
+      } else if (errorCode && STRIPE_UNAVAILABLE_CODES.has(errorCode)) {
+        toast({
+          title: 'Оплата зарубежной картой недоступна',
+          description: 'Попробуйте выбрать оплату российской картой через Robokassa.',
+          variant: 'destructive',
         });
       } else {
         toast({ title: 'Ошибка', description: errorMessage || 'Не удалось создать ссылку для оплаты', variant: 'destructive' });
