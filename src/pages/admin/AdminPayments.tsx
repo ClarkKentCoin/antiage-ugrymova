@@ -113,7 +113,7 @@ export default function AdminPayments() {
     if (!payments) return { all: 0, single: 0, recurring: 0 };
     return {
       all: payments.length,
-      single: payments.filter(p => p.payment_method === 'manual' || p.payment_method === 'robokassa_single').length,
+      single: payments.filter(p => p.payment_method === 'manual' || p.payment_method === 'robokassa_single' || p.payment_method === 'stripe_single').length,
       recurring: payments.filter(p => p.payment_method === 'robokassa_recurring').length,
     };
   }, [payments]);
