@@ -914,6 +914,9 @@ export type Database = {
           price: number
           purchase_once_only: boolean
           show_in_dashboard: boolean
+          stripe_currency: string
+          stripe_enabled: boolean
+          stripe_price: number | null
           tenant_id: string | null
           updated_at: string
         }
@@ -931,6 +934,9 @@ export type Database = {
           price: number
           purchase_once_only?: boolean
           show_in_dashboard?: boolean
+          stripe_currency?: string
+          stripe_enabled?: boolean
+          stripe_price?: number | null
           tenant_id?: string | null
           updated_at?: string
         }
@@ -948,6 +954,9 @@ export type Database = {
           price?: number
           purchase_once_only?: boolean
           show_in_dashboard?: boolean
+          stripe_currency?: string
+          stripe_enabled?: boolean
+          stripe_price?: number | null
           tenant_id?: string | null
           updated_at?: string
         }
