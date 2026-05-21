@@ -827,34 +827,50 @@ function NewUserView({
       {selectedTier && (
         <Card className="border-primary/30 bg-gradient-to-b from-primary/5 to-background">
           <CardContent className="pt-5 space-y-4">
+            {/* Payment method selector */}
+            <PaymentMethodSelector
+              tier={selectedTierData}
+              paymentMethods={paymentMethods}
+              selectedMethod={selectedMethod}
+              onChange={setSelectedMethod}
+              autoRenewal={autoRenewal}
+            />
+
+            {/* Selected tier summary depends on chosen method */}
             <div className="text-center pb-2">
               <p className="text-sm text-muted-foreground">Вы выбрали:</p>
-              <p className="font-semibold text-lg">{selectedTierData?.name} — {Number(selectedTierData?.price).toLocaleString('ru-RU')}₽</p>
+              {selectedMethod === 'stripe' && tierSupportsStripe(selectedTierData) ? (
+                <p className="font-semibold text-lg">
+                  {selectedTierData?.name} — {Number(selectedTierData.stripe_price).toLocaleString('ru-RU')} {selectedTierData.stripe_currency}
+                </p>
+              ) : (
+                <p className="font-semibold text-lg">
+                  {selectedTierData?.name} — {Number(selectedTierData?.price).toLocaleString('ru-RU')}₽
+                </p>
+              )}
             </div>
 
-            {/* Auto-renewal checkbox - hidden for purchase_once_only tiers */}
-            {!selectedTierData?.purchase_once_only && (
-            <div className="flex items-start space-x-3 p-3 rounded-lg bg-muted/50">
-              <Checkbox 
-                id="auto-renewal-new" 
-                checked={autoRenewal}
-                onCheckedChange={(checked) => {
-                  setAutoRenewal(checked === true);
-                  if (!checked) setConsentGiven(false);
-                }}
-              />
-              <div className="grid gap-1 leading-none">
-                <Label htmlFor="auto-renewal-new" className="font-medium cursor-pointer">
-                  Автоматическое продление
-                </Label>
+            {/* Auto-renewal + consent (Robokassa only, not for purchase_once_only) */}
+            {selectedMethod === 'robokassa' && !selectedTierData?.purchase_once_only && (
+              <div className="flex items-start space-x-3 p-3 rounded-lg bg-muted/50">
+                <Checkbox 
+                  id="auto-renewal-new" 
+                  checked={autoRenewal}
+                  onCheckedChange={(checked) => {
+                    setAutoRenewal(checked === true);
+                    if (!checked) setConsentGiven(false);
+                  }}
+                />
+                <div className="grid gap-1 leading-none">
+                  <Label htmlFor="auto-renewal-new" className="font-medium cursor-pointer">
+                    Автоматическое продление
+                  </Label>
+                </div>
               </div>
-            </div>
             )}
 
-            {/* Info and consent required if auto-renewal is enabled */}
-            {autoRenewal && (
+            {selectedMethod === 'robokassa' && autoRenewal && (
               <>
-                {/* Info bubble about Russian cards only */}
                 <div className="p-4 rounded-lg bg-primary/10 border border-primary/20">
                   <p className="text-sm text-foreground">
                     <span className="font-medium">Важно!</span> Режим Автоматическое продление пока доступен только для оплат с карт РФ. Если вы оплачиваете зарубежными картами и картами стран СНГ — пожалуйста снимите галочку Автоматическое продление. Полные правила оплаты вы можете ознакомиться по{' '}
@@ -870,7 +886,6 @@ function NewUserView({
                   </p>
                 </div>
 
-                {/* Consent block */}
                 <div className="space-y-3 p-4 rounded-lg bg-warning/10 border border-warning/20">
                   <div className="flex items-center gap-2 text-warning">
                     <AlertTriangle className="h-4 w-4" />
@@ -915,7 +930,7 @@ function NewUserView({
             <Button 
               className="w-full" 
               size="lg"
-              disabled={generatingLink || isSelectedTierUsed || (autoRenewal && !consentGiven)}
+              disabled={generatingLink || isSelectedTierUsed || (selectedMethod === 'robokassa' && autoRenewal && !consentGiven)}
               onClick={handlePayment}
             >
               {generatingLink ? (
@@ -926,7 +941,7 @@ function NewUserView({
               ) : (
                 <>
                   <CreditCard className="mr-2 h-4 w-4" />
-                  Оплатить через Robokassa
+                  {selectedMethod === 'stripe' ? 'Оплатить зарубежной картой' : 'Оплатить через Robokassa'}
                 </>
               )}
             </Button>
