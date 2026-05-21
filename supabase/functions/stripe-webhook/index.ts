@@ -121,6 +121,25 @@ serve(async (req) => {
   const dataObject: any = unverifiedEvent?.data?.object ?? {};
   const metadata: Record<string, string> = (dataObject.metadata ?? {}) as Record<string, string>;
 
+  // Early foreign-service ignore (unverified — used only to skip, never to fulfill).
+  // Backward compat: if metadata.service is missing, do not ignore.
+  const unverifiedService = typeof metadata.service === "string" ? metadata.service.trim().toLowerCase() : "";
+  if (unverifiedService && unverifiedService !== "channly") {
+    await safeLog(supabaseAdmin, {
+      level: "info", event_type: "payment.webhook_ignored_foreign_service", source: "stripe",
+      message: "Ignored foreign-service Stripe event (pre-verify)",
+      payload: {
+        event_id: unverifiedEvent.id ?? null,
+        event_type: unverifiedEvent.type ?? null,
+        service: metadata.service ?? null,
+        delivery_platform: metadata.delivery_platform ?? null,
+        product: metadata.product ?? null,
+      },
+    });
+    return new Response("ignored_foreign_service", { status: 200 });
+  }
+
+
   // 3) Resolve tenant
   let tenantId: string | null = (metadata.tenant_id as string) || null;
   const metaPaymentId: string | null = (metadata.payment_id as string) || null;
