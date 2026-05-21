@@ -162,7 +162,7 @@ export default function AdminPayments() {
       statusConfig[payment.status]?.label || payment.status,
       paymentMethodLabels[payment.payment_method] || payment.payment_method,
       payment.payment_note || '-',
-      Number(payment.amount).toString(),
+      formatPaymentAmount(payment.amount, payment.currency),
     ]);
 
     const csvContent = [
