@@ -491,6 +491,8 @@ serve(async (req) => {
           url_created: true,
           livemode: Boolean(session.livemode),
           created_at: new Date().toISOString(),
+          mode: provider.mode,
+          legal_acceptance: safeLegalAcceptance,
         },
       })
       .eq("id", payment.id);
