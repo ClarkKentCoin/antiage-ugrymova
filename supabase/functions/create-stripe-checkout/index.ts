@@ -531,7 +531,7 @@ serve(async (req) => {
       checkout_session_id: session.id,
       payment_id: payment.id,
       invoice_id: invoiceId,
-      amount: price,
+      amount: stripeAmount,
       currency: currencyUpper,
     });
   } catch (err) {
