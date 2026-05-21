@@ -463,7 +463,7 @@ serve(async (req) => {
         stripe_customer_id: session.customer ?? null,
         mode: "payment",
         status: session.status ?? "open",
-        amount: price,
+        amount: stripeAmount,
         currency: currencyUpper,
         success_url: successUrl,
         cancel_url: cancelUrl,
