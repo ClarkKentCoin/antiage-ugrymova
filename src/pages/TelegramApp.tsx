@@ -1904,6 +1904,9 @@ function SubscriptionContent({
                   setSelectedTier(tier.id);
                   setAutoRenewal(false);
                   setConsentGiven(false);
+                  setSelectedMethod('robokassa');
+                  setStripeTermsAccepted(false);
+                  setStripeImmediateAccepted(false);
                 }}
               >
                 <CardContent className="flex items-center justify-between p-4">
@@ -1924,8 +1927,17 @@ function SubscriptionContent({
           {selectedTier && (
             <Card className="border-primary/20 bg-primary/5">
               <CardContent className="pt-4 space-y-4">
-                {/* Auto-renewal checkbox - hidden for purchase_once_only tiers */}
-                {!tiers.find((t: any) => t.id === selectedTier)?.purchase_once_only && (
+                {/* Payment method selector */}
+                <PaymentMethodSelector
+                  tier={selectedTierData}
+                  paymentMethods={paymentMethods}
+                  selectedMethod={selectedMethod}
+                  onChange={setSelectedMethod}
+                  autoRenewal={autoRenewal}
+                />
+
+                {/* Auto-renewal checkbox - Robokassa only, hidden for purchase_once_only tiers */}
+                {selectedMethod === 'robokassa' && !selectedTierData?.purchase_once_only && (
                 <div className="flex items-start space-x-3">
                   <Checkbox 
                     id="auto-renewal" 
@@ -1943,8 +1955,8 @@ function SubscriptionContent({
                 </div>
                 )}
 
-                {/* Consent required if auto-renewal is enabled */}
-                {autoRenewal && (
+                {/* Consent required if Robokassa auto-renewal is enabled */}
+                {selectedMethod === 'robokassa' && autoRenewal && (
                   <div className="space-y-3 p-3 rounded-lg bg-warning/10 border border-warning/20">
                     <div className="flex items-center gap-2 text-warning">
                       <AlertTriangle className="h-4 w-4" />
@@ -1978,6 +1990,16 @@ function SubscriptionContent({
                   </div>
                 )}
 
+                {selectedMethod === 'stripe' && (
+                  <StripeLegalBlock
+                    idPrefix="extend"
+                    termsAccepted={stripeTermsAccepted}
+                    immediateAccessAccepted={stripeImmediateAccepted}
+                    onTermsChange={setStripeTermsAccepted}
+                    onImmediateChange={setStripeImmediateAccepted}
+                  />
+                )}
+
                 {(() => {
                   const isUsedInExtend = selectedTier ? purchasedOnceOnlyTierIds.has(selectedTier) : false;
                   const extendTierName = tiers.find(t => t.id === selectedTier)?.name;
@@ -1991,7 +2013,12 @@ function SubscriptionContent({
                       <Button 
                         className="w-full" 
                         size="lg"
-                        disabled={generatingLink || isUsedInExtend || (autoRenewal && !consentGiven)}
+                        disabled={
+                          generatingLink ||
+                          isUsedInExtend ||
+                          (selectedMethod === 'robokassa' && autoRenewal && !consentGiven) ||
+                          (selectedMethod === 'stripe' && (!stripeTermsAccepted || !stripeImmediateAccepted))
+                        }
                         onClick={handleGeneratePaymentLink}
                       >
                         {generatingLink ? (
@@ -2002,7 +2029,7 @@ function SubscriptionContent({
                         ) : (
                           <>
                             <CreditCard className="mr-2 h-4 w-4" />
-                            Оплатить через Robokassa
+                            {selectedMethod === 'stripe' ? 'Оплатить зарубежной картой' : 'Оплатить через Robokassa'}
                           </>
                         )}
                       </Button>
