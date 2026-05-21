@@ -113,18 +113,24 @@ export default function AdminDashboard() {
             icon={AlertTriangle}
             trend={expiringSoon > 0 ? 'down' : 'neutral'}
           />
-          <StatsCard
-            title="This Month"
-            value={`${thisMonthRevenue.toLocaleString()}₽`}
-            description={format(new Date(), 'MMMM yyyy')}
-            icon={TrendingUp}
-          />
-          <StatsCard
-            title="Total Revenue"
-            value={`${totalRevenue.toLocaleString()}₽`}
-            description="All time"
-            icon={CreditCard}
-          />
+          {currencyOrder.map(cur => (
+            <StatsCard
+              key={`month-${cur}`}
+              title={`This Month ${cur}`}
+              value={formatMoney(thisMonthRevenueByCurrency[cur] || 0, cur)}
+              description={format(new Date(), 'MMMM yyyy')}
+              icon={cur === 'RUB' ? Banknote : CreditCard}
+            />
+          ))}
+          {currencyOrder.map(cur => (
+            <StatsCard
+              key={`total-${cur}`}
+              title={`Total ${cur}`}
+              value={formatMoney(totalRevenueByCurrency[cur] || 0, cur)}
+              description="All time"
+              icon={cur === 'RUB' ? CreditCard : TrendingUp}
+            />
+          ))}
         </div>
 
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
