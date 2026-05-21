@@ -253,6 +253,45 @@ serve(async (req) => {
     return new Response("stripe_signature_verification_failed", { status: 400 });
   }
 
+  // Verified foreign-service ignore. Backward compat: missing service is processed normally.
+  const verifiedService = typeof metadata.service === "string" ? metadata.service.trim().toLowerCase() : "";
+  if (verifiedService && verifiedService !== "channly") {
+    await safeLog(supabaseAdmin, {
+      level: "info", event_type: "payment.webhook_ignored_foreign_service", source: "stripe",
+      tenant_id: tenantId,
+      message: "Ignored foreign-service Stripe event (post-verify)",
+      payload: {
+        event_id: eventId ?? null,
+        event_type: eventType ?? null,
+        service: metadata.service ?? null,
+        delivery_platform: metadata.delivery_platform ?? null,
+        product: metadata.product ?? null,
+        stripe_checkout_session_id: sessionId,
+        stripe_payment_intent_id: paymentIntentId,
+      },
+    });
+    try {
+      await supabaseAdmin.from("stripe_webhook_events").insert({
+        tenant_id: tenantId,
+        stripe_event_id: eventId,
+        event_type: eventType,
+        livemode: eventLivemode,
+        api_version: unverifiedEvent.api_version ?? null,
+        status: "ignored",
+        raw_payload: unverifiedEvent,
+        stripe_checkout_session_id: sessionId,
+        stripe_payment_intent_id: paymentIntentId,
+        error_message: "ignored_foreign_service",
+        received_at: new Date().toISOString(),
+        processed_at: new Date().toISOString(),
+      });
+    } catch (e) {
+      console.warn("[stripe-webhook] foreign-service event insert warn:", e);
+    }
+    return new Response("ignored_foreign_service", { status: 200 });
+  }
+
+
   // 6) Idempotency
   if (!eventId || !eventType) {
     return new Response("missing_event_metadata", { status: 400 });
