@@ -45,6 +45,150 @@ const openPaymentUrl = (url: string) => {
   window.location.href = url;
 };
 
+type PaymentMethodInfo = {
+  enabled: boolean;
+  label: string;
+  provider: string;
+  mode?: 'test' | 'live' | null;
+};
+type PaymentMethodsConfig = {
+  robokassa: PaymentMethodInfo;
+  stripe: PaymentMethodInfo;
+};
+type SelectedMethod = 'robokassa' | 'stripe';
+
+const DEFAULT_PAYMENT_METHODS: PaymentMethodsConfig = {
+  robokassa: { enabled: true, label: 'Российская карта', provider: 'robokassa' },
+  stripe: { enabled: false, label: 'Зарубежная карта', provider: 'stripe', mode: null },
+};
+
+/** Tier-level Stripe availability check (does NOT include provider gating). */
+function tierSupportsStripe(tier: any): boolean {
+  return (
+    !!tier?.stripe_enabled &&
+    typeof tier?.stripe_price === 'number' &&
+    tier.stripe_price > 0 &&
+    !!tier?.stripe_currency
+  );
+}
+
+function PaymentMethodSelector({
+  tier,
+  paymentMethods,
+  selectedMethod,
+  onChange,
+  autoRenewal,
+}: {
+  tier: any;
+  paymentMethods: PaymentMethodsConfig;
+  selectedMethod: SelectedMethod;
+  onChange: (m: SelectedMethod) => void;
+  autoRenewal: boolean;
+}) {
+  const providerStripeEnabled = paymentMethods.stripe.enabled;
+  const tierStripeOk = tierSupportsStripe(tier);
+  const stripeDisabled = !providerStripeEnabled || !tierStripeOk || autoRenewal;
+
+  let stripeHelper: string | null = null;
+  if (autoRenewal) {
+    stripeHelper = 'Автопродление пока доступно только для российских карт через Robokassa.';
+  } else if (!providerStripeEnabled) {
+    stripeHelper = 'Оплата зарубежной картой скоро будет доступна.';
+  } else if (!tierStripeOk) {
+    stripeHelper = 'Для этого тарифа оплата зарубежной картой недоступна.';
+  }
+
+  const baseCard = 'rounded-lg border p-3 transition-all text-left w-full';
+  const activeCard = 'border-primary ring-2 ring-primary/30 bg-primary/5';
+  const inactiveCard = 'hover:border-primary/50';
+  const disabledCard = 'opacity-50 cursor-not-allowed';
+
+  return (
+    <div className="space-y-3">
+      <p className="text-sm font-medium text-center">Выберите способ оплаты</p>
+      <div className="grid gap-2">
+        <button
+          type="button"
+          className={`${baseCard} ${selectedMethod === 'robokassa' ? activeCard : inactiveCard}`}
+          onClick={() => onChange('robokassa')}
+        >
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="font-semibold">Российская карта</p>
+              <p className="text-xs text-muted-foreground">Robokassa</p>
+            </div>
+            <p className="text-base font-bold whitespace-nowrap">
+              {Number(tier?.price ?? 0).toLocaleString('ru-RU')}₽
+            </p>
+          </div>
+        </button>
+
+        <button
+          type="button"
+          disabled={stripeDisabled}
+          className={`${baseCard} ${stripeDisabled ? disabledCard : selectedMethod === 'stripe' ? activeCard : inactiveCard}`}
+          onClick={() => {
+            if (stripeDisabled) return;
+            onChange('stripe');
+          }}
+        >
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="font-semibold">Зарубежная карта</p>
+              <p className="text-xs text-muted-foreground">Stripe</p>
+            </div>
+            <p className="text-base font-bold whitespace-nowrap">
+              {tierStripeOk
+                ? `${Number(tier.stripe_price).toLocaleString('ru-RU')} ${tier.stripe_currency}`
+                : '—'}
+            </p>
+          </div>
+          {stripeHelper && (
+            <p className="text-xs text-muted-foreground mt-2">{stripeHelper}</p>
+          )}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** Shared Stripe checkout invoker — UI only; never activates subscriptions. */
+async function invokeStripeCheckout(args: {
+  tierId: string;
+  telegramUserId: number;
+  tenantSlug: string | null;
+  initData: string;
+  subscriberId?: string | null;
+}) {
+  const body: Record<string, unknown> = {
+    tier_id: args.tierId,
+    telegram_user_id: args.telegramUserId,
+    tenant_slug: args.tenantSlug,
+    init_data: args.initData,
+  };
+  if (args.subscriberId) body.subscriber_id = args.subscriberId;
+  return supabase.functions.invoke('create-stripe-checkout', { body });
+}
+
+const STRIPE_UNAVAILABLE_CODES = new Set([
+  'stripe_disabled',
+  'stripe_not_configured',
+  'stripe_tier_not_enabled',
+  'invalid_stripe_tier_price',
+]);
+
+function parseEdgeError(error: unknown): { code: string | null; message: string | null } {
+  const err = error as any;
+  if (typeof err?.context?.body === 'string') {
+    try {
+      const parsed = JSON.parse(err.context.body);
+      return { code: parsed?.error ?? null, message: parsed?.message ?? null };
+    } catch {}
+  }
+  return { code: null, message: err?.message ?? null };
+}
+
+
 /** Cache-busting for custom logos from storage CDN. Local fallback is never modified. */
 function resolveLogoSrc(logoUrl: string | null | undefined): string {
   if (!logoUrl) return logoUgrymova;
