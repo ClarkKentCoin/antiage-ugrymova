@@ -545,6 +545,7 @@ export default function TelegramApp() {
           onDebugTap={onDebugTap}
           purchasedOnceOnlyTierIds={purchasedOnceOnlyTierIds}
           logoUrl={logoUrl}
+          paymentMethods={paymentMethods}
         />
         {debugBadgeEnabled && <MiniAppBuildBadge serverDebug={null} telegramDebug={telegramDebug} />}
       </main>
