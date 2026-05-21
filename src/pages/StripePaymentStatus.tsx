@@ -8,38 +8,82 @@ import { CheckCircle2, XCircle } from 'lucide-react';
  * - Do NOT read Stripe sessions.
  * - Do NOT activate subscriptions or grant access.
  * - Do NOT create invite links or send Telegram messages.
- * Subscription activation happens server-side via stripe-webhook (not implemented yet).
+ * Subscription activation happens server-side via stripe-webhook only.
  */
-function useReturnHref(): string {
+function useTelegramBotUrl(): string | null {
   return useMemo(() => {
     try {
       const params = new URLSearchParams(window.location.search);
-      const t = params.get('t');
-      return t ? `/telegram-app?t=${encodeURIComponent(t)}` : '/telegram-app';
+      const bot = params.get('bot');
+      if (bot && /^[A-Za-z0-9_]{3,}$/.test(bot)) {
+        return `https://t.me/${bot}`;
+      }
+      return null;
     } catch {
-      return '/telegram-app';
+      return null;
+    }
+  }, []);
+}
+
+function useIsDevFallback(): boolean {
+  return useMemo(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      return params.get('test') === '1';
+    } catch {
+      return false;
+    }
+  }, []);
+}
+
+function useTenantSlug(): string | null {
+  return useMemo(() => {
+    try {
+      return new URLSearchParams(window.location.search).get('t');
+    } catch {
+      return null;
     }
   }, []);
 }
 
 export function StripePaymentSuccessPage() {
-  const href = useReturnHref();
+  const botUrl = useTelegramBotUrl();
+  const isDev = useIsDevFallback();
+  const tenantSlug = useTenantSlug();
+  const devHref = tenantSlug ? `/telegram-app?t=${encodeURIComponent(tenantSlug)}` : '/telegram-app';
+
   return (
     <main className="min-h-screen bg-background flex items-center justify-center p-4">
       <Card className="max-w-md w-full">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-lg">
             <CheckCircle2 className="h-5 w-5 text-success" />
-            Платеж обрабатывается
+            Оплата успешна
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            Спасибо! Платеж отправлен на проверку. Доступ будет выдан после подтверждения оплаты.
+            Спасибо! Платёж принят. Доступ к закрытому каналу выдаётся автоматически только
+            после подтверждения платежа банком и нашей системой.
           </p>
-          <Button asChild className="w-full">
-            <a href={href}>Вернуться в Mini App</a>
-          </Button>
+          <p className="text-sm text-muted-foreground">
+            Как только оплата будет подтверждена, ссылка-приглашение придёт вам прямо в чат
+            с Telegram-ботом. Пожалуйста, вернитесь в Telegram-бот, чтобы получить доступ.
+          </p>
+          {botUrl ? (
+            <Button asChild className="w-full">
+              <a href={botUrl}>Открыть Telegram-бот</a>
+            </Button>
+          ) : (
+            <div className="rounded-md border bg-muted/40 p-3 text-sm text-center">
+              Вернитесь в Telegram-бот
+            </div>
+          )}
+          {isDev && (
+            <Button asChild variant="outline" className="w-full">
+              <a href={devHref}>Dev: вернуться в Mini App</a>
+            </Button>
+          )}
         </CardContent>
       </Card>
     </main>
@@ -47,7 +91,11 @@ export function StripePaymentSuccessPage() {
 }
 
 export function StripePaymentCancelPage() {
-  const href = useReturnHref();
+  const botUrl = useTelegramBotUrl();
+  const isDev = useIsDevFallback();
+  const tenantSlug = useTenantSlug();
+  const devHref = tenantSlug ? `/telegram-app?t=${encodeURIComponent(tenantSlug)}` : '/telegram-app';
+
   return (
     <main className="min-h-screen bg-background flex items-center justify-center p-4">
       <Card className="max-w-md w-full">
@@ -59,11 +107,23 @@ export function StripePaymentCancelPage() {
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            Вы можете вернуться и выбрать способ оплаты снова.
+            Платёж не был завершён. Вы можете вернуться в Telegram-бот и снова выбрать
+            способ оплаты (российская или зарубежная карта).
           </p>
-          <Button asChild className="w-full">
-            <a href={href}>Вернуться к оплате</a>
-          </Button>
+          {botUrl ? (
+            <Button asChild className="w-full">
+              <a href={botUrl}>Открыть Telegram-бот</a>
+            </Button>
+          ) : (
+            <div className="rounded-md border bg-muted/40 p-3 text-sm text-center">
+              Вернитесь в Telegram-бот и выберите способ оплаты заново
+            </div>
+          )}
+          {isDev && (
+            <Button asChild variant="outline" className="w-full">
+              <a href={devHref}>Dev: вернуться в Mini App</a>
+            </Button>
+          )}
         </CardContent>
       </Card>
     </main>
