@@ -10,6 +10,7 @@ export interface PaymentRecord {
   subscriber_id?: string;
   tier_id?: string | null;
   amount: number;
+  currency?: string | null;
   payment_method: string;
   payment_note: string | null;
   payment_date?: string;

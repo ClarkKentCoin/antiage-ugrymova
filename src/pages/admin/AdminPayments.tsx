@@ -35,8 +35,22 @@ const paymentMethodLabels: Record<string, string> = {
   robokassa: 'Robokassa',
   robokassa_single: 'Robokassa',
   robokassa_recurring: 'Robokassa (рек.)',
+  stripe_single: 'Stripe',
   other: 'Other',
 };
+
+function formatPaymentAmount(amount: number | string, currency?: string | null): string {
+  const num = Number(amount);
+  const cur = (currency || 'RUB').toUpperCase();
+  if (cur === 'RUB') {
+    return `${num.toLocaleString('ru-RU')}₽`;
+  }
+  if (cur === 'EUR' || cur === 'USD') {
+    return `${num} ${cur}`;
+  }
+  return `${num} ${cur}`;
+}
+
 
 const statusConfig: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
   completed: { label: 'Оплачено', variant: 'default' },
@@ -79,7 +93,7 @@ export default function AdminPayments() {
     if (!payments) return [];
     let result = payments;
     if (methodFilter === 'single') {
-      result = result.filter(p => p.payment_method === 'manual' || p.payment_method === 'robokassa_single');
+      result = result.filter(p => p.payment_method === 'manual' || p.payment_method === 'robokassa_single' || p.payment_method === 'stripe_single');
     } else if (methodFilter === 'recurring') {
       result = result.filter(p => p.payment_method === 'robokassa_recurring');
     }
@@ -99,7 +113,7 @@ export default function AdminPayments() {
     if (!payments) return { all: 0, single: 0, recurring: 0 };
     return {
       all: payments.length,
-      single: payments.filter(p => p.payment_method === 'manual' || p.payment_method === 'robokassa_single').length,
+      single: payments.filter(p => p.payment_method === 'manual' || p.payment_method === 'robokassa_single' || p.payment_method === 'stripe_single').length,
       recurring: payments.filter(p => p.payment_method === 'robokassa_recurring').length,
     };
   }, [payments]);
@@ -148,7 +162,7 @@ export default function AdminPayments() {
       statusConfig[payment.status]?.label || payment.status,
       paymentMethodLabels[payment.payment_method] || payment.payment_method,
       payment.payment_note || '-',
-      Number(payment.amount).toString(),
+      formatPaymentAmount(payment.amount, payment.currency),
     ]);
 
     const csvContent = [
@@ -302,7 +316,7 @@ export default function AdminPayments() {
                         {payment.payment_note || '-'}
                       </TableCell>
                       <TableCell className="text-right font-medium whitespace-nowrap">
-                        {Number(payment.amount).toLocaleString()}₽
+                        {formatPaymentAmount(payment.amount, payment.currency)}
                       </TableCell>
                     </TableRow>
                   );
