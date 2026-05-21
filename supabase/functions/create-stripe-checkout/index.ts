@@ -1,0 +1,486 @@
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "npm:@supabase/supabase-js@2";
+import { resolveTenantIdFromSlug, resolveTenantFromRequest } from "../_shared/tenant.ts";
+import { validateTelegramInitData } from "../_shared/telegramInitData.ts";
+import { getCanonicalAppBaseUrl } from "../_shared/appConfig.ts";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST,OPTIONS",
+};
+
+const json = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+
+serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
+
+  const supabaseAdmin = createClient(
+    Deno.env.get("SUPABASE_URL") ?? "",
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
+  );
+
+  try {
+    const body = await req.json().catch(() => ({}));
+    const {
+      subscriber_id,
+      tier_id,
+      telegram_user_id,
+      tenant_slug,
+    } = body ?? {};
+    const init_data: string = (body?.init_data ?? body?.initData ?? "") as string;
+
+    console.log("[create-stripe-checkout] request", {
+      tier_id,
+      telegram_user_id,
+      tenant_slug,
+      hasInitData: !!init_data,
+      initDataLength: init_data?.length ?? 0,
+    });
+
+    if (!tier_id) return json({ error: "tier_id is required" }, 400);
+
+    // Resolve tenant strictly
+    let tenantId: string;
+    let resolvedTenantSlug: string | null = null;
+    if (tenant_slug) {
+      const resolved = await resolveTenantIdFromSlug(supabaseAdmin, tenant_slug);
+      if (resolved.source === "default") return json({ error: "invalid_tenant" }, 400);
+      tenantId = resolved.tenantId;
+      resolvedTenantSlug = resolved.tenantSlug;
+    } else {
+      const resolved = await resolveTenantFromRequest({ req, supabaseAdmin, body: {} });
+      tenantId = resolved.tenantId;
+      resolvedTenantSlug = resolved.tenantSlug;
+    }
+
+    // Admin detection
+    const authHeader = req.headers.get("Authorization");
+    let isAdmin = false;
+    let resolvedSubscriberId: string | undefined = subscriber_id;
+
+    if (authHeader) {
+      const supabaseUser = createClient(
+        Deno.env.get("SUPABASE_URL") ?? "",
+        Deno.env.get("SUPABASE_ANON_KEY") ?? "",
+        { global: { headers: { Authorization: authHeader } } },
+      );
+      const { data: { user } } = await supabaseUser.auth.getUser();
+      if (user) {
+        const { data: roleData } = await supabaseAdmin
+          .from("user_roles")
+          .select("role")
+          .eq("user_id", user.id)
+          .eq("role", "admin")
+          .maybeSingle();
+        isAdmin = !!roleData;
+      }
+    }
+
+    // Non-admin: require validated init_data
+    if (!isAdmin) {
+      if (!telegram_user_id || !init_data) {
+        return json({ error: "telegram_user_id and init_data are required" }, 401);
+      }
+
+      const { data: settingsForBot } = await supabaseAdmin
+        .from("admin_settings")
+        .select("telegram_bot_token")
+        .eq("tenant_id", tenantId)
+        .maybeSingle();
+
+      if (!settingsForBot?.telegram_bot_token) {
+        return json({ error: "telegram_bot_not_configured" }, 400);
+      }
+
+      const validation = await validateTelegramInitData(init_data, settingsForBot.telegram_bot_token);
+      if (!validation.ok) {
+        return json({ error: "invalid_init_data", reason: validation.reason }, 401);
+      }
+      if (validation.telegramUserId !== Number(telegram_user_id)) {
+        return json({ error: "user_id_mismatch" }, 401);
+      }
+
+      const vId = validation.telegramUserId!;
+      const vUsername = validation.telegramUsername || null;
+      const vFirst = validation.telegramFirstName || null;
+      const vLast = validation.telegramLastName || null;
+
+      let { data: subscriber } = await supabaseAdmin
+        .from("subscribers")
+        .select("id, telegram_username, first_name, last_name")
+        .eq("telegram_user_id", vId)
+        .eq("tenant_id", tenantId)
+        .maybeSingle();
+
+      if (!subscriber) {
+        let tgUsername = vUsername;
+        let tgFirst = vFirst;
+        let tgLast = vLast;
+        if ((!tgUsername || !tgFirst) && settingsForBot.telegram_bot_token) {
+          try {
+            const r = await fetch(
+              `https://api.telegram.org/bot${settingsForBot.telegram_bot_token}/getChat?chat_id=${vId}`,
+            );
+            const d = await r.json();
+            if (d.ok && d.result) {
+              tgUsername = tgUsername || d.result.username || null;
+              tgFirst = tgFirst || d.result.first_name || null;
+              tgLast = tgLast || d.result.last_name || null;
+            }
+          } catch (e) {
+            console.warn("[create-stripe-checkout] tg getChat warn:", e);
+          }
+        }
+
+        const { data: newSub, error: createError } = await supabaseAdmin
+          .from("subscribers")
+          .insert({
+            telegram_user_id: vId,
+            telegram_username: tgUsername,
+            first_name: tgFirst,
+            last_name: tgLast,
+            status: "inactive",
+            tier_id,
+            tenant_id: tenantId,
+          })
+          .select("id")
+          .single();
+        if (createError) {
+          console.error("[create-stripe-checkout] create subscriber error:", createError);
+          return json({ error: "Error creating subscriber" }, 500);
+        }
+        subscriber = { id: newSub.id, telegram_username: tgUsername, first_name: tgFirst, last_name: tgLast } as any;
+      } else {
+        const upd: Record<string, any> = {};
+        if (vUsername && !subscriber.telegram_username) upd.telegram_username = vUsername;
+        if (vFirst && !subscriber.first_name) upd.first_name = vFirst;
+        if (vLast && !subscriber.last_name) upd.last_name = vLast;
+        if (Object.keys(upd).length > 0) {
+          await supabaseAdmin.from("subscribers").update(upd).eq("id", subscriber.id);
+        }
+      }
+
+      resolvedSubscriberId = subscriber!.id;
+
+      // chat_threads backfill (safe, tenant-scoped)
+      try {
+        const { data: subForChat } = await supabaseAdmin
+          .from("subscribers")
+          .select("first_name, last_name, telegram_username, telegram_user_id")
+          .eq("id", resolvedSubscriberId)
+          .eq("tenant_id", tenantId)
+          .maybeSingle();
+        if (subForChat?.telegram_user_id) {
+          const { data: threads } = await supabaseAdmin
+            .from("chat_threads")
+            .select("id, subscriber_id, telegram_first_name, telegram_last_name, telegram_username")
+            .eq("tenant_id", tenantId)
+            .eq("telegram_user_id", subForChat.telegram_user_id);
+          for (const t of threads ?? []) {
+            const u: Record<string, any> = {};
+            if (!t.subscriber_id) u.subscriber_id = resolvedSubscriberId;
+            if (!t.telegram_first_name && subForChat.first_name) u.telegram_first_name = subForChat.first_name;
+            if (!t.telegram_last_name && subForChat.last_name) u.telegram_last_name = subForChat.last_name;
+            if (!t.telegram_username && subForChat.telegram_username) u.telegram_username = subForChat.telegram_username;
+            if (Object.keys(u).length > 0) {
+              u.updated_at = new Date().toISOString();
+              await supabaseAdmin.from("chat_threads").update(u).eq("id", t.id);
+            }
+          }
+        }
+      } catch (e) {
+        console.warn("[create-stripe-checkout] backfill warn:", e);
+      }
+    }
+
+    if (!resolvedSubscriberId) return json({ error: "subscriber_id is required" }, 400);
+
+    // Verify subscriber & tier in tenant
+    const { data: subscriber, error: subErr } = await supabaseAdmin
+      .from("subscribers")
+      .select("id, telegram_user_id, telegram_username, email")
+      .eq("id", resolvedSubscriberId)
+      .eq("tenant_id", tenantId)
+      .single();
+    if (subErr || !subscriber) return json({ error: "Subscriber not found" }, 404);
+
+    const { data: tier, error: tierErr } = await supabaseAdmin
+      .from("subscription_tiers")
+      .select("id, name, description, price, purchase_once_only, is_active")
+      .eq("id", tier_id)
+      .eq("tenant_id", tenantId)
+      .maybeSingle();
+    if (tierErr || !tier) return json({ error: "Subscription tier not found" }, 404);
+    if (!tier.is_active) return json({ error: "tier_inactive" }, 400);
+
+    // purchase_once_only check
+    if (tier.purchase_once_only) {
+      const { data: existing } = await supabaseAdmin
+        .from("payment_history")
+        .select("id")
+        .eq("subscriber_id", resolvedSubscriberId)
+        .eq("tier_id", tier_id)
+        .eq("tenant_id", tenantId)
+        .eq("status", "completed")
+        .limit(1);
+      if (existing && existing.length > 0) {
+        return json(
+          { error: "tier_already_purchased_once", message: "Этот тариф можно купить только один раз." },
+          409,
+        );
+      }
+    }
+
+    // Load Stripe provider config
+    const { data: provider, error: providerErr } = await supabaseAdmin
+      .from("tenant_payment_providers")
+      .select("is_enabled, mode, public_config")
+      .eq("tenant_id", tenantId)
+      .eq("provider_code", "stripe")
+      .maybeSingle();
+    if (providerErr || !provider) return json({ error: "stripe_not_configured" }, 400);
+    if (!provider.is_enabled) return json({ error: "stripe_disabled" }, 400);
+
+    const pubConfig = (provider.public_config ?? {}) as Record<string, unknown>;
+    if (!pubConfig.publishable_key || !pubConfig.has_secret_key) {
+      return json({ error: "stripe_not_configured" }, 400);
+    }
+
+    // Currency: prefer provider public_config.currency, else EUR
+    const currencyUpper =
+      (typeof pubConfig.currency === "string" && pubConfig.currency.trim()
+        ? String(pubConfig.currency).trim().toUpperCase()
+        : "EUR");
+    const currencyLower = currencyUpper.toLowerCase();
+
+    // Load Stripe secret via RPC
+    const { data: secretData, error: secretErr } = await supabaseAdmin.rpc(
+      "get_tenant_payment_provider_secret",
+      { p_tenant_id: tenantId, p_provider_code: "stripe" },
+    );
+    if (secretErr || !secretData) {
+      console.error("[create-stripe-checkout] secret RPC error:", secretErr?.message);
+      return json({ error: "stripe_not_configured" }, 400);
+    }
+    const stripeSecretKey = (secretData as any)?.stripe_secret_key as string | undefined;
+    if (!stripeSecretKey) return json({ error: "stripe_not_configured" }, 400);
+
+    // Build invoice id and price
+    const price = Number(tier.price);
+    if (!Number.isFinite(price) || price <= 0) return json({ error: "invalid_tier_price" }, 400);
+    const unitAmount = Math.round(price * 100);
+
+    const invoiceId = `stripe_${Date.now()}_${Math.floor(Math.random() * 1_000_000)}`;
+
+    // Insert pending payment
+    const { data: payment, error: paymentErr } = await supabaseAdmin
+      .from("payment_history")
+      .insert({
+        subscriber_id: resolvedSubscriberId,
+        tier_id,
+        amount: price,
+        currency: currencyUpper,
+        invoice_id: invoiceId,
+        transaction_type: "initial",
+        payment_method: "stripe_single",
+        status: "pending",
+        tenant_id: tenantId,
+        stripe_data: {
+          created_at: new Date().toISOString(),
+          mode: provider.mode,
+        },
+      })
+      .select("id")
+      .single();
+    if (paymentErr || !payment) {
+      console.error("[create-stripe-checkout] payment insert error:", paymentErr);
+      await supabaseAdmin.from("system_logs").insert({
+        level: "error",
+        event_type: "payment.creation_error",
+        source: "stripe",
+        subscriber_id: resolvedSubscriberId,
+        telegram_user_id: subscriber.telegram_user_id,
+        tier_id,
+        tenant_id: tenantId,
+        message: "Failed to create stripe pending payment",
+        payload: { error: paymentErr?.message },
+      });
+      return json({ error: "Error creating payment record" }, 500);
+    }
+
+    await supabaseAdmin.from("system_logs").insert({
+      level: "info",
+      event_type: "payment.created",
+      source: "stripe",
+      subscriber_id: resolvedSubscriberId,
+      telegram_user_id: subscriber.telegram_user_id,
+      tier_id,
+      tenant_id: tenantId,
+      message: "Stripe pending payment created",
+      payload: { payment_id: payment.id, invoice_id: invoiceId, amount: price, currency: currencyUpper, mode: provider.mode },
+    });
+
+    // Build URLs
+    const baseUrl = getCanonicalAppBaseUrl();
+    const tSlugParam = resolvedTenantSlug ? `&t=${encodeURIComponent(resolvedTenantSlug)}` : "";
+    const successUrl = `${baseUrl}/telegram-app/payment-success?provider=stripe&session_id={CHECKOUT_SESSION_ID}${tSlugParam}`;
+    const cancelUrl = `${baseUrl}/telegram-app/payment-cancel?provider=stripe${tSlugParam}`;
+
+    // Metadata used in both checkout session and payment_intent
+    const metadata: Record<string, string> = {
+      provider: "stripe",
+      tenant_id: tenantId,
+      tenant_slug: resolvedTenantSlug ?? "",
+      subscriber_id: resolvedSubscriberId,
+      telegram_user_id: subscriber.telegram_user_id ? String(subscriber.telegram_user_id) : "",
+      tier_id: tier_id,
+      payment_id: payment.id,
+      invoice_id: invoiceId,
+    };
+
+    // Create Stripe Checkout Session via REST
+    const form = new URLSearchParams();
+    form.set("mode", "payment");
+    form.set("payment_method_types[0]", "card");
+    form.set("success_url", successUrl);
+    form.set("cancel_url", cancelUrl);
+    form.set("client_reference_id", payment.id);
+    form.set("locale", "auto");
+    if (subscriber.email) form.set("customer_email", subscriber.email);
+
+    form.set("line_items[0][quantity]", "1");
+    form.set("line_items[0][price_data][currency]", currencyLower);
+    form.set("line_items[0][price_data][unit_amount]", String(unitAmount));
+    form.set("line_items[0][price_data][product_data][name]", String(tier.name));
+    const desc = (tier.description && String(tier.description).trim())
+      || "Telegram channel subscription";
+    form.set("line_items[0][price_data][product_data][description]", desc);
+
+    for (const [k, v] of Object.entries(metadata)) {
+      form.set(`metadata[${k}]`, v);
+      form.set(`payment_intent_data[metadata][${k}]`, v);
+    }
+
+    const stripeResp = await fetch("https://api.stripe.com/v1/checkout/sessions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${stripeSecretKey}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: form.toString(),
+    });
+    const stripeBody = await stripeResp.json().catch(() => ({}));
+
+    if (!stripeResp.ok) {
+      console.error("[create-stripe-checkout] Stripe error:", stripeResp.status, stripeBody?.error?.message);
+      await supabaseAdmin.from("payment_history").update({ status: "failed" }).eq("id", payment.id);
+      await supabaseAdmin.from("system_logs").insert({
+        level: "error",
+        event_type: "payment.checkout_error",
+        source: "stripe",
+        subscriber_id: resolvedSubscriberId,
+        telegram_user_id: subscriber.telegram_user_id,
+        tier_id,
+        tenant_id: tenantId,
+        message: "Stripe Checkout Session creation failed",
+        payload: {
+          status: stripeResp.status,
+          stripe_error_code: stripeBody?.error?.code ?? null,
+          stripe_error_type: stripeBody?.error?.type ?? null,
+          stripe_error_message: stripeBody?.error?.message ?? null,
+        },
+      });
+      return json({ error: "stripe_checkout_failed", message: stripeBody?.error?.message ?? "unknown" }, 502);
+    }
+
+    const session = stripeBody as {
+      id: string;
+      url: string;
+      status?: string;
+      payment_status?: string;
+      payment_intent?: string | null;
+      customer?: string | null;
+      livemode?: boolean;
+    };
+
+    // Update payment_history with stripe identifiers
+    await supabaseAdmin
+      .from("payment_history")
+      .update({
+        stripe_checkout_session_id: session.id,
+        stripe_payment_intent_id: session.payment_intent ?? null,
+        stripe_customer_id: session.customer ?? null,
+        stripe_data: {
+          checkout_session_id: session.id,
+          payment_intent_id: session.payment_intent ?? null,
+          customer_id: session.customer ?? null,
+          payment_status: session.payment_status ?? null,
+          session_status: session.status ?? null,
+          url_created: true,
+          livemode: Boolean(session.livemode),
+          created_at: new Date().toISOString(),
+        },
+      })
+      .eq("id", payment.id);
+
+    // Insert into stripe_checkout_sessions
+    const { error: scsErr } = await supabaseAdmin
+      .from("stripe_checkout_sessions")
+      .insert({
+        tenant_id: tenantId,
+        subscriber_id: resolvedSubscriberId,
+        tier_id,
+        payment_id: payment.id,
+        stripe_checkout_session_id: session.id,
+        stripe_payment_intent_id: session.payment_intent ?? null,
+        stripe_customer_id: session.customer ?? null,
+        mode: "payment",
+        status: session.status ?? "open",
+        amount: price,
+        currency: currencyUpper,
+        success_url: successUrl,
+        cancel_url: cancelUrl,
+        livemode: Boolean(session.livemode),
+        metadata,
+      });
+    if (scsErr) {
+      console.error("[create-stripe-checkout] stripe_checkout_sessions insert error:", scsErr);
+    }
+
+    await supabaseAdmin.from("system_logs").insert({
+      level: "info",
+      event_type: "payment.checkout_created",
+      source: "stripe",
+      subscriber_id: resolvedSubscriberId,
+      telegram_user_id: subscriber.telegram_user_id,
+      tier_id,
+      tenant_id: tenantId,
+      message: "Stripe Checkout Session created",
+      payload: {
+        payment_id: payment.id,
+        checkout_session_id: session.id,
+        livemode: Boolean(session.livemode),
+        mode: provider.mode,
+      },
+    });
+
+    return json({
+      success: true,
+      checkout_url: session.url,
+      checkout_session_id: session.id,
+      payment_id: payment.id,
+      invoice_id: invoiceId,
+      amount: price,
+      currency: currencyUpper,
+    });
+  } catch (err) {
+    console.error("[create-stripe-checkout] Unhandled:", err);
+    return json({ error: "internal_error" }, 500);
+  }
+});
