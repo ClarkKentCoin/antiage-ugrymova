@@ -153,9 +153,45 @@ serve(async (req) => {
     return new Response("tenant_not_resolved", { status: 400 });
   }
 
-  // 4) Load tenant's stripe webhook secret
+  // 4) Load tenant's stripe webhook secret + provider mode (mode from tenant_payment_providers, not RPC)
   let webhookSecret: string | null = null;
   let providerMode: string | null = null;
+  let providerEnabled: boolean = false;
+  try {
+    const { data: providerRow, error: providerErr } = await supabaseAdmin
+      .from("tenant_payment_providers")
+      .select("mode, is_enabled")
+      .eq("tenant_id", tenantId)
+      .eq("provider_code", "stripe")
+      .maybeSingle();
+    if (providerErr) throw providerErr;
+    if (!providerRow) {
+      await safeLog(supabaseAdmin, {
+        level: "error", event_type: "payment.webhook_error", source: "stripe",
+        tenant_id: tenantId, message: "Stripe provider not configured for tenant",
+        payload: { event_id: eventId ?? null },
+      });
+      return new Response("provider_not_configured", { status: 400 });
+    }
+    providerMode = (providerRow.mode as string) ?? null;
+    providerEnabled = Boolean(providerRow.is_enabled);
+    if (!providerEnabled) {
+      await safeLog(supabaseAdmin, {
+        level: "error", event_type: "payment.webhook_error", source: "stripe",
+        tenant_id: tenantId, message: "Stripe provider disabled for tenant",
+        payload: { event_id: eventId ?? null, provider_mode: providerMode },
+      });
+      return new Response("provider_disabled", { status: 400 });
+    }
+  } catch (e) {
+    await safeLog(supabaseAdmin, {
+      level: "error", event_type: "payment.webhook_error", source: "stripe",
+      tenant_id: tenantId, message: "Failed to load tenant_payment_providers",
+      payload: { error: e instanceof Error ? e.message : String(e), event_id: eventId ?? null },
+    });
+    return new Response("provider_load_failed", { status: 400 });
+  }
+
   try {
     const { data: secretData, error: secretErr } = await supabaseAdmin.rpc(
       "get_tenant_payment_provider_secret",
@@ -163,7 +199,6 @@ serve(async (req) => {
     );
     if (secretErr || !secretData) throw secretErr ?? new Error("no_secret_data");
     webhookSecret = (secretData as any)?.stripe_webhook_secret ?? null;
-    providerMode = (secretData as any)?.mode ?? null;
   } catch (e) {
     await safeLog(supabaseAdmin, {
       level: "error", event_type: "payment.webhook_error", source: "stripe",
