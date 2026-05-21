@@ -198,7 +198,7 @@ export function CreateTierDialog({ open, onOpenChange }: CreateTierDialogProps) 
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="price">Цена (₽) *</Label>
+            <Label htmlFor="price">Цена Robokassa (₽) *</Label>
             <Input
               id="price"
               type="number"
@@ -209,7 +209,61 @@ export function CreateTierDialog({ open, onOpenChange }: CreateTierDialogProps) 
               min="0"
               step="0.01"
             />
+            <p className="text-xs text-muted-foreground">
+              Цена для российских карт / Robokassa
+            </p>
           </div>
+
+          <div className="rounded-md border border-border p-4 space-y-3">
+            <div>
+              <h4 className="text-sm font-semibold">Зарубежные карты / Stripe</h4>
+              <p className="text-xs text-muted-foreground mt-1">
+                Отдельная цена для оплаты зарубежными картами через Stripe. Основная цена тарифа в рублях не изменяется.
+              </p>
+            </div>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="stripe_enabled" className="pr-3">
+                Принимать оплату зарубежными картами через Stripe
+              </Label>
+              <Switch
+                id="stripe_enabled"
+                checked={formData.stripe_enabled}
+                onCheckedChange={(checked) => setFormData({ ...formData, stripe_enabled: checked })}
+              />
+            </div>
+            {formData.stripe_enabled && (
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-2">
+                  <Label htmlFor="stripe_price">Цена Stripe</Label>
+                  <Input
+                    id="stripe_price"
+                    type="number"
+                    placeholder="49.00"
+                    value={formData.stripe_price}
+                    onChange={(e) => setFormData({ ...formData, stripe_price: e.target.value })}
+                    min="0"
+                    step="0.01"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="stripe_currency">Валюта</Label>
+                  <Select
+                    value={formData.stripe_currency}
+                    onValueChange={(value: StripeCurrency) => setFormData({ ...formData, stripe_currency: value })}
+                  >
+                    <SelectTrigger id="stripe_currency">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="EUR">EUR</SelectItem>
+                      <SelectItem value="USD">USD</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            )}
+          </div>
+
 
           <div className="space-y-2">
             <Label htmlFor="billing_timezone">Часовой пояс</Label>
