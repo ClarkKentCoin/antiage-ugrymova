@@ -376,37 +376,44 @@ serve(async (req) => {
     const successUrl = `${baseUrl}/telegram-app/payment-success?provider=stripe&session_id={CHECKOUT_SESSION_ID}${tSlugParam}`;
     const cancelUrl = `${baseUrl}/telegram-app/payment-cancel?provider=stripe${tSlugParam}`;
 
-    // Channly service routing metadata (used to separate from future Uspas events)
+    // Channly app-level routing metadata (tenant-safe; product is NOT hardcoded globally).
+    // service/delivery_platform/product_type are app identifiers shared across all Channly tenants.
     const SERVICE_ROUTING = {
       service: "channly",
       delivery_platform: "telegram",
-      product: "culinary_club",
+      product_type: "telegram_channel_subscription",
       metadata_version: "1",
     } as const;
 
-    // Optional channel diagnostics (safe — never block checkout if missing)
+    // Optional per-tenant channel info (safe — never block checkout if missing)
     let channelName = "";
     let telegramChannelId = "";
     try {
       const { data: chSettings } = await supabaseAdmin
         .from("admin_settings")
-        .select("telegram_channel_id, telegram_channel_name")
+        .select("telegram_channel_id, channel_name")
         .eq("tenant_id", tenantId)
         .maybeSingle();
       if (chSettings) {
         if (chSettings.telegram_channel_id) telegramChannelId = String(chSettings.telegram_channel_id);
-        if ((chSettings as any).telegram_channel_name) channelName = String((chSettings as any).telegram_channel_name);
+        if ((chSettings as any).channel_name) channelName = String((chSettings as any).channel_name);
       }
     } catch (e) {
       console.warn("[create-stripe-checkout] optional channel lookup warn:", e);
     }
 
-    // Metadata used in both checkout session and payment_intent
+    // Dynamic per-tenant product_name (fallbacks: channel_name → tenant_slug → generic)
+    const productName =
+      channelName
+      || (resolvedTenantSlug ? resolvedTenantSlug : "")
+      || "Telegram channel subscription";
+
+    // Metadata used in both checkout session and payment_intent (all values must be strings)
     const metadata: Record<string, string> = {
       provider: "stripe",
       service: SERVICE_ROUTING.service,
       delivery_platform: SERVICE_ROUTING.delivery_platform,
-      product: SERVICE_ROUTING.product,
+      product_type: SERVICE_ROUTING.product_type,
       metadata_version: SERVICE_ROUTING.metadata_version,
       tenant_id: tenantId,
       tenant_slug: resolvedTenantSlug ?? "",
@@ -416,6 +423,7 @@ serve(async (req) => {
       tier_name: tier.name ? String(tier.name) : "",
       payment_id: payment.id,
       invoice_id: invoiceId,
+      product_name: productName,
       legal_terms_accepted: "true",
       immediate_access_accepted: "true",
       terms_url: safeLegalAcceptance.terms_url,
