@@ -117,7 +117,7 @@ export default function AdminDashboard() {
             icon={AlertTriangle}
             trend={expiringSoon > 0 ? 'down' : 'neutral'}
           />
-          {currencyOrder.map(cur => (
+          {(['RUB', 'EUR'] as const).map(cur => (
             <StatsCard
               key={`month-${cur}`}
               title={`This Month ${cur}`}
@@ -126,7 +126,7 @@ export default function AdminDashboard() {
               icon={cur === 'RUB' ? Banknote : CreditCard}
             />
           ))}
-          {currencyOrder.map(cur => (
+          {(['RUB', 'EUR'] as const).map(cur => (
             <StatsCard
               key={`total-${cur}`}
               title={`Total ${cur}`}
@@ -139,15 +139,39 @@ export default function AdminDashboard() {
 
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <StatsCard
-            title="Single Payment"
-            value={singlePaymentUsers}
-            description="Manual / one-time"
+            title="RUB One-time"
+            value={rubOneTimeCount}
+            description="Robokassa / manual"
             icon={Banknote}
           />
           <StatsCard
-            title="Recurrent Payment"
-            value={recurrentPaymentUsers}
-            description="Auto-renewal"
+            title="RUB Recurring"
+            value={rubRecurringCount}
+            description="Robokassa auto-renewal"
+            icon={Repeat}
+          />
+          <StatsCard
+            title="EUR One-time"
+            value={eurOneTimeCount}
+            description="Stripe"
+            icon={CreditCard}
+          />
+          <StatsCard
+            title="EUR Recurring"
+            value={eurRecurringCount}
+            description="Stripe auto-renewal"
+            icon={Repeat}
+          />
+          <StatsCard
+            title="Total One-time"
+            value={totalOneTimeCount}
+            description="All one-time payments"
+            icon={Banknote}
+          />
+          <StatsCard
+            title="Total Recurring"
+            value={totalRecurringCount}
+            description="All recurring payments"
             icon={Repeat}
           />
         </div>
