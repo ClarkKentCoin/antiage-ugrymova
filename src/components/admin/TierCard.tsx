@@ -51,11 +51,19 @@ export function TierCard({ tier }: TierCardProps) {
           </div>
         </CardHeader>
         <CardContent>
-          <div className="flex items-baseline gap-1 mb-4">
+          <div className="flex items-baseline gap-1 mb-1">
             <span className="text-3xl font-bold">{tier.price}</span>
             <span className="text-muted-foreground">₽</span>
             <span className="text-muted-foreground ml-1">/ {formatDuration(tier)}</span>
           </div>
+          {tier.stripe_enabled && tier.stripe_price != null && (
+            <div className="mb-4">
+              <Badge variant="outline" className="text-xs">
+                Stripe: {tier.stripe_price} {tier.stripe_currency ?? 'EUR'}
+              </Badge>
+            </div>
+          )}
+          {!(tier.stripe_enabled && tier.stripe_price != null) && <div className="mb-4" />}
           
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
