@@ -1028,6 +1028,16 @@ function NewUserView({
               </>
             )}
 
+            {selectedMethod === 'stripe' && (
+              <StripeLegalBlock
+                idPrefix="new"
+                termsAccepted={stripeTermsAccepted}
+                immediateAccessAccepted={stripeImmediateAccepted}
+                onTermsChange={setStripeTermsAccepted}
+                onImmediateChange={setStripeImmediateAccepted}
+              />
+            )}
+
             {isSelectedTierUsed && (
               <p className="text-sm text-center text-muted-foreground">
                 Тариф «{selectedTierData?.name}» уже был использован. Пожалуйста, выберите другой тариф.
@@ -1037,7 +1047,7 @@ function NewUserView({
             <Button 
               className="w-full" 
               size="lg"
-              disabled={generatingLink || isSelectedTierUsed || (selectedMethod === 'robokassa' && autoRenewal && !consentGiven)}
+              disabled={generatingLink || isSelectedTierUsed || (selectedMethod === 'robokassa' && autoRenewal && !consentGiven) || (selectedMethod === 'stripe' && (!stripeTermsAccepted || !stripeImmediateAccepted))}
               onClick={handlePayment}
             >
               {generatingLink ? (
