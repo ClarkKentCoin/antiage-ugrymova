@@ -1983,7 +1983,7 @@ function SubscriptionContent({
                         </p>
                       </div>
                     </div>
-                    <p className="font-semibold">{Number(payment.amount).toLocaleString('ru-RU')}₽</p>
+                    <p className="font-semibold">{formatPaymentAmount(payment.amount, payment.currency)}</p>
                   </CardContent>
                 </Card>
               ))}
