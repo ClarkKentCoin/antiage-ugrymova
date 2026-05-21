@@ -66,15 +66,19 @@ export default function AdminDashboard() {
   const thisMonthRevenueByCurrency = sumByCurrency(thisMonthPayments as any);
   const totalRevenueByCurrency = sumByCurrency((payments || []) as any);
 
-  const currencyOrder = Array.from(
-    new Set([
-      'RUB',
-      'EUR',
-      'USD',
-      ...Object.keys(thisMonthRevenueByCurrency),
-      ...Object.keys(totalRevenueByCurrency),
-    ])
-  );
+  const isRub = (p: any) => {
+    const c = (p.currency || 'RUB').toUpperCase();
+    return c === 'RUB';
+  };
+  const isEur = (p: any) => (p.currency || '').toUpperCase() === 'EUR';
+
+  const paymentsList = payments || [];
+  const rubOneTimeCount = paymentsList.filter(p => isRub(p) && (p.payment_method === 'manual' || p.payment_method === 'robokassa_single')).length;
+  const rubRecurringCount = paymentsList.filter(p => isRub(p) && p.payment_method === 'robokassa_recurring').length;
+  const eurOneTimeCount = paymentsList.filter(p => isEur(p) && p.payment_method === 'stripe_single').length;
+  const eurRecurringCount = paymentsList.filter(p => isEur(p) && p.payment_method === 'stripe_recurring').length;
+  const totalOneTimeCount = paymentsList.filter(p => ['manual', 'robokassa_single', 'stripe_single'].includes(p.payment_method)).length;
+  const totalRecurringCount = paymentsList.filter(p => ['robokassa_recurring', 'stripe_recurring'].includes(p.payment_method)).length;
 
   if (loadingSubscribers || loadingPayments || loadingTiers) {
     return (
