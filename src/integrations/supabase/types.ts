@@ -446,6 +446,7 @@ export type Database = {
         Row: {
           amount: number
           created_at: string
+          currency: string
           id: string
           invoice_id: string | null
           payment_date: string
@@ -453,6 +454,10 @@ export type Database = {
           payment_note: string | null
           robokassa_data: Json | null
           status: string | null
+          stripe_checkout_session_id: string | null
+          stripe_customer_id: string | null
+          stripe_data: Json
+          stripe_payment_intent_id: string | null
           subscriber_id: string
           tenant_id: string | null
           tier_id: string | null
@@ -461,6 +466,7 @@ export type Database = {
         Insert: {
           amount: number
           created_at?: string
+          currency?: string
           id?: string
           invoice_id?: string | null
           payment_date?: string
@@ -468,6 +474,10 @@ export type Database = {
           payment_note?: string | null
           robokassa_data?: Json | null
           status?: string | null
+          stripe_checkout_session_id?: string | null
+          stripe_customer_id?: string | null
+          stripe_data?: Json
+          stripe_payment_intent_id?: string | null
           subscriber_id: string
           tenant_id?: string | null
           tier_id?: string | null
@@ -476,6 +486,7 @@ export type Database = {
         Update: {
           amount?: number
           created_at?: string
+          currency?: string
           id?: string
           invoice_id?: string | null
           payment_date?: string
@@ -483,6 +494,10 @@ export type Database = {
           payment_note?: string | null
           robokassa_data?: Json | null
           status?: string | null
+          stripe_checkout_session_id?: string | null
+          stripe_customer_id?: string | null
+          stripe_data?: Json
+          stripe_payment_intent_id?: string | null
           subscriber_id?: string
           tenant_id?: string | null
           tier_id?: string | null
@@ -505,6 +520,193 @@ export type Database = {
           },
           {
             foreignKeyName: "payment_history_tier_id_fkey"
+            columns: ["tier_id"]
+            isOneToOne: false
+            referencedRelation: "subscription_tiers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      stripe_checkout_sessions: {
+        Row: {
+          amount: number
+          cancel_url: string | null
+          created_at: string
+          currency: string
+          id: string
+          livemode: boolean
+          metadata: Json
+          mode: string
+          payment_id: string
+          status: string
+          stripe_checkout_session_id: string
+          stripe_customer_id: string | null
+          stripe_payment_intent_id: string | null
+          subscriber_id: string
+          success_url: string | null
+          tenant_id: string
+          tier_id: string
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          cancel_url?: string | null
+          created_at?: string
+          currency?: string
+          id?: string
+          livemode?: boolean
+          metadata?: Json
+          mode?: string
+          payment_id: string
+          status?: string
+          stripe_checkout_session_id: string
+          stripe_customer_id?: string | null
+          stripe_payment_intent_id?: string | null
+          subscriber_id: string
+          success_url?: string | null
+          tenant_id: string
+          tier_id: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          cancel_url?: string | null
+          created_at?: string
+          currency?: string
+          id?: string
+          livemode?: boolean
+          metadata?: Json
+          mode?: string
+          payment_id?: string
+          status?: string
+          stripe_checkout_session_id?: string
+          stripe_customer_id?: string | null
+          stripe_payment_intent_id?: string | null
+          subscriber_id?: string
+          success_url?: string | null
+          tenant_id?: string
+          tier_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stripe_checkout_sessions_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: true
+            referencedRelation: "payment_history"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stripe_checkout_sessions_subscriber_id_fkey"
+            columns: ["subscriber_id"]
+            isOneToOne: false
+            referencedRelation: "subscribers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stripe_checkout_sessions_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stripe_checkout_sessions_tier_id_fkey"
+            columns: ["tier_id"]
+            isOneToOne: false
+            referencedRelation: "subscription_tiers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      stripe_webhook_events: {
+        Row: {
+          api_version: string | null
+          created_at: string
+          error_message: string | null
+          event_type: string
+          id: string
+          livemode: boolean
+          payment_id: string | null
+          processed_at: string | null
+          raw_payload: Json
+          received_at: string
+          status: string
+          stripe_checkout_session_id: string | null
+          stripe_customer_id: string | null
+          stripe_event_id: string
+          stripe_payment_intent_id: string | null
+          subscriber_id: string | null
+          tenant_id: string | null
+          tier_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          api_version?: string | null
+          created_at?: string
+          error_message?: string | null
+          event_type: string
+          id?: string
+          livemode?: boolean
+          payment_id?: string | null
+          processed_at?: string | null
+          raw_payload?: Json
+          received_at?: string
+          status?: string
+          stripe_checkout_session_id?: string | null
+          stripe_customer_id?: string | null
+          stripe_event_id: string
+          stripe_payment_intent_id?: string | null
+          subscriber_id?: string | null
+          tenant_id?: string | null
+          tier_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          api_version?: string | null
+          created_at?: string
+          error_message?: string | null
+          event_type?: string
+          id?: string
+          livemode?: boolean
+          payment_id?: string | null
+          processed_at?: string | null
+          raw_payload?: Json
+          received_at?: string
+          status?: string
+          stripe_checkout_session_id?: string | null
+          stripe_customer_id?: string | null
+          stripe_event_id?: string
+          stripe_payment_intent_id?: string | null
+          subscriber_id?: string | null
+          tenant_id?: string | null
+          tier_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stripe_webhook_events_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
+            referencedRelation: "payment_history"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stripe_webhook_events_subscriber_id_fkey"
+            columns: ["subscriber_id"]
+            isOneToOne: false
+            referencedRelation: "subscribers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stripe_webhook_events_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stripe_webhook_events_tier_id_fkey"
             columns: ["tier_id"]
             isOneToOne: false
             referencedRelation: "subscription_tiers"
@@ -826,6 +1028,59 @@ export type Database = {
           },
         ]
       }
+      tenant_payment_providers: {
+        Row: {
+          configured_at: string | null
+          created_at: string
+          display_name: string
+          id: string
+          is_enabled: boolean
+          last_verified_at: string | null
+          mode: string
+          provider_code: string
+          public_config: Json
+          secret_ref: string | null
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          configured_at?: string | null
+          created_at?: string
+          display_name?: string
+          id?: string
+          is_enabled?: boolean
+          last_verified_at?: string | null
+          mode?: string
+          provider_code: string
+          public_config?: Json
+          secret_ref?: string | null
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          configured_at?: string | null
+          created_at?: string
+          display_name?: string
+          id?: string
+          is_enabled?: boolean
+          last_verified_at?: string | null
+          mode?: string
+          provider_code?: string
+          public_config?: Json
+          secret_ref?: string | null
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenant_payment_providers_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tenants: {
         Row: {
           created_at: string
@@ -897,6 +1152,18 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      save_tenant_payment_provider_secret: {
+        Args: {
+          p_display_name: string
+          p_is_enabled?: boolean
+          p_mode: string
+          p_provider_code: string
+          p_public_config?: Json
+          p_secret_patch?: Json
+          p_tenant_id: string
+        }
+        Returns: Json
       }
     }
     Enums: {
