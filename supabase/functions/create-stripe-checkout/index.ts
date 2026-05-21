@@ -62,6 +62,7 @@ serve(async (req) => {
     // Admin detection
     const authHeader = req.headers.get("Authorization");
     let isAdmin = false;
+    let adminUserId: string | null = null;
     let resolvedSubscriberId: string | undefined = subscriber_id;
 
     if (authHeader) {
@@ -79,8 +80,22 @@ serve(async (req) => {
           .eq("role", "admin")
           .maybeSingle();
         isAdmin = !!roleData;
+        if (isAdmin) adminUserId = user.id;
       }
     }
+
+    // Admin tenant ownership check: admin can only act on their own tenant
+    if (isAdmin && adminUserId) {
+      const { data: tenantRow } = await supabaseAdmin
+        .from("tenants")
+        .select("id, owner_id")
+        .eq("id", tenantId)
+        .maybeSingle();
+      if (!tenantRow || tenantRow.owner_id !== adminUserId) {
+        return json({ error: "forbidden_tenant" }, 403);
+      }
+    }
+
 
     // Non-admin: require validated init_data
     if (!isAdmin) {
