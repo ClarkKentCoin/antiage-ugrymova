@@ -316,7 +316,7 @@ export default function AdminPayments() {
                         {payment.payment_note || '-'}
                       </TableCell>
                       <TableCell className="text-right font-medium whitespace-nowrap">
-                        {Number(payment.amount).toLocaleString()}₽
+                        {formatPaymentAmount(payment.amount, payment.currency)}
                       </TableCell>
                     </TableRow>
                   );
