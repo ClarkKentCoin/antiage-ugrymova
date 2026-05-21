@@ -45,6 +45,35 @@ const openPaymentUrl = (url: string) => {
   window.location.href = url;
 };
 
+/** Currency-aware amount formatter for Mini App payment history. */
+function formatPaymentAmount(
+  amount: number | string | null | undefined,
+  currency?: string | null,
+): string {
+  const value = Number(amount ?? 0).toLocaleString('ru-RU');
+  const normalized = String(currency || 'RUB').toUpperCase();
+  if (normalized === 'RUB') return `${value}₽`;
+  if (normalized === 'EUR') return `${value} EUR`;
+  if (normalized === 'USD') return `${value} USD`;
+  return `${value} ${normalized}`;
+}
+
+/** Human label for a payment_method code. */
+function paymentMethodLabel(method: string | null | undefined): string | null {
+  switch (method) {
+    case 'robokassa_recurring':
+      return 'Robokassa (авто)';
+    case 'robokassa_single':
+      return 'Robokassa';
+    case 'stripe_single':
+      return 'Зарубежная карта (Stripe)';
+    case 'manual':
+      return 'Вручную';
+    default:
+      return null;
+  }
+}
+
 type PaymentMethodInfo = {
   enabled: boolean;
   label: string;
@@ -1495,20 +1524,67 @@ function SubscriptionContent({
   const [generatingLink, setGeneratingLink] = useState(false);
   const [disableAutoRenewalOpen, setDisableAutoRenewalOpen] = useState(false);
   const [disablingAutoRenewal, setDisablingAutoRenewal] = useState(false);
+  const [selectedMethod, setSelectedMethod] = useState<SelectedMethod>('robokassa');
+  const [stripeTermsAccepted, setStripeTermsAccepted] = useState(false);
+  const [stripeImmediateAccepted, setStripeImmediateAccepted] = useState(false);
   const { toast } = useToast();
+
+  // Stripe recurring is not implemented yet — force Robokassa when auto-renewal is on.
+  useEffect(() => {
+    if (autoRenewal && selectedMethod !== 'robokassa') setSelectedMethod('robokassa');
+  }, [autoRenewal, selectedMethod]);
+
+  // Reset Stripe consents when method changes away from Stripe.
+  useEffect(() => {
+    if (selectedMethod !== 'stripe') {
+      setStripeTermsAccepted(false);
+      setStripeImmediateAccepted(false);
+    }
+  }, [selectedMethod]);
+
+  const selectedTierData = selectedTier ? tiers.find((t: any) => t.id === selectedTier) : null;
 
   const handleGeneratePaymentLink = async () => {
     if (!selectedTier || !subscriber?.id) return;
-    
-    if (autoRenewal && !consentGiven) {
+
+    if (selectedMethod === 'robokassa' && autoRenewal && !consentGiven) {
       toast({ title: 'Необходимо согласие', description: 'Пожалуйста, подтвердите согласие на автосписания', variant: 'destructive' });
+      return;
+    }
+
+    if (selectedMethod === 'stripe' && (!stripeTermsAccepted || !stripeImmediateAccepted)) {
+      toast({
+        title: 'Требуется согласие',
+        description: 'Подтвердите условия оплаты и доступа перед переходом к Stripe.',
+        variant: 'destructive',
+      });
       return;
     }
 
     setGeneratingLink(true);
     try {
       const tgInitData = (window as any)?.Telegram?.WebApp?.initData ?? '';
-      console.log('[TelegramApp payment] initData available:', Boolean(tgInitData), 'length:', tgInitData.length);
+      console.log('[TelegramApp extend payment] method:', selectedMethod, 'initData len:', tgInitData.length);
+
+      if (selectedMethod === 'stripe') {
+        const { data, error } = await invokeStripeCheckout({
+          tierId: selectedTier,
+          telegramUserId: telegramUserId ?? 0,
+          tenantSlug: getPublicTenantSlug(),
+          initData: tgInitData,
+          subscriberId: subscriber.id,
+          legalAcceptance: buildStripeLegalAcceptance(),
+        });
+        if (error) throw error;
+        if (data?.checkout_url) {
+          toast({ title: 'Переход к оплате Stripe...', description: 'Сейчас откроется страница оплаты' });
+          openPaymentUrl(data.checkout_url);
+        } else {
+          toast({ title: 'Ошибка', description: 'Ссылка Stripe не вернулась от сервера', variant: 'destructive' });
+        }
+        return;
+      }
+
       const { data, error } = await supabase.functions.invoke('create-robokassa-payment', {
         body: {
           subscriber_id: subscriber.id,
@@ -1523,19 +1599,14 @@ function SubscriptionContent({
       });
 
       if (error) throw error;
-      
+
       if (data?.payment_url) {
         toast({ title: 'Переход к оплате...', description: 'Сейчас откроется страница оплаты' });
         openPaymentUrl(data.payment_url);
       }
     } catch (error) {
       console.error('Error generating payment link:', error);
-      const err = error as any;
-      let errorCode: string | null = null;
-      let errorMessage: string | null = null;
-      if (typeof err?.context?.body === 'string') {
-        try { const p = JSON.parse(err.context.body); errorCode = p?.error ?? null; errorMessage = p?.message ?? null; } catch {}
-      }
+      const { code: errorCode, message: errorMessage } = parseEdgeError(error);
       const securityCodes = new Set(['invalid_init_data', 'user_id_mismatch', 'telegram_bot_not_configured']);
       if (errorCode && (securityCodes.has(errorCode) || errorCode === 'telegram_user_id and init_data are required')) {
         toast({
@@ -1550,6 +1621,18 @@ function SubscriptionContent({
           description: tierName
             ? `Тариф «${tierName}» уже был использован. Пожалуйста, выберите другой тариф.`
             : 'Этот тариф можно купить только один раз. Пожалуйста, выберите другой тариф.',
+        });
+      } else if (errorCode === 'legal_consent_required') {
+        toast({
+          title: 'Требуется согласие',
+          description: 'Подтвердите условия оплаты и доступа перед переходом к Stripe.',
+          variant: 'destructive',
+        });
+      } else if (errorCode && STRIPE_UNAVAILABLE_CODES.has(errorCode)) {
+        toast({
+          title: 'Оплата зарубежной картой недоступна',
+          description: 'Попробуйте выбрать оплату российской картой через Robokassa.',
+          variant: 'destructive',
         });
       } else {
         toast({ title: 'Ошибка', description: errorMessage || 'Не удалось создать ссылку для оплаты', variant: 'destructive' });
@@ -1821,6 +1904,9 @@ function SubscriptionContent({
                   setSelectedTier(tier.id);
                   setAutoRenewal(false);
                   setConsentGiven(false);
+                  setSelectedMethod('robokassa');
+                  setStripeTermsAccepted(false);
+                  setStripeImmediateAccepted(false);
                 }}
               >
                 <CardContent className="flex items-center justify-between p-4">
@@ -1841,8 +1927,17 @@ function SubscriptionContent({
           {selectedTier && (
             <Card className="border-primary/20 bg-primary/5">
               <CardContent className="pt-4 space-y-4">
-                {/* Auto-renewal checkbox - hidden for purchase_once_only tiers */}
-                {!tiers.find((t: any) => t.id === selectedTier)?.purchase_once_only && (
+                {/* Payment method selector */}
+                <PaymentMethodSelector
+                  tier={selectedTierData}
+                  paymentMethods={paymentMethods}
+                  selectedMethod={selectedMethod}
+                  onChange={setSelectedMethod}
+                  autoRenewal={autoRenewal}
+                />
+
+                {/* Auto-renewal checkbox - Robokassa only, hidden for purchase_once_only tiers */}
+                {selectedMethod === 'robokassa' && !selectedTierData?.purchase_once_only && (
                 <div className="flex items-start space-x-3">
                   <Checkbox 
                     id="auto-renewal" 
@@ -1860,8 +1955,8 @@ function SubscriptionContent({
                 </div>
                 )}
 
-                {/* Consent required if auto-renewal is enabled */}
-                {autoRenewal && (
+                {/* Consent required if Robokassa auto-renewal is enabled */}
+                {selectedMethod === 'robokassa' && autoRenewal && (
                   <div className="space-y-3 p-3 rounded-lg bg-warning/10 border border-warning/20">
                     <div className="flex items-center gap-2 text-warning">
                       <AlertTriangle className="h-4 w-4" />
@@ -1895,6 +1990,16 @@ function SubscriptionContent({
                   </div>
                 )}
 
+                {selectedMethod === 'stripe' && (
+                  <StripeLegalBlock
+                    idPrefix="extend"
+                    termsAccepted={stripeTermsAccepted}
+                    immediateAccessAccepted={stripeImmediateAccepted}
+                    onTermsChange={setStripeTermsAccepted}
+                    onImmediateChange={setStripeImmediateAccepted}
+                  />
+                )}
+
                 {(() => {
                   const isUsedInExtend = selectedTier ? purchasedOnceOnlyTierIds.has(selectedTier) : false;
                   const extendTierName = tiers.find(t => t.id === selectedTier)?.name;
@@ -1908,7 +2013,12 @@ function SubscriptionContent({
                       <Button 
                         className="w-full" 
                         size="lg"
-                        disabled={generatingLink || isUsedInExtend || (autoRenewal && !consentGiven)}
+                        disabled={
+                          generatingLink ||
+                          isUsedInExtend ||
+                          (selectedMethod === 'robokassa' && autoRenewal && !consentGiven) ||
+                          (selectedMethod === 'stripe' && (!stripeTermsAccepted || !stripeImmediateAccepted))
+                        }
                         onClick={handleGeneratePaymentLink}
                       >
                         {generatingLink ? (
@@ -1919,7 +2029,7 @@ function SubscriptionContent({
                         ) : (
                           <>
                             <CreditCard className="mr-2 h-4 w-4" />
-                            Оплатить через Robokassa
+                            {selectedMethod === 'stripe' ? 'Оплатить зарубежной картой' : 'Оплатить через Robokassa'}
                           </>
                         )}
                       </Button>
@@ -1954,7 +2064,7 @@ function SubscriptionContent({
                         </p>
                       </div>
                     </div>
-                    <p className="font-semibold">{Number(payment.amount).toLocaleString('ru-RU')}₽</p>
+                    <p className="font-semibold">{formatPaymentAmount(payment.amount, payment.currency)}</p>
                   </CardContent>
                 </Card>
               ))}
@@ -1974,12 +2084,13 @@ function SubscriptionContent({
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Способ оплаты</span>
-                <span>{
-                  subscriber.subscriber_payment_method === 'robokassa_recurring' ? 'Robokassa (авто)' :
-                  subscriber.subscriber_payment_method === 'robokassa_single' ? 'Robokassa' :
-                  subscriber.subscriber_payment_method === 'manual' ? 'Вручную' :
-                  '—'
-                }</span>
+                <span>{(() => {
+                  const direct = paymentMethodLabel(subscriber.subscriber_payment_method);
+                  if (direct) return direct;
+                  const latestCompleted = (payments ?? []).find((p: any) => p?.status === 'completed');
+                  const fallback = paymentMethodLabel(latestCompleted?.payment_method);
+                  return fallback ?? '—';
+                })()}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Подписчик с</span>

@@ -181,7 +181,7 @@ serve(async (req) => {
     // Fetch payment history - only completed payments for MiniApp users, filtered by tenant
     const { data: payments, error: payError } = await supabaseAdmin
       .from("payment_history")
-      .select("id, created_at, payment_date, amount, status, payment_method, invoice_id, payment_note, tier_id, subscription_tiers(name, purchase_once_only)")
+      .select("id, created_at, payment_date, amount, currency, status, payment_method, invoice_id, payment_note, tier_id, subscription_tiers(name, purchase_once_only)")
       .eq("subscriber_id", subscriber.id)
       .eq("tenant_id", tenantId)
       .eq("status", "completed")

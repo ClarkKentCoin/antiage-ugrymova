@@ -721,9 +721,15 @@ serve(async (req) => {
           const expiresDate = DateTime.fromISO(newEndISO, { zone: "utc" })
             .setZone("Europe/Moscow")
             .toLocaleString({ day: "numeric", month: "long", year: "numeric" }, { locale: "ru" });
-          const amountWithCurrency = `${Math.round(Number(payment.amount)).toString()} ${payment.currency}`;
+          const amountRaw = Number(payment.amount).toLocaleString("ru-RU");
+          const currencyCode = String(payment.currency || "EUR").toUpperCase();
+          const amountWithCurrency = currencyCode === "RUB" ? `${amountRaw}₽` : `${amountRaw} ${currencyCode}`;
           const successMessage = notificationPaymentSuccess
             .replace(/{channel_name}/g, channelName || "канал")
+            // Strip currency suffixes that templates may hardcode for RUB, to avoid e.g. "49 EUR₽".
+            .replace(/\{amount\}\s*₽/g, amountWithCurrency)
+            .replace(/\{amount\}\s*руб\.?/gi, amountWithCurrency)
+            .replace(/\{amount\}\s*RUB/gi, amountWithCurrency)
             .replace(/{amount}/g, amountWithCurrency)
             .replace(/{expires_date}/g, expiresDate);
 
