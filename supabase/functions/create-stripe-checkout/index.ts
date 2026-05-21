@@ -32,6 +32,7 @@ serve(async (req) => {
       tier_id,
       telegram_user_id,
       tenant_slug,
+      legal_acceptance,
     } = body ?? {};
     const init_data: string = (body?.init_data ?? body?.initData ?? "") as string;
 
@@ -41,9 +42,30 @@ serve(async (req) => {
       tenant_slug,
       hasInitData: !!init_data,
       initDataLength: init_data?.length ?? 0,
+      hasLegalAcceptance: !!legal_acceptance,
     });
 
     if (!tier_id) return json({ error: "tier_id is required" }, 400);
+
+    // Validate legal acceptance early — required for Stripe checkout
+    const la = (legal_acceptance ?? null) as Record<string, unknown> | null;
+    if (!la || la.terms_accepted !== true || la.immediate_access_accepted !== true) {
+      return json(
+        { error: "legal_consent_required", message: "Legal consent is required before Stripe checkout." },
+        400,
+      );
+    }
+    const safeLegalAcceptance = {
+      terms_accepted: true,
+      immediate_access_accepted: true,
+      accepted_at: typeof la.accepted_at === "string" ? la.accepted_at : new Date().toISOString(),
+      terms_url: typeof la.terms_url === "string" ? la.terms_url : "https://club.ugrymova.ru/en/terms",
+      subscription_terms_url: typeof la.subscription_terms_url === "string" ? la.subscription_terms_url : "https://club.ugrymova.ru/en/subscription-terms",
+      privacy_policy_url: typeof la.privacy_policy_url === "string" ? la.privacy_policy_url : "https://club.ugrymova.ru/en/privacy-policy",
+      refund_policy_url: typeof la.refund_policy_url === "string" ? la.refund_policy_url : "https://club.ugrymova.ru/en/refund-policy",
+      legal_notice_url: typeof la.legal_notice_url === "string" ? la.legal_notice_url : "https://club.ugrymova.ru/en/legal-notice",
+      international_payments_url: typeof la.international_payments_url === "string" ? la.international_payments_url : "https://club.ugrymova.ru/en/international-payments",
+    };
 
     // Resolve tenant strictly
     let tenantId: string;
@@ -315,6 +337,7 @@ serve(async (req) => {
         stripe_data: {
           created_at: new Date().toISOString(),
           mode: provider.mode,
+          legal_acceptance: safeLegalAcceptance,
         },
       })
       .select("id")
@@ -363,9 +386,20 @@ serve(async (req) => {
       tier_id: tier_id,
       payment_id: payment.id,
       invoice_id: invoiceId,
+      legal_terms_accepted: "true",
+      immediate_access_accepted: "true",
+      terms_url: safeLegalAcceptance.terms_url,
+      refund_policy_url: safeLegalAcceptance.refund_policy_url,
+      subscription_terms_url: safeLegalAcceptance.subscription_terms_url,
     };
 
     // Create Stripe Checkout Session via REST
+    // NOTE: Stripe Dashboard should also be configured manually:
+    //   - Public details: website / support info
+    //   - Terms of Service URL
+    //   - Privacy Policy URL
+    //   - Refund Policy URL
+    //   - Legal policies enabled in Checkout Settings
     const form = new URLSearchParams();
     form.set("mode", "payment");
     form.set("payment_method_types[0]", "card");
@@ -382,6 +416,17 @@ serve(async (req) => {
     const desc = (tier.description && String(tier.description).trim())
       || "Telegram channel subscription";
     form.set("line_items[0][price_data][product_data][description]", desc);
+
+    // Require Terms of Service acceptance on Stripe Checkout
+    form.set("consent_collection[terms_of_service]", "required");
+    form.set(
+      "custom_text[terms_of_service_acceptance][message]",
+      "I agree to the [Terms of Service](https://club.ugrymova.ru/en/terms), [Subscription Terms](https://club.ugrymova.ru/en/subscription-terms), [Privacy Policy](https://club.ugrymova.ru/en/privacy-policy), and [Refund Policy](https://club.ugrymova.ru/en/refund-policy). I request immediate access to the digital Telegram club after payment confirmation.",
+    );
+    form.set(
+      "custom_text[submit][message]",
+      "After payment confirmation, access is provided through the Telegram bot / Mini App. Please review the refund and subscription terms before paying.",
+    );
 
     for (const [k, v] of Object.entries(metadata)) {
       form.set(`metadata[${k}]`, v);
@@ -446,6 +491,8 @@ serve(async (req) => {
           url_created: true,
           livemode: Boolean(session.livemode),
           created_at: new Date().toISOString(),
+          mode: provider.mode,
+          legal_acceptance: safeLegalAcceptance,
         },
       })
       .eq("id", payment.id);
@@ -485,6 +532,8 @@ serve(async (req) => {
             url_created: true,
             livemode: Boolean(session.livemode),
             created_at: new Date().toISOString(),
+            mode: provider.mode,
+            legal_acceptance: safeLegalAcceptance,
             mapping_error: scsErr.message ?? "stripe_checkout_sessions insert failed",
           },
         })

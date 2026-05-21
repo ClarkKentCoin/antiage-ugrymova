@@ -159,6 +159,7 @@ async function invokeStripeCheckout(args: {
   tenantSlug: string | null;
   initData: string;
   subscriberId?: string | null;
+  legalAcceptance?: Record<string, unknown> | null;
 }) {
   const body: Record<string, unknown> = {
     tier_id: args.tierId,
@@ -167,7 +168,84 @@ async function invokeStripeCheckout(args: {
     init_data: args.initData,
   };
   if (args.subscriberId) body.subscriber_id = args.subscriberId;
+  if (args.legalAcceptance) body.legal_acceptance = args.legalAcceptance;
   return supabase.functions.invoke('create-stripe-checkout', { body });
+}
+
+const STRIPE_LEGAL_URLS = {
+  terms_url: 'https://club.ugrymova.ru/en/terms',
+  subscription_terms_url: 'https://club.ugrymova.ru/en/subscription-terms',
+  privacy_policy_url: 'https://club.ugrymova.ru/en/privacy-policy',
+  refund_policy_url: 'https://club.ugrymova.ru/en/refund-policy',
+  legal_notice_url: 'https://club.ugrymova.ru/en/legal-notice',
+  international_payments_url: 'https://club.ugrymova.ru/en/international-payments',
+} as const;
+
+function buildStripeLegalAcceptance() {
+  return {
+    terms_accepted: true,
+    immediate_access_accepted: true,
+    accepted_at: new Date().toISOString(),
+    ...STRIPE_LEGAL_URLS,
+  };
+}
+
+function StripeLegalBlock({
+  idPrefix,
+  termsAccepted,
+  immediateAccessAccepted,
+  onTermsChange,
+  onImmediateChange,
+}: {
+  idPrefix: string;
+  termsAccepted: boolean;
+  immediateAccessAccepted: boolean;
+  onTermsChange: (v: boolean) => void;
+  onImmediateChange: (v: boolean) => void;
+}) {
+  const linkCls = 'text-primary underline';
+  const link = (href: string, label: string) => (
+    <a href={href} target="_blank" rel="noopener noreferrer" className={linkCls} onClick={(e) => e.stopPropagation()}>
+      {label}
+    </a>
+  );
+  return (
+    <div className="space-y-3 p-4 rounded-lg bg-muted/40 border border-border">
+      <p className="text-sm font-medium">Перед оплатой зарубежной картой</p>
+      <p className="text-xs text-muted-foreground leading-relaxed">
+        Оплата зарубежной картой проходит через Stripe. Доступ к Telegram-клубу будет выдан после подтверждения платежа.
+      </p>
+      <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs">
+        {link(STRIPE_LEGAL_URLS.terms_url, 'Terms of Service')}
+        {link(STRIPE_LEGAL_URLS.subscription_terms_url, 'Subscription Terms')}
+        {link(STRIPE_LEGAL_URLS.privacy_policy_url, 'Privacy Policy')}
+        {link(STRIPE_LEGAL_URLS.refund_policy_url, 'Refund Policy')}
+        {link(STRIPE_LEGAL_URLS.legal_notice_url, 'Legal Notice')}
+        {link(STRIPE_LEGAL_URLS.international_payments_url, 'International Payments')}
+      </div>
+      <div className="flex items-start space-x-3">
+        <Checkbox
+          id={`${idPrefix}-stripe-terms`}
+          checked={termsAccepted}
+          onCheckedChange={(c) => onTermsChange(c === true)}
+        />
+        <Label htmlFor={`${idPrefix}-stripe-terms`} className="text-xs cursor-pointer leading-snug">
+          I have read and agree to the Terms of Service, Subscription Terms, Privacy Policy and Refund Policy.
+        </Label>
+      </div>
+      <div className="flex items-start space-x-3">
+        <Checkbox
+          id={`${idPrefix}-stripe-immediate`}
+          checked={immediateAccessAccepted}
+          onCheckedChange={(c) => onImmediateChange(c === true)}
+        />
+        <Label htmlFor={`${idPrefix}-stripe-immediate`} className="text-xs cursor-pointer leading-snug">
+          I request immediate access to the digital Telegram club after payment confirmation and acknowledge that
+          refund/withdrawal conditions are described in the Refund Policy and Subscription Terms.
+        </Label>
+      </div>
+    </div>
+  );
 }
 
 const STRIPE_UNAVAILABLE_CODES = new Set([
@@ -640,6 +718,8 @@ function NewUserView({
   const [consentGiven, setConsentGiven] = useState(false);
   const [generatingLink, setGeneratingLink] = useState(false);
   const [selectedMethod, setSelectedMethod] = useState<SelectedMethod>('robokassa');
+  const [stripeTermsAccepted, setStripeTermsAccepted] = useState(false);
+  const [stripeImmediateAccepted, setStripeImmediateAccepted] = useState(false);
   const { toast } = useToast();
 
   // Force Robokassa when auto-renewal is on (Stripe path has no recurring support here).
@@ -647,12 +727,22 @@ function NewUserView({
     if (autoRenewal && selectedMethod !== 'robokassa') setSelectedMethod('robokassa');
   }, [autoRenewal, selectedMethod]);
 
+  // Reset Stripe consents when method changes away from Stripe
+  useEffect(() => {
+    if (selectedMethod !== 'stripe') {
+      setStripeTermsAccepted(false);
+      setStripeImmediateAccepted(false);
+    }
+  }, [selectedMethod]);
+
   const handleSelectTier = (tierId: string) => {
     if (purchasedOnceOnlyTierIds.has(tierId)) return;
     setSelectedTier(tierId);
     setAutoRenewal(false);
     setConsentGiven(false);
     setSelectedMethod('robokassa');
+    setStripeTermsAccepted(false);
+    setStripeImmediateAccepted(false);
   };
 
   const handlePayment = async () => {
@@ -662,6 +752,15 @@ function NewUserView({
       toast({
         title: 'Необходимо согласие',
         description: 'Пожалуйста, подтвердите согласие на автосписания',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (selectedMethod === 'stripe' && (!stripeTermsAccepted || !stripeImmediateAccepted)) {
+      toast({
+        title: 'Требуется согласие',
+        description: 'Подтвердите условия оплаты и доступа перед переходом к Stripe.',
         variant: 'destructive',
       });
       return;
@@ -684,6 +783,7 @@ function NewUserView({
           tenantSlug: getPublicTenantSlug(),
           initData: tgInitData,
           subscriberId: subscriber?.id ?? null,
+          legalAcceptance: buildStripeLegalAcceptance(),
         });
         if (error) throw error;
         if (data?.checkout_url) {
@@ -695,6 +795,7 @@ function NewUserView({
         }
         return;
       }
+
 
       // Robokassa (default)
       const body: Record<string, unknown> = {
@@ -723,7 +824,13 @@ function NewUserView({
       const { code: errorCode, message: errorMessage } = parseEdgeError(error);
       const securityCodes = new Set(['invalid_init_data', 'user_id_mismatch', 'telegram_bot_not_configured']);
 
-      if (errorCode && STRIPE_UNAVAILABLE_CODES.has(errorCode)) {
+      if (errorCode === 'legal_consent_required') {
+        toast({
+          title: 'Требуется согласие',
+          description: 'Подтвердите условия оплаты и доступа перед переходом к Stripe.',
+          variant: 'destructive',
+        });
+      } else if (errorCode && STRIPE_UNAVAILABLE_CODES.has(errorCode)) {
         toast({
           title: 'Stripe недоступен',
           description: 'Оплата зарубежной картой временно недоступна. Выберите российскую карту или попробуйте позже.',
@@ -921,6 +1028,16 @@ function NewUserView({
               </>
             )}
 
+            {selectedMethod === 'stripe' && (
+              <StripeLegalBlock
+                idPrefix="new"
+                termsAccepted={stripeTermsAccepted}
+                immediateAccessAccepted={stripeImmediateAccepted}
+                onTermsChange={setStripeTermsAccepted}
+                onImmediateChange={setStripeImmediateAccepted}
+              />
+            )}
+
             {isSelectedTierUsed && (
               <p className="text-sm text-center text-muted-foreground">
                 Тариф «{selectedTierData?.name}» уже был использован. Пожалуйста, выберите другой тариф.
@@ -930,7 +1047,7 @@ function NewUserView({
             <Button 
               className="w-full" 
               size="lg"
-              disabled={generatingLink || isSelectedTierUsed || (selectedMethod === 'robokassa' && autoRenewal && !consentGiven)}
+              disabled={generatingLink || isSelectedTierUsed || (selectedMethod === 'robokassa' && autoRenewal && !consentGiven) || (selectedMethod === 'stripe' && (!stripeTermsAccepted || !stripeImmediateAccepted))}
               onClick={handlePayment}
             >
               {generatingLink ? (
@@ -981,11 +1098,20 @@ function GracePeriodView({
   const [consentGiven, setConsentGiven] = useState(false);
   const [generatingLink, setGeneratingLink] = useState(false);
   const [selectedMethod, setSelectedMethod] = useState<SelectedMethod>('robokassa');
+  const [stripeTermsAccepted, setStripeTermsAccepted] = useState(false);
+  const [stripeImmediateAccepted, setStripeImmediateAccepted] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
     if (autoRenewal && selectedMethod !== 'robokassa') setSelectedMethod('robokassa');
   }, [autoRenewal, selectedMethod]);
+
+  useEffect(() => {
+    if (selectedMethod !== 'stripe') {
+      setStripeTermsAccepted(false);
+      setStripeImmediateAccepted(false);
+    }
+  }, [selectedMethod]);
 
   const handleSelectTier = (tierId: string) => {
     if (purchasedOnceOnlyTierIds.has(tierId)) return;
@@ -993,6 +1119,8 @@ function GracePeriodView({
     setAutoRenewal(false);
     setConsentGiven(false);
     setSelectedMethod('robokassa');
+    setStripeTermsAccepted(false);
+    setStripeImmediateAccepted(false);
   };
 
   const handlePayment = async () => {
@@ -1004,6 +1132,15 @@ function GracePeriodView({
 
     if (selectedMethod === 'robokassa' && autoRenewal && !consentGiven) {
       toast({ title: 'Необходимо согласие', description: 'Пожалуйста, подтвердите согласие на автосписания', variant: 'destructive' });
+      return;
+    }
+
+    if (selectedMethod === 'stripe' && (!stripeTermsAccepted || !stripeImmediateAccepted)) {
+      toast({
+        title: 'Требуется согласие',
+        description: 'Подтвердите условия оплаты и доступа перед переходом к Stripe.',
+        variant: 'destructive',
+      });
       return;
     }
 
@@ -1024,6 +1161,7 @@ function GracePeriodView({
           tenantSlug: getPublicTenantSlug(),
           initData: tgInitData,
           subscriberId: subscriber?.id ?? null,
+          legalAcceptance: buildStripeLegalAcceptance(),
         });
         if (error) throw error;
         if (data?.checkout_url) {
@@ -1060,7 +1198,13 @@ function GracePeriodView({
       console.error('Error generating payment link:', error);
       const { code: errorCode, message: errorMessage } = parseEdgeError(error);
       const securityCodes = new Set(['invalid_init_data', 'user_id_mismatch', 'telegram_bot_not_configured']);
-      if (errorCode && STRIPE_UNAVAILABLE_CODES.has(errorCode)) {
+      if (errorCode === 'legal_consent_required') {
+        toast({
+          title: 'Требуется согласие',
+          description: 'Подтвердите условия оплаты и доступа перед переходом к Stripe.',
+          variant: 'destructive',
+        });
+      } else if (errorCode && STRIPE_UNAVAILABLE_CODES.has(errorCode)) {
         toast({
           title: 'Stripe недоступен',
           description: 'Оплата зарубежной картой временно недоступна. Выберите российскую карту или попробуйте позже.',
@@ -1263,6 +1407,16 @@ function GracePeriodView({
               </>
             )}
 
+            {selectedMethod === 'stripe' && (
+              <StripeLegalBlock
+                idPrefix="grace"
+                termsAccepted={stripeTermsAccepted}
+                immediateAccessAccepted={stripeImmediateAccepted}
+                onTermsChange={setStripeTermsAccepted}
+                onImmediateChange={setStripeImmediateAccepted}
+              />
+            )}
+
             {isSelectedTierUsed && (
               <p className="text-sm text-center text-muted-foreground">
                 Тариф «{selectedTierData?.name}» уже был использован. Пожалуйста, выберите другой тариф.
@@ -1272,7 +1426,7 @@ function GracePeriodView({
             <Button 
               className="w-full" 
               size="lg"
-              disabled={generatingLink || isSelectedTierUsed || (selectedMethod === 'robokassa' && autoRenewal && !consentGiven)}
+              disabled={generatingLink || isSelectedTierUsed || (selectedMethod === 'robokassa' && autoRenewal && !consentGiven) || (selectedMethod === 'stripe' && (!stripeTermsAccepted || !stripeImmediateAccepted))}
               onClick={handlePayment}
             >
               {generatingLink ? (
