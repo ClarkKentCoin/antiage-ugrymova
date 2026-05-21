@@ -32,6 +32,7 @@ serve(async (req) => {
       tier_id,
       telegram_user_id,
       tenant_slug,
+      legal_acceptance,
     } = body ?? {};
     const init_data: string = (body?.init_data ?? body?.initData ?? "") as string;
 
@@ -41,9 +42,30 @@ serve(async (req) => {
       tenant_slug,
       hasInitData: !!init_data,
       initDataLength: init_data?.length ?? 0,
+      hasLegalAcceptance: !!legal_acceptance,
     });
 
     if (!tier_id) return json({ error: "tier_id is required" }, 400);
+
+    // Validate legal acceptance early — required for Stripe checkout
+    const la = (legal_acceptance ?? null) as Record<string, unknown> | null;
+    if (!la || la.terms_accepted !== true || la.immediate_access_accepted !== true) {
+      return json(
+        { error: "legal_consent_required", message: "Legal consent is required before Stripe checkout." },
+        400,
+      );
+    }
+    const safeLegalAcceptance = {
+      terms_accepted: true,
+      immediate_access_accepted: true,
+      accepted_at: typeof la.accepted_at === "string" ? la.accepted_at : new Date().toISOString(),
+      terms_url: typeof la.terms_url === "string" ? la.terms_url : "https://club.ugrymova.ru/en/terms",
+      subscription_terms_url: typeof la.subscription_terms_url === "string" ? la.subscription_terms_url : "https://club.ugrymova.ru/en/subscription-terms",
+      privacy_policy_url: typeof la.privacy_policy_url === "string" ? la.privacy_policy_url : "https://club.ugrymova.ru/en/privacy-policy",
+      refund_policy_url: typeof la.refund_policy_url === "string" ? la.refund_policy_url : "https://club.ugrymova.ru/en/refund-policy",
+      legal_notice_url: typeof la.legal_notice_url === "string" ? la.legal_notice_url : "https://club.ugrymova.ru/en/legal-notice",
+      international_payments_url: typeof la.international_payments_url === "string" ? la.international_payments_url : "https://club.ugrymova.ru/en/international-payments",
+    };
 
     // Resolve tenant strictly
     let tenantId: string;
