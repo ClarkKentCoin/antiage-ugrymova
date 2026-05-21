@@ -2003,12 +2003,13 @@ function SubscriptionContent({
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Способ оплаты</span>
-                <span>{
-                  subscriber.subscriber_payment_method === 'robokassa_recurring' ? 'Robokassa (авто)' :
-                  subscriber.subscriber_payment_method === 'robokassa_single' ? 'Robokassa' :
-                  subscriber.subscriber_payment_method === 'manual' ? 'Вручную' :
-                  '—'
-                }</span>
+                <span>{(() => {
+                  const direct = paymentMethodLabel(subscriber.subscriber_payment_method);
+                  if (direct) return direct;
+                  const latestCompleted = (payments ?? []).find((p: any) => p?.status === 'completed');
+                  const fallback = paymentMethodLabel(latestCompleted?.payment_method);
+                  return fallback ?? '—';
+                })()}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Подписчик с</span>
