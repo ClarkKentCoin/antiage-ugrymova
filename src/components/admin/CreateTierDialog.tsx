@@ -35,6 +35,7 @@ const INTERVAL_UNIT_OPTIONS: { value: IntervalUnit; label: string }[] = [
 
 export function CreateTierDialog({ open, onOpenChange }: CreateTierDialogProps) {
   const createTier = useCreateTier();
+  const { toast } = useToast();
 
   const [formData, setFormData] = useState({
     name: '',
@@ -47,6 +48,9 @@ export function CreateTierDialog({ open, onOpenChange }: CreateTierDialogProps) 
     grace_period_enabled: true,
     show_in_dashboard: false,
     purchase_once_only: false,
+    stripe_enabled: false,
+    stripe_price: '',
+    stripe_currency: 'EUR' as StripeCurrency,
   });
 
   const handleSubmit = (e: React.FormEvent) => {
