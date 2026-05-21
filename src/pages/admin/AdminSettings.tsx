@@ -853,6 +853,9 @@ export default function AdminSettings() {
             </CardContent>
           </Card>
 
+          <StripeProviderSettings tenantId={tenantId} tenantSlug={tenantSlug} />
+
+
           {/* Welcome Message */}
           <Card>
             <CardHeader>
