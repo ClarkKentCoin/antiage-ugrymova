@@ -38,14 +38,43 @@ export default function AdminDashboard() {
       }));
   }, [tiers, subscribers]);
 
-  const thisMonthRevenue = payments?.filter(p => {
-    const paymentDate = new Date(p.payment_date);
-    const now = new Date();
-    return paymentDate.getMonth() === now.getMonth() && 
-           paymentDate.getFullYear() === now.getFullYear();
-  }).reduce((sum, p) => sum + Number(p.amount), 0) || 0;
+  const getPaymentCurrency = (payment: { currency?: string | null }) =>
+    (payment.currency || 'RUB').toUpperCase();
 
-  const totalRevenue = payments?.reduce((sum, p) => sum + Number(p.amount), 0) || 0;
+  const formatMoney = (amount: number, currency: string) => {
+    const cur = (currency || 'RUB').toUpperCase();
+    const formatted = Number(amount).toLocaleString('ru-RU');
+    if (cur === 'RUB') return `${formatted}₽`;
+    return `${formatted} ${cur}`;
+  };
+
+  const now = new Date();
+  const thisMonthPayments = payments?.filter(p => {
+    const d = new Date(p.payment_date);
+    return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+  }) || [];
+
+  const sumByCurrency = (list: typeof payments extends (infer T)[] | undefined ? T[] : never[]) => {
+    const acc: Record<string, number> = { RUB: 0, EUR: 0, USD: 0 };
+    (list as any[]).forEach(p => {
+      const cur = getPaymentCurrency(p);
+      acc[cur] = (acc[cur] || 0) + Number(p.amount);
+    });
+    return acc;
+  };
+
+  const thisMonthRevenueByCurrency = sumByCurrency(thisMonthPayments as any);
+  const totalRevenueByCurrency = sumByCurrency((payments || []) as any);
+
+  const currencyOrder = Array.from(
+    new Set([
+      'RUB',
+      'EUR',
+      'USD',
+      ...Object.keys(thisMonthRevenueByCurrency),
+      ...Object.keys(totalRevenueByCurrency),
+    ])
+  );
 
   if (loadingSubscribers || loadingPayments || loadingTiers) {
     return (
@@ -84,18 +113,24 @@ export default function AdminDashboard() {
             icon={AlertTriangle}
             trend={expiringSoon > 0 ? 'down' : 'neutral'}
           />
-          <StatsCard
-            title="This Month"
-            value={`${thisMonthRevenue.toLocaleString()}₽`}
-            description={format(new Date(), 'MMMM yyyy')}
-            icon={TrendingUp}
-          />
-          <StatsCard
-            title="Total Revenue"
-            value={`${totalRevenue.toLocaleString()}₽`}
-            description="All time"
-            icon={CreditCard}
-          />
+          {currencyOrder.map(cur => (
+            <StatsCard
+              key={`month-${cur}`}
+              title={`This Month ${cur}`}
+              value={formatMoney(thisMonthRevenueByCurrency[cur] || 0, cur)}
+              description={format(new Date(), 'MMMM yyyy')}
+              icon={cur === 'RUB' ? Banknote : CreditCard}
+            />
+          ))}
+          {currencyOrder.map(cur => (
+            <StatsCard
+              key={`total-${cur}`}
+              title={`Total ${cur}`}
+              value={formatMoney(totalRevenueByCurrency[cur] || 0, cur)}
+              description="All time"
+              icon={cur === 'RUB' ? CreditCard : TrendingUp}
+            />
+          ))}
         </div>
 
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -147,7 +182,7 @@ export default function AdminDashboard() {
                   </p>
                 </div>
                 <div className="text-right">
-                  <p className="font-medium">{Number(payment.amount).toLocaleString()}₽</p>
+                  <p className="font-medium">{formatMoney(Number(payment.amount), getPaymentCurrency(payment))}</p>
                   <p className="text-sm text-muted-foreground">
                     {format(new Date(payment.payment_date), 'MMM d, HH:mm')}
                   </p>
