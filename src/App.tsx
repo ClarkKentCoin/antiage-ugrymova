@@ -63,6 +63,8 @@ function AppRoutes() {
     <Routes>
       <Route path="/" element={<Index />} />
       <Route path="/telegram-app" element={<TelegramApp />} />
+      <Route path="/telegram-app/payment-success" element={<StripePaymentSuccessPage />} />
+      <Route path="/telegram-app/payment-cancel" element={<StripePaymentCancelPage />} />
       <Route path="/admin/login" element={<AdminLogin />} />
       <Route path="/admin" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
       <Route path="/admin/subscribers" element={<ProtectedRoute><AdminSubscribers /></ProtectedRoute>} />
