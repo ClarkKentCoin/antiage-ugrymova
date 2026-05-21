@@ -182,7 +182,7 @@ export default function AdminDashboard() {
                   </p>
                 </div>
                 <div className="text-right">
-                  <p className="font-medium">{Number(payment.amount).toLocaleString()}₽</p>
+                  <p className="font-medium">{formatMoney(Number(payment.amount), getPaymentCurrency(payment))}</p>
                   <p className="text-sm text-muted-foreground">
                     {format(new Date(payment.payment_date), 'MMM d, HH:mm')}
                   </p>
