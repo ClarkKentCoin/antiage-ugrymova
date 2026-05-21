@@ -9,6 +9,8 @@ const DEFAULT_PUBLIC_TENANT_ID =
 
 export type IntervalUnit = 'day' | 'week' | 'month' | 'year';
 
+export type StripeCurrency = 'EUR' | 'USD';
+
 export interface SubscriptionTier {
   id: string;
   name: string;
@@ -22,6 +24,9 @@ export interface SubscriptionTier {
   grace_period_enabled: boolean;
   show_in_dashboard: boolean;
   purchase_once_only: boolean;
+  stripe_enabled?: boolean | null;
+  stripe_price?: number | null;
+  stripe_currency?: StripeCurrency | string | null;
   created_at: string;
   updated_at: string;
 }
@@ -38,6 +43,9 @@ export interface CreateTierInput {
   interval_unit: IntervalUnit;
   interval_count: number;
   billing_timezone: string;
+  stripe_enabled?: boolean;
+  stripe_price?: number | null;
+  stripe_currency?: StripeCurrency;
 }
 
 export interface UpdateTierInput {
@@ -53,6 +61,9 @@ export interface UpdateTierInput {
   interval_unit?: IntervalUnit;
   interval_count?: number;
   billing_timezone?: string;
+  stripe_enabled?: boolean;
+  stripe_price?: number | null;
+  stripe_currency?: StripeCurrency;
 }
 
 // Helper to derive interval from legacy duration_days
