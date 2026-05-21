@@ -718,6 +718,8 @@ function NewUserView({
   const [consentGiven, setConsentGiven] = useState(false);
   const [generatingLink, setGeneratingLink] = useState(false);
   const [selectedMethod, setSelectedMethod] = useState<SelectedMethod>('robokassa');
+  const [stripeTermsAccepted, setStripeTermsAccepted] = useState(false);
+  const [stripeImmediateAccepted, setStripeImmediateAccepted] = useState(false);
   const { toast } = useToast();
 
   // Force Robokassa when auto-renewal is on (Stripe path has no recurring support here).
@@ -725,12 +727,22 @@ function NewUserView({
     if (autoRenewal && selectedMethod !== 'robokassa') setSelectedMethod('robokassa');
   }, [autoRenewal, selectedMethod]);
 
+  // Reset Stripe consents when method changes away from Stripe
+  useEffect(() => {
+    if (selectedMethod !== 'stripe') {
+      setStripeTermsAccepted(false);
+      setStripeImmediateAccepted(false);
+    }
+  }, [selectedMethod]);
+
   const handleSelectTier = (tierId: string) => {
     if (purchasedOnceOnlyTierIds.has(tierId)) return;
     setSelectedTier(tierId);
     setAutoRenewal(false);
     setConsentGiven(false);
     setSelectedMethod('robokassa');
+    setStripeTermsAccepted(false);
+    setStripeImmediateAccepted(false);
   };
 
   const handlePayment = async () => {
