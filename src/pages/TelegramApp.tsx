@@ -313,6 +313,21 @@ export default function TelegramApp() {
               'Закрытый Telegram-канал для женщин: мотивация, рецепты, научные подходы к антиэйджу. Всё для энергии и молодости в одном месте.',
           });
           setGracePeriodDays(data.grace_period_days ?? 0);
+          if (data.payment_methods && typeof data.payment_methods === 'object') {
+            setPaymentMethods({
+              robokassa: {
+                enabled: data.payment_methods?.robokassa?.enabled ?? true,
+                label: data.payment_methods?.robokassa?.label ?? 'Российская карта',
+                provider: 'robokassa',
+              },
+              stripe: {
+                enabled: !!data.payment_methods?.stripe?.enabled,
+                label: data.payment_methods?.stripe?.label ?? 'Зарубежная карта',
+                provider: 'stripe',
+                mode: data.payment_methods?.stripe?.mode ?? null,
+              },
+            });
+          }
           console.log('[TelegramApp] Loaded public config:', { tenant_id: data.tenant_id, grace_period_days: data.grace_period_days, logo_url: rawLogoUrl });
         } else {
           setGracePeriodDays(0);
