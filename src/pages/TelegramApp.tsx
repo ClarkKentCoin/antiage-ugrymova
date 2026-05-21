@@ -45,6 +45,35 @@ const openPaymentUrl = (url: string) => {
   window.location.href = url;
 };
 
+/** Currency-aware amount formatter for Mini App payment history. */
+function formatPaymentAmount(
+  amount: number | string | null | undefined,
+  currency?: string | null,
+): string {
+  const value = Number(amount ?? 0).toLocaleString('ru-RU');
+  const normalized = String(currency || 'RUB').toUpperCase();
+  if (normalized === 'RUB') return `${value}₽`;
+  if (normalized === 'EUR') return `${value} EUR`;
+  if (normalized === 'USD') return `${value} USD`;
+  return `${value} ${normalized}`;
+}
+
+/** Human label for a payment_method code. */
+function paymentMethodLabel(method: string | null | undefined): string | null {
+  switch (method) {
+    case 'robokassa_recurring':
+      return 'Robokassa (авто)';
+    case 'robokassa_single':
+      return 'Robokassa';
+    case 'stripe_single':
+      return 'Зарубежная карта (Stripe)';
+    case 'manual':
+      return 'Вручную';
+    default:
+      return null;
+  }
+}
+
 type PaymentMethodInfo = {
   enabled: boolean;
   label: string;
