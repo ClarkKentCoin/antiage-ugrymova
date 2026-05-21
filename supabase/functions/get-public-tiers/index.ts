@@ -52,7 +52,7 @@ serve(async (req) => {
 
     const { data: tiers, error } = await supabaseAdmin
       .from("subscription_tiers")
-      .select("id, name, description, duration_days, price, is_active, interval_unit, interval_count, billing_timezone, grace_period_enabled, show_in_dashboard, purchase_once_only, created_at, updated_at")
+      .select("id, name, description, duration_days, price, is_active, interval_unit, interval_count, billing_timezone, grace_period_enabled, show_in_dashboard, purchase_once_only, stripe_enabled, stripe_price, stripe_currency, created_at, updated_at")
       .eq("is_active", true)
       .eq("tenant_id", tenantId)
       .order("price", { ascending: true });
