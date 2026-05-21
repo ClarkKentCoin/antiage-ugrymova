@@ -376,14 +376,44 @@ serve(async (req) => {
     const successUrl = `${baseUrl}/telegram-app/payment-success?provider=stripe&session_id={CHECKOUT_SESSION_ID}${tSlugParam}`;
     const cancelUrl = `${baseUrl}/telegram-app/payment-cancel?provider=stripe${tSlugParam}`;
 
+    // Channly service routing metadata (used to separate from future Uspas events)
+    const SERVICE_ROUTING = {
+      service: "channly",
+      delivery_platform: "telegram",
+      product: "culinary_club",
+      metadata_version: "1",
+    } as const;
+
+    // Optional channel diagnostics (safe — never block checkout if missing)
+    let channelName = "";
+    let telegramChannelId = "";
+    try {
+      const { data: chSettings } = await supabaseAdmin
+        .from("admin_settings")
+        .select("telegram_channel_id, telegram_channel_name")
+        .eq("tenant_id", tenantId)
+        .maybeSingle();
+      if (chSettings) {
+        if (chSettings.telegram_channel_id) telegramChannelId = String(chSettings.telegram_channel_id);
+        if ((chSettings as any).telegram_channel_name) channelName = String((chSettings as any).telegram_channel_name);
+      }
+    } catch (e) {
+      console.warn("[create-stripe-checkout] optional channel lookup warn:", e);
+    }
+
     // Metadata used in both checkout session and payment_intent
     const metadata: Record<string, string> = {
       provider: "stripe",
+      service: SERVICE_ROUTING.service,
+      delivery_platform: SERVICE_ROUTING.delivery_platform,
+      product: SERVICE_ROUTING.product,
+      metadata_version: SERVICE_ROUTING.metadata_version,
       tenant_id: tenantId,
       tenant_slug: resolvedTenantSlug ?? "",
       subscriber_id: resolvedSubscriberId,
       telegram_user_id: subscriber.telegram_user_id ? String(subscriber.telegram_user_id) : "",
       tier_id: tier_id,
+      tier_name: tier.name ? String(tier.name) : "",
       payment_id: payment.id,
       invoice_id: invoiceId,
       legal_terms_accepted: "true",
@@ -392,6 +422,8 @@ serve(async (req) => {
       refund_policy_url: safeLegalAcceptance.refund_policy_url,
       subscription_terms_url: safeLegalAcceptance.subscription_terms_url,
     };
+    if (channelName) metadata.channel_name = channelName;
+    if (telegramChannelId) metadata.telegram_channel_id = telegramChannelId;
 
     // Create Stripe Checkout Session via REST
     // NOTE: Stripe Dashboard should also be configured manually:
