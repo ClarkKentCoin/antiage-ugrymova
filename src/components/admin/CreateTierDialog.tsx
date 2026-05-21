@@ -17,8 +17,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { useCreateTier, IntervalUnit, computeDurationDays } from '@/hooks/useSubscriptionTiers';
+import { useCreateTier, IntervalUnit, StripeCurrency, computeDurationDays } from '@/hooks/useSubscriptionTiers';
 import { logEvent, generateRequestId } from '@/lib/logger';
+import { useToast } from '@/hooks/use-toast';
 
 interface CreateTierDialogProps {
   open: boolean;
