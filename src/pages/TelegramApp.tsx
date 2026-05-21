@@ -1098,11 +1098,20 @@ function GracePeriodView({
   const [consentGiven, setConsentGiven] = useState(false);
   const [generatingLink, setGeneratingLink] = useState(false);
   const [selectedMethod, setSelectedMethod] = useState<SelectedMethod>('robokassa');
+  const [stripeTermsAccepted, setStripeTermsAccepted] = useState(false);
+  const [stripeImmediateAccepted, setStripeImmediateAccepted] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
     if (autoRenewal && selectedMethod !== 'robokassa') setSelectedMethod('robokassa');
   }, [autoRenewal, selectedMethod]);
+
+  useEffect(() => {
+    if (selectedMethod !== 'stripe') {
+      setStripeTermsAccepted(false);
+      setStripeImmediateAccepted(false);
+    }
+  }, [selectedMethod]);
 
   const handleSelectTier = (tierId: string) => {
     if (purchasedOnceOnlyTierIds.has(tierId)) return;
@@ -1110,6 +1119,8 @@ function GracePeriodView({
     setAutoRenewal(false);
     setConsentGiven(false);
     setSelectedMethod('robokassa');
+    setStripeTermsAccepted(false);
+    setStripeImmediateAccepted(false);
   };
 
   const handlePayment = async () => {
@@ -1121,6 +1132,15 @@ function GracePeriodView({
 
     if (selectedMethod === 'robokassa' && autoRenewal && !consentGiven) {
       toast({ title: 'Необходимо согласие', description: 'Пожалуйста, подтвердите согласие на автосписания', variant: 'destructive' });
+      return;
+    }
+
+    if (selectedMethod === 'stripe' && (!stripeTermsAccepted || !stripeImmediateAccepted)) {
+      toast({
+        title: 'Требуется согласие',
+        description: 'Подтвердите условия оплаты и доступа перед переходом к Stripe.',
+        variant: 'destructive',
+      });
       return;
     }
 
@@ -1141,6 +1161,7 @@ function GracePeriodView({
           tenantSlug: getPublicTenantSlug(),
           initData: tgInitData,
           subscriberId: subscriber?.id ?? null,
+          legalAcceptance: buildStripeLegalAcceptance(),
         });
         if (error) throw error;
         if (data?.checkout_url) {
