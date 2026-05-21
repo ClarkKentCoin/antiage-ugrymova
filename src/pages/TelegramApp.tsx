@@ -963,6 +963,7 @@ function GracePeriodView({
   onDebugTap,
   purchasedOnceOnlyTierIds = new Set(),
   logoUrl,
+  paymentMethods,
 }: {
   channelInfo: { name: string; description: string } | null;
   tiers: any[];
@@ -973,32 +974,65 @@ function GracePeriodView({
   onDebugTap?: () => void;
   purchasedOnceOnlyTierIds?: Set<string>;
   logoUrl?: string | null;
+  paymentMethods: PaymentMethodsConfig;
 }) {
   const [selectedTier, setSelectedTier] = useState<string | null>(null);
   const [autoRenewal, setAutoRenewal] = useState(false);
   const [consentGiven, setConsentGiven] = useState(false);
   const [generatingLink, setGeneratingLink] = useState(false);
+  const [selectedMethod, setSelectedMethod] = useState<SelectedMethod>('robokassa');
   const { toast } = useToast();
+
+  useEffect(() => {
+    if (autoRenewal && selectedMethod !== 'robokassa') setSelectedMethod('robokassa');
+  }, [autoRenewal, selectedMethod]);
 
   const handleSelectTier = (tierId: string) => {
     if (purchasedOnceOnlyTierIds.has(tierId)) return;
     setSelectedTier(tierId);
     setAutoRenewal(false);
     setConsentGiven(false);
+    setSelectedMethod('robokassa');
   };
 
   const handlePayment = async () => {
-    if (!selectedTier || !subscriber?.id) return;
-    
-    if (autoRenewal && !consentGiven) {
+    if (!selectedTier) return;
+    if (selectedMethod === 'robokassa' && !subscriber?.id) return;
+
+    if (selectedMethod === 'robokassa' && autoRenewal && !consentGiven) {
       toast({ title: 'Необходимо согласие', description: 'Пожалуйста, подтвердите согласие на автосписания', variant: 'destructive' });
+      return;
+    }
+
+    if (!telegramUserId) {
+      toast({ title: 'Ошибка', description: 'Не удалось определить Telegram пользователя', variant: 'destructive' });
       return;
     }
 
     setGeneratingLink(true);
     try {
       const tgInitData = (window as any)?.Telegram?.WebApp?.initData ?? '';
-      console.log('[TelegramApp payment] initData available:', Boolean(tgInitData), 'length:', tgInitData.length);
+      console.log('[TelegramApp grace payment] method:', selectedMethod, 'initData len:', tgInitData.length);
+
+      if (selectedMethod === 'stripe') {
+        const { data, error } = await invokeStripeCheckout({
+          tierId: selectedTier,
+          telegramUserId,
+          tenantSlug: getPublicTenantSlug(),
+          initData: tgInitData,
+          subscriberId: subscriber?.id ?? null,
+        });
+        if (error) throw error;
+        if (data?.checkout_url) {
+          toast({ title: 'Переход к оплате Stripe...', description: 'Сейчас откроется страница оплаты' });
+          openPaymentUrl(data.checkout_url);
+          onRefetch?.();
+        } else {
+          toast({ title: 'Ошибка', description: 'Ссылка Stripe не вернулась от сервера', variant: 'destructive' });
+        }
+        return;
+      }
+
       const { data, error } = await supabase.functions.invoke('create-robokassa-payment', {
         body: {
           subscriber_id: subscriber.id,
@@ -1021,14 +1055,15 @@ function GracePeriodView({
       }
     } catch (error) {
       console.error('Error generating payment link:', error);
-      const err = error as any;
-      let errorCode: string | null = null;
-      let errorMessage: string | null = null;
-      if (typeof err?.context?.body === 'string') {
-        try { const p = JSON.parse(err.context.body); errorCode = p?.error ?? null; errorMessage = p?.message ?? null; } catch {}
-      }
+      const { code: errorCode, message: errorMessage } = parseEdgeError(error);
       const securityCodes = new Set(['invalid_init_data', 'user_id_mismatch', 'telegram_bot_not_configured']);
-      if (errorCode && (securityCodes.has(errorCode) || errorCode === 'telegram_user_id and init_data are required')) {
+      if (errorCode && STRIPE_UNAVAILABLE_CODES.has(errorCode)) {
+        toast({
+          title: 'Stripe недоступен',
+          description: 'Оплата зарубежной картой временно недоступна. Выберите российскую карту или попробуйте позже.',
+          variant: 'destructive',
+        });
+      } else if (errorCode && (securityCodes.has(errorCode) || errorCode === 'telegram_user_id and init_data are required')) {
         toast({
           title: 'Ошибка',
           description: 'Не удалось подтвердить Telegram-сессию. Откройте оплату через кнопку в Telegram-боте.',
