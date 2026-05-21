@@ -658,7 +658,7 @@ function NewUserView({
   const handlePayment = async () => {
     if (!selectedTier) return;
 
-    if (autoRenewal && !consentGiven) {
+    if (selectedMethod === 'robokassa' && autoRenewal && !consentGiven) {
       toast({
         title: 'Необходимо согласие',
         description: 'Пожалуйста, подтвердите согласие на автосписания',
@@ -675,7 +675,28 @@ function NewUserView({
     setGeneratingLink(true);
     try {
       const tgInitData = (window as any)?.Telegram?.WebApp?.initData ?? '';
-      console.log('[TelegramApp payment] initData available:', Boolean(tgInitData), 'length:', tgInitData.length);
+      console.log('[TelegramApp payment] method:', selectedMethod, 'initData len:', tgInitData.length);
+
+      if (selectedMethod === 'stripe') {
+        const { data, error } = await invokeStripeCheckout({
+          tierId: selectedTier,
+          telegramUserId,
+          tenantSlug: getPublicTenantSlug(),
+          initData: tgInitData,
+          subscriberId: subscriber?.id ?? null,
+        });
+        if (error) throw error;
+        if (data?.checkout_url) {
+          toast({ title: 'Переход к оплате Stripe...', description: 'Сейчас откроется страница оплаты' });
+          openPaymentUrl(data.checkout_url);
+          onRefetch?.();
+        } else {
+          toast({ title: 'Ошибка', description: 'Ссылка Stripe не вернулась от сервера', variant: 'destructive' });
+        }
+        return;
+      }
+
+      // Robokassa (default)
       const body: Record<string, unknown> = {
         tier_id: selectedTier,
         is_recurring: autoRenewal,
@@ -685,14 +706,9 @@ function NewUserView({
         tenant_slug: getPublicTenantSlug(),
         init_data: tgInitData,
       };
-
-      // Optional: if subscriber exists (например, в тестовом режиме), передадим его
       if (subscriber?.id) body.subscriber_id = subscriber.id;
 
-      const { data, error } = await supabase.functions.invoke('create-robokassa-payment', {
-        body,
-      });
-
+      const { data, error } = await supabase.functions.invoke('create-robokassa-payment', { body });
       if (error) throw error;
 
       if (data?.payment_url) {
@@ -704,20 +720,16 @@ function NewUserView({
       }
     } catch (error) {
       console.error('Error generating payment link:', error);
-
-      const err = error as any;
-      let errorCode: string | null = null;
-      let errorMessage: string | null = null;
-      if (typeof err?.context?.body === 'string') {
-        try {
-          const parsed = JSON.parse(err.context.body);
-          errorCode = parsed?.error ?? null;
-          errorMessage = parsed?.message ?? null;
-        } catch {}
-      }
-
+      const { code: errorCode, message: errorMessage } = parseEdgeError(error);
       const securityCodes = new Set(['invalid_init_data', 'user_id_mismatch', 'telegram_bot_not_configured']);
-      if (errorCode && (securityCodes.has(errorCode) || errorMessage === 'telegram_user_id and init_data are required' || errorCode === 'telegram_user_id and init_data are required')) {
+
+      if (errorCode && STRIPE_UNAVAILABLE_CODES.has(errorCode)) {
+        toast({
+          title: 'Stripe недоступен',
+          description: 'Оплата зарубежной картой временно недоступна. Выберите российскую карту или попробуйте позже.',
+          variant: 'destructive',
+        });
+      } else if (errorCode && (securityCodes.has(errorCode) || errorMessage === 'telegram_user_id and init_data are required' || errorCode === 'telegram_user_id and init_data are required')) {
         toast({
           title: 'Ошибка',
           description: 'Не удалось подтвердить Telegram-сессию. Откройте оплату через кнопку в Telegram-боте.',
@@ -734,7 +746,7 @@ function NewUserView({
       } else {
         toast({
           title: 'Ошибка',
-          description: errorMessage || err?.message || 'Не удалось создать ссылку для оплаты',
+          description: errorMessage || (error as any)?.message || 'Не удалось создать ссылку для оплаты',
           variant: 'destructive',
         });
       }
