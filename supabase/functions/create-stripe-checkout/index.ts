@@ -227,12 +227,23 @@ serve(async (req) => {
 
     const { data: tier, error: tierErr } = await supabaseAdmin
       .from("subscription_tiers")
-      .select("id, name, description, price, purchase_once_only, is_active")
+      .select("id, name, description, price, purchase_once_only, is_active, stripe_enabled, stripe_price, stripe_currency")
       .eq("id", tier_id)
       .eq("tenant_id", tenantId)
       .maybeSingle();
     if (tierErr || !tier) return json({ error: "Subscription tier not found" }, 404);
     if (!tier.is_active) return json({ error: "tier_inactive" }, 400);
+
+    if (tier.stripe_enabled !== true) {
+      return json({ error: "stripe_tier_not_enabled", message: "Stripe is not enabled for this tariff." }, 400);
+    }
+    const stripeAmount = Number(tier.stripe_price);
+    if (!Number.isFinite(stripeAmount) || stripeAmount <= 0) {
+      return json({ error: "invalid_stripe_tier_price", message: "Stripe price is not configured for this tariff." }, 400);
+    }
+    if (!tier.stripe_currency || !String(tier.stripe_currency).trim()) {
+      return json({ error: "invalid_stripe_currency", message: "Stripe currency is not configured for this tariff." }, 400);
+    }
 
     // purchase_once_only check
     if (tier.purchase_once_only) {
@@ -267,11 +278,8 @@ serve(async (req) => {
       return json({ error: "stripe_not_configured" }, 400);
     }
 
-    // Currency: prefer provider public_config.currency, else EUR
-    const currencyUpper =
-      (typeof pubConfig.currency === "string" && pubConfig.currency.trim()
-        ? String(pubConfig.currency).trim().toUpperCase()
-        : "EUR");
+    // Currency: from tier.stripe_currency
+    const currencyUpper = String(tier.stripe_currency || "EUR").toUpperCase();
     const currencyLower = currencyUpper.toLowerCase();
 
     // Load Stripe secret via RPC
@@ -286,10 +294,8 @@ serve(async (req) => {
     const stripeSecretKey = (secretData as any)?.stripe_secret_key as string | undefined;
     if (!stripeSecretKey) return json({ error: "stripe_not_configured" }, 400);
 
-    // Build invoice id and price
-    const price = Number(tier.price);
-    if (!Number.isFinite(price) || price <= 0) return json({ error: "invalid_tier_price" }, 400);
-    const unitAmount = Math.round(price * 100);
+    // Build invoice id and Stripe price (separate from Robokassa/RUB price)
+    const unitAmount = Math.round(stripeAmount * 100);
 
     const invoiceId = `stripe_${Date.now()}_${Math.floor(Math.random() * 1_000_000)}`;
 
@@ -299,7 +305,7 @@ serve(async (req) => {
       .insert({
         subscriber_id: resolvedSubscriberId,
         tier_id,
-        amount: price,
+        amount: stripeAmount,
         currency: currencyUpper,
         invoice_id: invoiceId,
         transaction_type: "initial",
@@ -338,7 +344,7 @@ serve(async (req) => {
       tier_id,
       tenant_id: tenantId,
       message: "Stripe pending payment created",
-      payload: { payment_id: payment.id, invoice_id: invoiceId, amount: price, currency: currencyUpper, mode: provider.mode },
+      payload: { payment_id: payment.id, invoice_id: invoiceId, amount: stripeAmount, currency: currencyUpper, mode: provider.mode },
     });
 
     // Build URLs
@@ -457,7 +463,7 @@ serve(async (req) => {
         stripe_customer_id: session.customer ?? null,
         mode: "payment",
         status: session.status ?? "open",
-        amount: price,
+        amount: stripeAmount,
         currency: currencyUpper,
         success_url: successUrl,
         cancel_url: cancelUrl,
@@ -525,7 +531,7 @@ serve(async (req) => {
       checkout_session_id: session.id,
       payment_id: payment.id,
       invoice_id: invoiceId,
-      amount: price,
+      amount: stripeAmount,
       currency: currencyUpper,
     });
   } catch (err) {
