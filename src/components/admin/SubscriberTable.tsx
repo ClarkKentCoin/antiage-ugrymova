@@ -40,7 +40,7 @@ const statusVariants: Record<string, string> = {
   grace_period: 'bg-amber-100 text-amber-800 border-amber-300',
 };
 
-export function SubscriberTable({ subscribers }: SubscriberTableProps) {
+export function SubscriberTable({ subscribers, tenantGraceDays = 0 }: SubscriberTableProps) {
   const [editingSubscriber, setEditingSubscriber] = useState<Subscriber | null>(null);
   const [extendingSubscriber, setExtendingSubscriber] = useState<Subscriber | null>(null);
   const [messagingSubscriber, setMessagingSubscriber] = useState<Subscriber | null>(null);
