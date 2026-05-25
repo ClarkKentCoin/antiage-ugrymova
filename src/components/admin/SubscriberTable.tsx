@@ -232,7 +232,7 @@ export function SubscriberTable({ subscribers, tenantGraceDays = 0 }: Subscriber
                   {getSortIcon('status')}
                 </Button>
               </TableHead>
-              <TableHead className="hidden lg:table-cell">Grace Period</TableHead>
+              <TableHead className="hidden lg:table-cell">Статус отсрочки</TableHead>
               <TableHead>
                 <Button 
                   variant="ghost" 
