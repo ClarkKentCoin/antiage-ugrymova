@@ -29,6 +29,7 @@ type SortDirection = 'asc' | 'desc';
 
 interface SubscriberTableProps {
   subscribers: Subscriber[];
+  tenantGraceDays?: number;
 }
 
 const statusVariants: Record<string, string> = {
