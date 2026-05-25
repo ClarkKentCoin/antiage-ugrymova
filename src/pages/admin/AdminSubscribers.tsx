@@ -31,6 +31,25 @@ const filterTabs: { value: StatusFilter; label: string }[] = [
 ];
 
 export default function AdminSubscribers() {
+  const { tenantId } = useAuth();
+  const [tenantGraceDays, setTenantGraceDays] = useState<number>(0);
+
+  useEffect(() => {
+    if (!tenantId) return;
+    let cancelled = false;
+    supabase
+      .from('admin_settings')
+      .select('grace_period_days')
+      .eq('tenant_id', tenantId)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!cancelled && data?.grace_period_days != null) {
+          setTenantGraceDays(data.grace_period_days);
+        }
+      });
+    return () => { cancelled = true; };
+  }, [tenantId]);
+
   const { data: subscribers, isLoading } = useSubscribers();
   const { data: allTiers } = useSubscriptionTiers();
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
