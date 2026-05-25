@@ -1,4 +1,6 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
 import { AdminLayout } from '@/components/admin/AdminLayout';
 import { SubscriberTable } from '@/components/admin/SubscriberTable';
 import { AddSubscriberDialog } from '@/components/admin/AddSubscriberDialog';
