@@ -29,6 +29,7 @@ export interface Subscriber {
     interval_unit?: string | null;
     interval_count?: number | null;
     billing_timezone?: string | null;
+    grace_period_enabled?: boolean | null;
   } | null;
   // Used for inner join filtering - only subscribers with completed payments
   payment_history?: { id: string; status: string; payment_method?: string; created_at?: string }[];
