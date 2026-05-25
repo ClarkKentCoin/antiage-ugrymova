@@ -186,6 +186,7 @@ export default function AdminSettings() {
     } catch (error) {
       console.error('Error loading settings:', error);
     } finally {
+      hasLoadedOnceRef.current = true;
       setIsLoading(false);
     }
   };
