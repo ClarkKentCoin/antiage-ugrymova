@@ -118,8 +118,14 @@ export default function AdminSettings() {
     }).catch(err => console.warn('Failed to fetch canonical base URL:', err));
   }, [tenantSlug]);
 
+  // Track whether the user has started editing the form. Once dirty, we will
+  // NOT overwrite the local form state with refetched server data (e.g. after
+  // a tab refocus / token refresh), so unsaved input is preserved.
+  const isDirtyRef = useRef(false);
+  const hasLoadedOnceRef = useRef(false);
+
   useEffect(() => {
-    if (!tenantLoading) {
+    if (!tenantLoading && !hasLoadedOnceRef.current) {
       loadSettings();
     }
   }, [tenantLoading, tenantId]);
@@ -180,6 +186,7 @@ export default function AdminSettings() {
     } catch (error) {
       console.error('Error loading settings:', error);
     } finally {
+      hasLoadedOnceRef.current = true;
       setIsLoading(false);
     }
   };
