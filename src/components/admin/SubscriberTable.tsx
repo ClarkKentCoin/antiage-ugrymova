@@ -173,13 +173,20 @@ export function SubscriberTable({ subscribers, tenantGraceDays = 0 }: Subscriber
     return diff;
   };
 
-  // Calculate days in grace period (days since subscription ended)
-  const getGracePeriodDays = (subscriber: Subscriber) => {
+  // Calculate grace-period status: remaining days until grace end, or overdue days past it
+  const getGraceStatus = (subscriber: Subscriber) => {
     if (subscriber.status !== 'grace_period' || !subscriber.subscription_end) return null;
+    const tierGraceEnabled = subscriber.subscription_tiers?.grace_period_enabled !== false;
+    const graceDays = tierGraceEnabled ? tenantGraceDays : 0;
     const end = new Date(subscriber.subscription_end);
+    const graceEndAt = new Date(end.getTime() + graceDays * 24 * 60 * 60 * 1000);
     const now = new Date();
-    const daysSinceExpired = Math.ceil((now.getTime() - end.getTime()) / (1000 * 60 * 60 * 24));
-    return daysSinceExpired;
+    const diffMs = graceEndAt.getTime() - now.getTime();
+    const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+    if (diffMs >= 0) {
+      return { type: 'remaining' as const, days: Math.max(diffDays, 0), graceEndAt };
+    }
+    return { type: 'overdue' as const, days: Math.abs(diffDays), graceEndAt };
   };
 
   return (
