@@ -209,7 +209,7 @@ export function SubscriberTable({ subscribers, tenantGraceDays = 0 }: Subscriber
               </TableHead>
               <TableHead className="hidden lg:table-cell">Full Name</TableHead>
               <TableHead className="hidden lg:table-cell">Email</TableHead>
-              <TableHead className="hidden xl:table-cell">Phone</TableHead>
+              
               <TableHead>
                 <Button 
                   variant="ghost" 
@@ -287,9 +287,6 @@ export function SubscriberTable({ subscribers, tenantGraceDays = 0 }: Subscriber
                     </TableCell>
                     <TableCell className="text-muted-foreground hidden lg:table-cell">
                       <span className="truncate block max-w-[180px]">{subscriber.email || '-'}</span>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground hidden xl:table-cell">
-                      {subscriber.phone_number || '-'}
                     </TableCell>
                     <TableCell>
                       {subscriber.subscription_tiers?.name || '-'}
