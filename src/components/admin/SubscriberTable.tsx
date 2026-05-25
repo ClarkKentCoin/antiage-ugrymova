@@ -29,6 +29,7 @@ type SortDirection = 'asc' | 'desc';
 
 interface SubscriberTableProps {
   subscribers: Subscriber[];
+  tenantGraceDays?: number;
 }
 
 const statusVariants: Record<string, string> = {
@@ -39,7 +40,7 @@ const statusVariants: Record<string, string> = {
   grace_period: 'bg-amber-100 text-amber-800 border-amber-300',
 };
 
-export function SubscriberTable({ subscribers }: SubscriberTableProps) {
+export function SubscriberTable({ subscribers, tenantGraceDays = 0 }: SubscriberTableProps) {
   const [editingSubscriber, setEditingSubscriber] = useState<Subscriber | null>(null);
   const [extendingSubscriber, setExtendingSubscriber] = useState<Subscriber | null>(null);
   const [messagingSubscriber, setMessagingSubscriber] = useState<Subscriber | null>(null);
@@ -172,13 +173,20 @@ export function SubscriberTable({ subscribers }: SubscriberTableProps) {
     return diff;
   };
 
-  // Calculate days in grace period (days since subscription ended)
-  const getGracePeriodDays = (subscriber: Subscriber) => {
+  // Calculate grace-period status: remaining days until grace end, or overdue days past it
+  const getGraceStatus = (subscriber: Subscriber) => {
     if (subscriber.status !== 'grace_period' || !subscriber.subscription_end) return null;
+    const tierGraceEnabled = subscriber.subscription_tiers?.grace_period_enabled !== false;
+    const graceDays = tierGraceEnabled ? tenantGraceDays : 0;
     const end = new Date(subscriber.subscription_end);
+    const graceEndAt = new Date(end.getTime() + graceDays * 24 * 60 * 60 * 1000);
     const now = new Date();
-    const daysSinceExpired = Math.ceil((now.getTime() - end.getTime()) / (1000 * 60 * 60 * 24));
-    return daysSinceExpired;
+    const diffMs = graceEndAt.getTime() - now.getTime();
+    const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+    if (diffMs >= 0) {
+      return { type: 'remaining' as const, days: Math.max(diffDays, 0), graceEndAt };
+    }
+    return { type: 'overdue' as const, days: Math.abs(diffDays), graceEndAt };
   };
 
   return (
@@ -224,7 +232,7 @@ export function SubscriberTable({ subscribers }: SubscriberTableProps) {
                   {getSortIcon('status')}
                 </Button>
               </TableHead>
-              <TableHead className="hidden lg:table-cell">Grace Period</TableHead>
+              <TableHead className="hidden lg:table-cell">Статус отсрочки</TableHead>
               <TableHead>
                 <Button 
                   variant="ghost" 
@@ -260,7 +268,7 @@ export function SubscriberTable({ subscribers }: SubscriberTableProps) {
             ) : (
               sortedSubscribers.map((subscriber) => {
                 const daysRemaining = getDaysRemaining(subscriber.subscription_end);
-                const gracePeriodDays = getGracePeriodDays(subscriber);
+                const graceStatus = getGraceStatus(subscriber);
                 return (
                   <TableRow key={subscriber.id}>
                     <TableCell>
@@ -292,11 +300,26 @@ export function SubscriberTable({ subscribers }: SubscriberTableProps) {
                       </Badge>
                     </TableCell>
                     <TableCell className="hidden lg:table-cell">
-                      {gracePeriodDays !== null ? (
-                        <div className="flex items-center gap-1">
-                          <span className="text-amber-600 font-medium">{gracePeriodDays}</span>
-                          <span className="text-xs text-muted-foreground">день</span>
-                        </div>
+                      {graceStatus ? (
+                        graceStatus.type === 'remaining' ? (
+                          <div>
+                            <p className="text-sm font-medium text-amber-600">
+                              Осталось {graceStatus.days} дн.
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              до {format(graceStatus.graceEndAt, 'dd.MM.yyyy')}
+                            </p>
+                          </div>
+                        ) : (
+                          <div>
+                            <p className="text-sm font-semibold text-destructive">
+                              Просрочен на {graceStatus.days} дн.
+                            </p>
+                            <p className="text-xs text-destructive/80">
+                              должен быть Expired
+                            </p>
+                          </div>
+                        )
                       ) : (
                         <span className="text-muted-foreground">-</span>
                       )}
