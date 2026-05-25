@@ -300,11 +300,26 @@ export function SubscriberTable({ subscribers, tenantGraceDays = 0 }: Subscriber
                       </Badge>
                     </TableCell>
                     <TableCell className="hidden lg:table-cell">
-                      {gracePeriodDays !== null ? (
-                        <div className="flex items-center gap-1">
-                          <span className="text-amber-600 font-medium">{gracePeriodDays}</span>
-                          <span className="text-xs text-muted-foreground">день</span>
-                        </div>
+                      {graceStatus ? (
+                        graceStatus.type === 'remaining' ? (
+                          <div>
+                            <p className="text-sm font-medium text-amber-600">
+                              Осталось {graceStatus.days} дн.
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              до {format(graceStatus.graceEndAt, 'dd.MM.yyyy')}
+                            </p>
+                          </div>
+                        ) : (
+                          <div>
+                            <p className="text-sm font-semibold text-destructive">
+                              Просрочен на {graceStatus.days} дн.
+                            </p>
+                            <p className="text-xs text-destructive/80">
+                              должен быть Expired
+                            </p>
+                          </div>
+                        )
                       ) : (
                         <span className="text-muted-foreground">-</span>
                       )}
