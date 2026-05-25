@@ -105,10 +105,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
+    // Track the user id we've already bootstrapped for, so token refreshes
+    // (e.g. on tab refocus) don't re-trigger the loading spinner or refetches
+    // that would unmount mounted pages and wipe unsaved form state.
+    let initializedUserId: string | null = null;
+
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
+        initializedUserId = session.user.id;
         checkAdminRole(session.user.id);
       } else {
         setIsLoading(false);
@@ -120,8 +126,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
-        checkAdminRole(session.user.id);
+        // Only re-run admin/tenant bootstrap when the actual user identity
+        // changes. Plain TOKEN_REFRESHED / SIGNED_IN events on tab refocus
+        // must not toggle loading state or refetch tenant data.
+        if (initializedUserId !== session.user.id) {
+          initializedUserId = session.user.id;
+          checkAdminRole(session.user.id);
+        }
       } else {
+        initializedUserId = null;
         setIsAdmin(false);
         setIsLoading(false);
         setTenantId(null);
