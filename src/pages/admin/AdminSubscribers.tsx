@@ -195,7 +195,7 @@ export default function AdminSubscribers() {
           </Select>
         </div>
 
-        <SubscriberTable subscribers={filteredSubscribers} />
+        <SubscriberTable subscribers={filteredSubscribers} tenantGraceDays={tenantGraceDays} />
 
         <AddSubscriberDialog
           open={isAddDialogOpen}
