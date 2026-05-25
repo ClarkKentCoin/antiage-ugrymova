@@ -64,7 +64,8 @@ export function useSubscribers() {
             price,
             interval_unit,
             interval_count,
-            billing_timezone
+            billing_timezone,
+            grace_period_enabled
           ),
           payment_history!inner(id, status, payment_method, created_at)
         `)
