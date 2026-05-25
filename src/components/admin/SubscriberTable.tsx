@@ -268,7 +268,7 @@ export function SubscriberTable({ subscribers, tenantGraceDays = 0 }: Subscriber
             ) : (
               sortedSubscribers.map((subscriber) => {
                 const daysRemaining = getDaysRemaining(subscriber.subscription_end);
-                const gracePeriodDays = getGracePeriodDays(subscriber);
+                const graceStatus = getGraceStatus(subscriber);
                 return (
                   <TableRow key={subscriber.id}>
                     <TableCell>
