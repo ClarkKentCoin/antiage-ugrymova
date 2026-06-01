@@ -47,6 +47,8 @@ export function AddSubscriberDialog({ open, onOpenChange }: AddSubscriberDialogP
     payment_note: '',
     payment_method: 'manual' as 'manual' | 'robokassa',
     auto_renewal: false,
+    manual_mode: 'tier' as 'tier' | 'custom_days',
+    custom_days: '',
   });
 
   const [isGeneratingLink, setIsGeneratingLink] = useState(false);
@@ -60,13 +62,21 @@ export function AddSubscriberDialog({ open, onOpenChange }: AddSubscriberDialogP
     (selectedTier.price === 0 && (selectedTier.duration_days ?? 0) >= 3650)
   );
 
-  // Compute new end date using calendar intervals
+  const isCustomMode = formData.payment_method === 'manual' && formData.manual_mode === 'custom_days';
+  const customDaysNum = parseInt(formData.custom_days, 10);
+  const customDaysValid = !isNaN(customDaysNum) && customDaysNum >= 1 && customDaysNum <= 3650;
+
+  // Compute new end date using calendar intervals (tier) or custom days
   const getNewEndDate = (): string | null => {
+    if (isCustomMode) {
+      if (!customDaysValid) return null;
+      return new Date(Date.now() + customDaysNum * 24 * 60 * 60 * 1000).toISOString();
+    }
     if (!selectedTier) return null;
-    
+
     const nowISO = new Date().toISOString();
     const { unit, count, timezone } = getTierInterval(selectedTier);
-    
+
     return computeNextEndISO(nowISO, null, unit, count, timezone);
   };
 
