@@ -331,41 +331,81 @@ export function AddSubscriberDialog({ open, onOpenChange }: AddSubscriberDialogP
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="tier">Тариф *</Label>
-            <Select
-              value={formData.tier_id}
-              onValueChange={(value) => {
-                const newTier = tiers?.find(t => t.id === value);
-                const isNewTierAdminOnly = newTier && (
-                  (newTier.name || '').trim().toLowerCase() === 'добавлен админом' ||
-                  (newTier.price === 0 && (newTier.duration_days ?? 0) >= 3650)
-                );
-                setFormData({ 
-                  ...formData, 
-                  tier_id: value,
-                  payment_method: isNewTierAdminOnly ? 'manual' : formData.payment_method,
-                });
-                if (isNewTierAdminOnly) {
-                  setPaymentUrl(null);
+          {formData.payment_method === 'manual' && (
+            <div className="space-y-3">
+              <Label>Ручной доступ</Label>
+              <RadioGroup
+                value={formData.manual_mode}
+                onValueChange={(value: 'tier' | 'custom_days') =>
+                  setFormData({ ...formData, manual_mode: value })
                 }
-              }}
-              required
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Выберите тариф" />
-              </SelectTrigger>
-              <SelectContent>
-                {tiers?.filter(t => t.is_active).map((tier) => (
-                  <SelectItem key={tier.id} value={tier.id}>
-                    {tier.name} - {tier.price}₽ ({formatDuration(tier)})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+                className="grid grid-cols-1 sm:grid-cols-2 gap-3"
+              >
+                <div className="flex items-center space-x-2 rounded-lg border p-3 cursor-pointer hover:bg-muted/50">
+                  <RadioGroupItem value="tier" id="mode-tier" />
+                  <Label htmlFor="mode-tier" className="cursor-pointer">По тарифу</Label>
+                </div>
+                <div className="flex items-center space-x-2 rounded-lg border p-3 cursor-pointer hover:bg-muted/50">
+                  <RadioGroupItem value="custom_days" id="mode-custom" />
+                  <Label htmlFor="mode-custom" className="cursor-pointer">Без тарифа — указать дни вручную</Label>
+                </div>
+              </RadioGroup>
+            </div>
+          )}
 
-          {selectedTier && (() => {
+          {!isCustomMode && (
+            <div className="space-y-2">
+              <Label htmlFor="tier">Тариф *</Label>
+              <Select
+                value={formData.tier_id}
+                onValueChange={(value) => {
+                  const newTier = tiers?.find(t => t.id === value);
+                  const isNewTierAdminOnly = newTier && (
+                    (newTier.name || '').trim().toLowerCase() === 'добавлен админом' ||
+                    (newTier.price === 0 && (newTier.duration_days ?? 0) >= 3650)
+                  );
+                  setFormData({
+                    ...formData,
+                    tier_id: value,
+                    payment_method: isNewTierAdminOnly ? 'manual' : formData.payment_method,
+                  });
+                  if (isNewTierAdminOnly) {
+                    setPaymentUrl(null);
+                  }
+                }}
+                required={!isCustomMode}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Выберите тариф" />
+                </SelectTrigger>
+                <SelectContent>
+                  {tiers?.filter(t => t.is_active).map((tier) => (
+                    <SelectItem key={tier.id} value={tier.id}>
+                      {tier.name} - {tier.price}₽ ({formatDuration(tier)})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {isCustomMode && (
+            <div className="space-y-2">
+              <Label htmlFor="custom_days">Количество дней доступа *</Label>
+              <Input
+                id="custom_days"
+                type="number"
+                min={1}
+                max={3650}
+                placeholder="Например: 30"
+                value={formData.custom_days}
+                onChange={(e) => setFormData({ ...formData, custom_days: e.target.value })}
+                required
+              />
+            </div>
+          )}
+
+          {!isCustomMode && selectedTier && (() => {
             const interval = getTierInterval(selectedTier);
             const newEnd = getNewEndDate();
             return (
@@ -374,6 +414,20 @@ export function AddSubscriberDialog({ open, onOpenChange }: AddSubscriberDialogP
                   Подписка истечёт{' '}
                   <span className="font-medium text-foreground">
                     {newEnd ? formatDateInTimezone(newEnd, interval.timezone) : '—'}
+                  </span>
+                </p>
+              </div>
+            );
+          })()}
+
+          {isCustomMode && customDaysValid && (() => {
+            const newEnd = getNewEndDate();
+            return (
+              <div className="rounded-lg bg-muted p-3 text-sm">
+                <p className="text-muted-foreground">
+                  Доступ до{' '}
+                  <span className="font-medium text-foreground">
+                    {newEnd ? formatDateInTimezone(newEnd) : '—'}
                   </span>
                 </p>
               </div>
