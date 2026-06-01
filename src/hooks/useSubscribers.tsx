@@ -40,12 +40,13 @@ export interface CreateSubscriberInput {
   telegram_username?: string;
   first_name?: string;
   last_name?: string;
-  tier_id?: string;
+  tier_id?: string | null;
   subscription_start?: string;
   subscription_end?: string;
   status?: string;
   payment_note?: string;
   amount?: number;
+  payment_method?: string;
 }
 
 export function useSubscribers() {
