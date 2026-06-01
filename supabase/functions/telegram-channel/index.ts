@@ -576,7 +576,7 @@ serve(async (req) => {
       if (subscriber?.is_in_channel) {
         // User is already in channel - send message without invite
         console.log(`User ${telegram_user_id} is already in channel, sending info message`);
-        
+
         const msgResult = await callTelegramApi(botToken, "sendMessage", {
           chat_id: telegram_user_id,
           text: "✅ Вы уже являетесь участником канала!",
@@ -584,42 +584,81 @@ serve(async (req) => {
         });
 
         return new Response(
-          JSON.stringify({ 
-            success: true, 
+          JSON.stringify({
+            success: true,
             already_member: true,
-            message_sent: msgResult.ok 
+            message_sent: msgResult.ok
           }),
           { headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
 
-      // Revoke old invite links first
+      // Always attempt to unban first — handles previously-removed users.
+      await unbanBeforeInvite(supabaseAdmin, botToken, channelId, telegram_user_id, subscriber_id);
+
+      // Idempotency: reuse an existing valid invite if available.
+      let inviteLink: string | null = null;
+      let reused = false;
+      let expiresAtIso: string | null = null;
+
       if (subscriber_id) {
-        await revokeOldInviteLinks(supabaseAdmin, botToken, channelId, subscriber_id);
+        const reusable = await findReusableInviteLink(supabaseAdmin, subscriber_id);
+        if (reusable) {
+          inviteLink = reusable.invite_link;
+          expiresAtIso = reusable.expires_at;
+          reused = true;
+          console.log(`[telegram-channel] Reusing active invite for subscriber ${subscriber_id}, expires ${reusable.expires_at}`);
+          try {
+            await supabaseAdmin.from("system_logs").insert({
+              level: "info",
+              event_type: "telegram.invite_reused_existing",
+              source: "edge_fn",
+              subscriber_id: subscriber_id,
+              telegram_user_id: telegram_user_id ? Number(telegram_user_id) : null,
+              tenant_id: tenantId,
+              message: "Reused existing valid invite link",
+              payload: { channel_id: channelId, invite_link: inviteLink, expires_at: expiresAtIso, reused: true },
+            });
+          } catch (_) {}
+        }
       }
 
-      console.log(`Creating invite link for channel ${channelId} with 10 minute expiry`);
-      
-      // Create new invite link with expiration
-      const result = await createAndSaveInviteLink(
-        supabaseAdmin,
-        botToken,
-        channelId,
-        subscriber_id
-      );
-
-      if (!result.success) {
-        return new Response(
-          JSON.stringify({ error: result.error }),
-          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      // No reusable invite — create a new one. Do NOT revoke active ones (idempotency).
+      if (!inviteLink) {
+        console.log(`Creating invite link for channel ${channelId} with 30 minute expiry`);
+        const result = await createAndSaveInviteLink(
+          supabaseAdmin,
+          botToken,
+          channelId,
+          subscriber_id
         );
+
+        if (!result.success) {
+          return new Response(
+            JSON.stringify({ error: result.error }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+        inviteLink = result.invite_link!;
+        try {
+          await supabaseAdmin.from("system_logs").insert({
+            level: "info",
+            event_type: "telegram.invite_created",
+            source: "edge_fn",
+            subscriber_id: subscriber_id,
+            telegram_user_id: telegram_user_id ? Number(telegram_user_id) : null,
+            tenant_id: tenantId,
+            message: "Invite link created",
+            payload: { channel_id: channelId, invite_link: inviteLink, reused: false },
+          });
+        } catch (_) {}
       }
 
       // Send the invite link to the user
-      console.log(`Sending invite link to user ${telegram_user_id}`);
+      console.log(`Sending invite link to user ${telegram_user_id} (reused=${reused})`);
       const messageResult = await callTelegramApi(botToken, "sendMessage", {
         chat_id: telegram_user_id,
-        text: `🎉 Ваша подписка активирована!\n\nПерейдите по ссылке, чтобы присоединиться к каналу:\n${result.invite_link}\n\n⚠️ Ссылка одноразовая и действует 10 минут.`,
+        text: `🎉 Ваша подписка активирована!\n\nПерейдите по ссылке, чтобы присоединиться к каналу:\n${inviteLink}\n\n⚠️ Ссылка одноразовая и действует ${INVITE_LINK_EXPIRY_MINUTES_TEXT}.`,
         parse_mode: "HTML",
       });
 
@@ -627,11 +666,11 @@ serve(async (req) => {
 
       if (!messageResult.ok) {
         console.error("Failed to send message:", messageResult.description);
-        // Return 200 with invite link even if message sending failed (user can copy link)
         return new Response(
-          JSON.stringify({ 
-            success: true, 
-            invite_link: result.invite_link,
+          JSON.stringify({
+            success: true,
+            invite_link: inviteLink,
+            reused,
             message_sent: false,
             error: messageResult.description || "Could not send message to user. They may need to start the bot first."
           }),
@@ -640,10 +679,11 @@ serve(async (req) => {
       }
 
       return new Response(
-        JSON.stringify({ 
-          success: true, 
-          invite_link: result.invite_link,
-          message_sent: true 
+        JSON.stringify({
+          success: true,
+          invite_link: inviteLink,
+          reused,
+          message_sent: true
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
