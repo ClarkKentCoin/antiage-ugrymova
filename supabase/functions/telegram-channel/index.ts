@@ -9,7 +9,65 @@ interface TelegramResponse {
   description?: string;
 }
 
-const INVITE_LINK_EXPIRY_SECONDS = 600; // 10 minutes
+const INVITE_LINK_EXPIRY_SECONDS = 1800; // 30 minutes
+const INVITE_LINK_EXPIRY_MINUTES_TEXT = "30 минут";
+
+// Look up an active, non-revoked, non-expired invite for this subscriber.
+async function findReusableInviteLink(
+  supabaseAdmin: any,
+  subscriberId: string
+): Promise<{ id: string; invite_link: string; expires_at: string } | null> {
+  const nowIso = new Date().toISOString();
+  const { data, error } = await supabaseAdmin
+    .from("invite_links")
+    .select("id, invite_link, expires_at")
+    .eq("subscriber_id", subscriberId)
+    .eq("revoked", false)
+    .gt("expires_at", nowIso)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    console.warn("[telegram-channel] findReusableInviteLink error:", error.message);
+    return null;
+  }
+  return data ?? null;
+}
+
+// Best-effort unban before inviting. Never blocks invite creation.
+async function unbanBeforeInvite(
+  supabaseAdmin: any,
+  botToken: string,
+  channelId: string,
+  telegramUserId: number | string | undefined | null,
+  subscriberId: string | null
+): Promise<{ ok: boolean; description?: string } | null> {
+  if (!telegramUserId) return null;
+  try {
+    const res = await callTelegramApi(botToken, "unbanChatMember", {
+      chat_id: channelId,
+      user_id: telegramUserId,
+      only_if_banned: true,
+    });
+    console.log("[telegram-channel] unban-before-invite result:", JSON.stringify(res));
+    try {
+      await supabaseAdmin.from("system_logs").insert({
+        level: res.ok ? "info" : "warn",
+        event_type: "telegram.user_unbanned_before_invite",
+        source: "edge_fn",
+        subscriber_id: subscriberId,
+        telegram_user_id: telegramUserId ? Number(telegramUserId) : null,
+        message: res.ok ? "Unban attempted before invite" : "Unban attempt failed (non-blocking)",
+        payload: { channel_id: channelId, telegram_ok: res.ok, telegram_description: res.description ?? null },
+      });
+    } catch (_) {}
+    return { ok: !!res.ok, description: res.description };
+  } catch (err) {
+    console.warn("[telegram-channel] unban-before-invite exception:", err);
+    return null;
+  }
+}
 
 async function callTelegramApi(botToken: string, method: string, params: Record<string, any> = {}): Promise<TelegramResponse> {
   const url = `https://api.telegram.org/bot${botToken}/${method}`;
