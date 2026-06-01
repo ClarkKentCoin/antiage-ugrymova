@@ -15,7 +15,29 @@ interface TelegramResponse {
   description?: string;
 }
 
-const INVITE_LINK_EXPIRY_SECONDS = 600; // 10 minutes
+const INVITE_LINK_EXPIRY_SECONDS = 1800; // 30 minutes
+const INVITE_LINK_EXPIRY_MINUTES_TEXT = "30 минут";
+
+async function findReusableInviteLink(
+  supabaseAdmin: any,
+  subscriberId: string
+): Promise<{ id: string; invite_link: string; expires_at: string } | null> {
+  const nowIso = new Date().toISOString();
+  const { data, error } = await supabaseAdmin
+    .from("invite_links")
+    .select("id, invite_link, expires_at")
+    .eq("subscriber_id", subscriberId)
+    .eq("revoked", false)
+    .gt("expires_at", nowIso)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) {
+    console.warn("[subscriber-status-change] findReusableInviteLink error:", error.message);
+    return null;
+  }
+  return data ?? null;
+}
 
 // Replace template variables with actual values
 // Handles backward compatibility: "{days} дней" → "{days} {days_word}"
