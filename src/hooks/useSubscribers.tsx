@@ -220,7 +220,7 @@ export function useCreateSubscriber() {
           telegram_username: input.telegram_username,
           first_name: input.first_name,
           last_name: input.last_name,
-          tier_id: input.tier_id,
+          tier_id: input.tier_id ?? null,
           subscription_end: input.subscription_end,
           status: input.status || 'active',
         };
@@ -249,7 +249,7 @@ export function useCreateSubscriber() {
             telegram_username: input.telegram_username,
             first_name: input.first_name,
             last_name: input.last_name,
-            tier_id: input.tier_id,
+            tier_id: input.tier_id ?? null,
             subscription_start: input.subscription_start,
             subscription_end: input.subscription_end,
             status: input.status || 'active',
@@ -262,16 +262,18 @@ export function useCreateSubscriber() {
         subscriber = newSubscriber;
       }
 
-      // If payment info provided, create payment record
-      if (input.amount && input.tier_id) {
+      // If payment info provided, create payment audit record.
+      // Allow amount = 0 (manual access without payment) and tier_id = null.
+      if (input.amount !== undefined && input.amount !== null) {
         const { error: paymentError } = await supabase
           .from('payment_history')
           .insert({
             subscriber_id: subscriber.id,
-            tier_id: input.tier_id,
+            tier_id: input.tier_id ?? null,
             amount: input.amount,
-            payment_method: 'manual',
+            payment_method: input.payment_method || 'manual',
             payment_note: input.payment_note,
+            status: 'completed',
             tenant_id: tenantId,
           });
 
