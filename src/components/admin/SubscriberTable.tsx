@@ -289,7 +289,8 @@ export function SubscriberTable({ subscribers, tenantGraceDays = 0 }: Subscriber
                       <span className="truncate block max-w-[180px]">{subscriber.email || '-'}</span>
                     </TableCell>
                     <TableCell>
-                      {subscriber.subscription_tiers?.name || '-'}
+                      {subscriber.subscription_tiers?.name
+                        || (subscriber.tier_id == null && subscriber.subscription_end ? 'Ручной доступ' : '-')}
                     </TableCell>
                     <TableCell>
                       <Badge variant="outline" className={statusVariants[subscriber.status] || statusVariants.inactive}>
