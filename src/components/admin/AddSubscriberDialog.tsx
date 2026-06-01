@@ -260,6 +260,8 @@ export function AddSubscriberDialog({ open, onOpenChange }: AddSubscriberDialogP
       payment_note: '',
       payment_method: 'manual',
       auto_renewal: false,
+      manual_mode: 'tier',
+      custom_days: '',
     });
     setPaymentUrl(null);
   };
