@@ -82,7 +82,7 @@ export function AddSubscriberDialog({ open, onOpenChange }: AddSubscriberDialogP
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!tenantId) {
       toast({ title: 'Ошибка: контекст тенанта не найден', variant: 'destructive' });
       return;
@@ -103,39 +103,56 @@ export function AddSubscriberDialog({ open, onOpenChange }: AddSubscriberDialogP
       });
       return;
     }
-    
-    // Manual payment - activate immediately using calendar intervals
+
+    // Manual payment - activate immediately
+    if (isCustomMode && !customDaysValid) {
+      toast({ title: 'Введите корректное количество дней (1–3650)', variant: 'destructive' });
+      return;
+    }
+    if (!isCustomMode && !formData.tier_id) {
+      toast({ title: 'Выберите тариф', variant: 'destructive' });
+      return;
+    }
+
     const nowISO = new Date().toISOString();
     const endDateISO = getNewEndDate();
     const requestId = generateRequestId();
+
+    const tierIdForInput = isCustomMode ? null : formData.tier_id;
+    const amountForInput = isCustomMode ? 0 : selectedTier?.price;
+    const customNote = isCustomMode
+      ? `Ручной доступ без оплаты: ${customDaysNum} дн.${formData.payment_note ? ` — ${formData.payment_note}` : ''}`
+      : (formData.payment_note || undefined);
 
     createSubscriber.mutate({
       telegram_user_id: parseInt(formData.telegram_user_id),
       telegram_username: formData.telegram_username || undefined,
       first_name: formData.first_name || undefined,
       last_name: formData.last_name || undefined,
-      tier_id: formData.tier_id || undefined,
+      tier_id: tierIdForInput as string | null | undefined,
       subscription_start: nowISO,
       subscription_end: endDateISO || undefined,
       status: 'active',
-      payment_note: formData.payment_note || undefined,
-      amount: selectedTier?.price,
+      payment_note: customNote,
+      amount: amountForInput,
+      payment_method: 'manual',
     }, {
       onSuccess: (data) => {
         logEvent({
-          event_type: 'subscription.started',
+          event_type: isCustomMode ? 'subscription.manual_access_granted' : 'subscription.started',
           source: 'admin_ui',
           subscriber_id: data.id,
           telegram_user_id: parseInt(formData.telegram_user_id),
-          tier_id: formData.tier_id,
+          tier_id: tierIdForInput || undefined,
           request_id: requestId,
           tenant_id: tenantId,
-          message: 'Admin added subscriber manually',
+          message: isCustomMode ? 'Admin granted manual access without tier' : 'Admin added subscriber manually',
           payload: {
             subscription_start: nowISO,
             subscription_end: endDateISO,
-            tier_name: selectedTier?.name,
-            amount: selectedTier?.price,
+            tier_name: isCustomMode ? null : selectedTier?.name,
+            amount: amountForInput,
+            custom_days: isCustomMode ? customDaysNum : undefined,
             payment_method: 'manual',
           },
         });
