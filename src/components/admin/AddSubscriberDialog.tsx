@@ -47,6 +47,8 @@ export function AddSubscriberDialog({ open, onOpenChange }: AddSubscriberDialogP
     payment_note: '',
     payment_method: 'manual' as 'manual' | 'robokassa',
     auto_renewal: false,
+    manual_mode: 'tier' as 'tier' | 'custom_days',
+    custom_days: '',
   });
 
   const [isGeneratingLink, setIsGeneratingLink] = useState(false);
@@ -60,19 +62,27 @@ export function AddSubscriberDialog({ open, onOpenChange }: AddSubscriberDialogP
     (selectedTier.price === 0 && (selectedTier.duration_days ?? 0) >= 3650)
   );
 
-  // Compute new end date using calendar intervals
+  const isCustomMode = formData.payment_method === 'manual' && formData.manual_mode === 'custom_days';
+  const customDaysNum = parseInt(formData.custom_days, 10);
+  const customDaysValid = !isNaN(customDaysNum) && customDaysNum >= 1 && customDaysNum <= 3650;
+
+  // Compute new end date using calendar intervals (tier) or custom days
   const getNewEndDate = (): string | null => {
+    if (isCustomMode) {
+      if (!customDaysValid) return null;
+      return new Date(Date.now() + customDaysNum * 24 * 60 * 60 * 1000).toISOString();
+    }
     if (!selectedTier) return null;
-    
+
     const nowISO = new Date().toISOString();
     const { unit, count, timezone } = getTierInterval(selectedTier);
-    
+
     return computeNextEndISO(nowISO, null, unit, count, timezone);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!tenantId) {
       toast({ title: 'Ошибка: контекст тенанта не найден', variant: 'destructive' });
       return;
@@ -93,39 +103,56 @@ export function AddSubscriberDialog({ open, onOpenChange }: AddSubscriberDialogP
       });
       return;
     }
-    
-    // Manual payment - activate immediately using calendar intervals
+
+    // Manual payment - activate immediately
+    if (isCustomMode && !customDaysValid) {
+      toast({ title: 'Введите корректное количество дней (1–3650)', variant: 'destructive' });
+      return;
+    }
+    if (!isCustomMode && !formData.tier_id) {
+      toast({ title: 'Выберите тариф', variant: 'destructive' });
+      return;
+    }
+
     const nowISO = new Date().toISOString();
     const endDateISO = getNewEndDate();
     const requestId = generateRequestId();
+
+    const tierIdForInput = isCustomMode ? null : formData.tier_id;
+    const amountForInput = isCustomMode ? 0 : selectedTier?.price;
+    const customNote = isCustomMode
+      ? `Ручной доступ без оплаты: ${customDaysNum} дн.${formData.payment_note ? ` — ${formData.payment_note}` : ''}`
+      : (formData.payment_note || undefined);
 
     createSubscriber.mutate({
       telegram_user_id: parseInt(formData.telegram_user_id),
       telegram_username: formData.telegram_username || undefined,
       first_name: formData.first_name || undefined,
       last_name: formData.last_name || undefined,
-      tier_id: formData.tier_id || undefined,
+      tier_id: tierIdForInput as string | null | undefined,
       subscription_start: nowISO,
       subscription_end: endDateISO || undefined,
       status: 'active',
-      payment_note: formData.payment_note || undefined,
-      amount: selectedTier?.price,
+      payment_note: customNote,
+      amount: amountForInput,
+      payment_method: 'manual',
     }, {
       onSuccess: (data) => {
         logEvent({
-          event_type: 'subscription.started',
+          event_type: isCustomMode ? 'subscription.manual_access_granted' : 'subscription.started',
           source: 'admin_ui',
           subscriber_id: data.id,
           telegram_user_id: parseInt(formData.telegram_user_id),
-          tier_id: formData.tier_id,
+          tier_id: tierIdForInput || undefined,
           request_id: requestId,
           tenant_id: tenantId,
-          message: 'Admin added subscriber manually',
+          message: isCustomMode ? 'Admin granted manual access without tier' : 'Admin added subscriber manually',
           payload: {
             subscription_start: nowISO,
             subscription_end: endDateISO,
-            tier_name: selectedTier?.name,
-            amount: selectedTier?.price,
+            tier_name: isCustomMode ? null : selectedTier?.name,
+            amount: amountForInput,
+            custom_days: isCustomMode ? customDaysNum : undefined,
             payment_method: 'manual',
           },
         });
@@ -250,6 +277,8 @@ export function AddSubscriberDialog({ open, onOpenChange }: AddSubscriberDialogP
       payment_note: '',
       payment_method: 'manual',
       auto_renewal: false,
+      manual_mode: 'tier',
+      custom_days: '',
     });
     setPaymentUrl(null);
   };
@@ -302,41 +331,81 @@ export function AddSubscriberDialog({ open, onOpenChange }: AddSubscriberDialogP
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="tier">Тариф *</Label>
-            <Select
-              value={formData.tier_id}
-              onValueChange={(value) => {
-                const newTier = tiers?.find(t => t.id === value);
-                const isNewTierAdminOnly = newTier && (
-                  (newTier.name || '').trim().toLowerCase() === 'добавлен админом' ||
-                  (newTier.price === 0 && (newTier.duration_days ?? 0) >= 3650)
-                );
-                setFormData({ 
-                  ...formData, 
-                  tier_id: value,
-                  payment_method: isNewTierAdminOnly ? 'manual' : formData.payment_method,
-                });
-                if (isNewTierAdminOnly) {
-                  setPaymentUrl(null);
+          {formData.payment_method === 'manual' && (
+            <div className="space-y-3">
+              <Label>Ручной доступ</Label>
+              <RadioGroup
+                value={formData.manual_mode}
+                onValueChange={(value: 'tier' | 'custom_days') =>
+                  setFormData({ ...formData, manual_mode: value })
                 }
-              }}
-              required
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Выберите тариф" />
-              </SelectTrigger>
-              <SelectContent>
-                {tiers?.filter(t => t.is_active).map((tier) => (
-                  <SelectItem key={tier.id} value={tier.id}>
-                    {tier.name} - {tier.price}₽ ({formatDuration(tier)})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+                className="grid grid-cols-1 sm:grid-cols-2 gap-3"
+              >
+                <div className="flex items-center space-x-2 rounded-lg border p-3 cursor-pointer hover:bg-muted/50">
+                  <RadioGroupItem value="tier" id="mode-tier" />
+                  <Label htmlFor="mode-tier" className="cursor-pointer">По тарифу</Label>
+                </div>
+                <div className="flex items-center space-x-2 rounded-lg border p-3 cursor-pointer hover:bg-muted/50">
+                  <RadioGroupItem value="custom_days" id="mode-custom" />
+                  <Label htmlFor="mode-custom" className="cursor-pointer">Без тарифа — указать дни вручную</Label>
+                </div>
+              </RadioGroup>
+            </div>
+          )}
 
-          {selectedTier && (() => {
+          {!isCustomMode && (
+            <div className="space-y-2">
+              <Label htmlFor="tier">Тариф *</Label>
+              <Select
+                value={formData.tier_id}
+                onValueChange={(value) => {
+                  const newTier = tiers?.find(t => t.id === value);
+                  const isNewTierAdminOnly = newTier && (
+                    (newTier.name || '').trim().toLowerCase() === 'добавлен админом' ||
+                    (newTier.price === 0 && (newTier.duration_days ?? 0) >= 3650)
+                  );
+                  setFormData({
+                    ...formData,
+                    tier_id: value,
+                    payment_method: isNewTierAdminOnly ? 'manual' : formData.payment_method,
+                  });
+                  if (isNewTierAdminOnly) {
+                    setPaymentUrl(null);
+                  }
+                }}
+                required={!isCustomMode}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Выберите тариф" />
+                </SelectTrigger>
+                <SelectContent>
+                  {tiers?.filter(t => t.is_active).map((tier) => (
+                    <SelectItem key={tier.id} value={tier.id}>
+                      {tier.name} - {tier.price}₽ ({formatDuration(tier)})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {isCustomMode && (
+            <div className="space-y-2">
+              <Label htmlFor="custom_days">Количество дней доступа *</Label>
+              <Input
+                id="custom_days"
+                type="number"
+                min={1}
+                max={3650}
+                placeholder="Например: 30"
+                value={formData.custom_days}
+                onChange={(e) => setFormData({ ...formData, custom_days: e.target.value })}
+                required
+              />
+            </div>
+          )}
+
+          {!isCustomMode && selectedTier && (() => {
             const interval = getTierInterval(selectedTier);
             const newEnd = getNewEndDate();
             return (
@@ -345,6 +414,20 @@ export function AddSubscriberDialog({ open, onOpenChange }: AddSubscriberDialogP
                   Подписка истечёт{' '}
                   <span className="font-medium text-foreground">
                     {newEnd ? formatDateInTimezone(newEnd, interval.timezone) : '—'}
+                  </span>
+                </p>
+              </div>
+            );
+          })()}
+
+          {isCustomMode && customDaysValid && (() => {
+            const newEnd = getNewEndDate();
+            return (
+              <div className="rounded-lg bg-muted p-3 text-sm">
+                <p className="text-muted-foreground">
+                  Доступ до{' '}
+                  <span className="font-medium text-foreground">
+                    {newEnd ? formatDateInTimezone(newEnd) : '—'}
                   </span>
                 </p>
               </div>
